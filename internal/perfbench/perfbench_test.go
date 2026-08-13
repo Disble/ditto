@@ -29,7 +29,7 @@ func BenchmarkLinkAllToTemporaryRepository(b *testing.B) {
 	root := benchRoot(b)
 	repository := fsrepository.New(root)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		temporary, err := os.MkdirTemp("", "dittobench-")
 		if err != nil {
 			b.Fatal(err)
@@ -45,7 +45,7 @@ func BenchmarkListGoSourceFiles(b *testing.B) {
 	root := benchRoot(b)
 	repository := fsrepository.New(root)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		repository.ListGoSourceFiles()
 	}
 }

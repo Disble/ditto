@@ -1,6 +1,6 @@
 module github.com/Disble/ditto
 
-go 1.22
+go 1.25
 
 require (
 	github.com/fatih/color v1.18.0

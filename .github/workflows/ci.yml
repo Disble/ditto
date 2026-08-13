@@ -13,11 +13,11 @@ jobs:
     continue-on-error: ${{ matrix.continue-on-error }}
     strategy:
       matrix:
-        go-version: [ "1.22" ]
+        go-version: [ "1.25" ]
         continue-on-error: [ false ]
         include:
           - go-version: "latest"
-            continue-on-error: true
+            continue-on-error: false
     steps:
     - uses: actions/checkout@v6
 
