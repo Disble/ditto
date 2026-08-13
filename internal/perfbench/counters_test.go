@@ -105,14 +105,23 @@ func (l *countingLaboratory) Test(
 	return future.Resolved(result.Ok(""))
 }
 
-// fileCountingVirus counts parses. Each GoSourceFile.Incubate call parses the
-// file and walks the tree exactly once, and every walk visits exactly one
-// *ast.File, so the tally of those visits is the tally of parses.
-type fileCountingVirus struct{ parses *int }
+// treeCountingVirus separates two costs that used to be the same number.
+//
+// Every walk of a parsed file visits exactly one *ast.File node, so counting
+// those visits counts walks. Counting the *distinct* nodes counts parses,
+// because a shared tree hands every mutator the same pointer and a re-parsed
+// one cannot. While each file was parsed once per mutator the two were equal,
+// which is what made an earlier version of this counter look like it measured
+// parses when it only ever measured walks.
+type treeCountingVirus struct {
+	walks *int
+	trees map[*ast.File]struct{}
+}
 
-func (v fileCountingVirus) Incubate(node ast.Node, _ *types.Info) []*viruses.Infection {
-	if _, isFile := node.(*ast.File); isFile {
-		*v.parses++
+func (v treeCountingVirus) Incubate(node ast.Node, _ *types.Info) []*viruses.Infection {
+	if file, isFile := node.(*ast.File); isFile {
+		*v.walks++
+		v.trees[file] = struct{}{}
 	}
 
 	return nil
@@ -134,20 +143,26 @@ func TestCounterFilesLinkedPerMutant(t *testing.T) {
 func TestCounterSourceParsesPerRelease(t *testing.T) {
 	t.Parallel()
 
-	parses := 0
+	walks := 0
+	trees := map[*ast.File]struct{}{}
 	virusCount := 3
 	viri := make([]viruses.Virus, virusCount)
 
 	for i := range virusCount {
-		viri[i] = fileCountingVirus{parses: &parses}
+		viri[i] = treeCountingVirus{walks: &walks, trees: trees}
 	}
 
 	root := writeFixtureRepository(t)
 	ditto.New(fsrepository.New(root), &countingLaboratory{}, fakereporter.New()).Release(viri...)
 
-	// With one parse per source file this equals fixtureSourceFiles. Anything
-	// larger means the file is being re-parsed for every mutator.
-	assertCounter(t, "sourceParsesPerReleaseWithThreeViruses", parses)
+	// One parse per source file is the floor: the tree does not depend on which
+	// mutator is asking for it. Anything larger means the file is being
+	// re-parsed per mutator.
+	assertCounter(t, "sourceParsesPerReleaseWithThreeViruses", len(trees))
+
+	// Walks are a separate cost and a separate number. Every mutator needs its
+	// own pass, so this one is expected to scale with the mutator count.
+	assertCounter(t, "astWalksPerReleaseWithThreeViruses", walks)
 }
 
 func TestCounterMutantsAndLaboratoryRunsPerRelease(t *testing.T) {
