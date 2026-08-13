@@ -79,5 +79,59 @@ A constant context it does not know about would not appear in these numbers.
 
 **Compiling is not behaving.** Both results are about one expression's semantics
 and one syntactic constraint. Whether a whole instrumented package still passes
-its own suite unchanged is the golden test's question, and it has not been asked
-of an instrumented build yet.
+its own suite unchanged was asked next, and is below.
+
+## H3 — an instrumented package reaches the same verdicts as today
+
+The two earlier results are about one expression. This one is about a real
+package: dharness's `internal/jsconfig`, 12 comparison sites, in a throwaway copy
+of the module.
+
+Every site is run twice over. Once the way ditto works today — one operator
+flipped, the suite run, repeat — and once against a single instrumented file
+compiled one time, with the site selected through the environment.
+
+*Falsified by a single disagreement between the two verdict vectors, or by the
+instrumented package with nothing selected behaving differently from the
+untouched one.*
+
+**Result: holds.**
+
+    baseline, untouched                    : suite passed
+    instrumented, nothing selected         : suite passed
+
+    verdicts, one flipped operator (today) : KKKSKKKKSKKK
+    verdicts, instrumented and selected    : KKKSKKKKSKKK
+
+    compilations : today 12, instrumented 1
+    wall clock   : today 8.22 s, instrumented 1.77 s
+
+Ten killed, two survived, and the same two survived both ways. The instrumented
+build reaches today's verdicts, and it reaches them from one compilation instead
+of twelve.
+
+The 4.6× is this package's number and should not be carried anywhere else: the
+toll removed per mutant is fixed, so a package whose suite does real work keeps
+that work and shows a smaller ratio. What generalises is the counter — **one
+compilation instead of N** — not the clock.
+
+### Three defects found on the way, all in the harness
+
+None of them were in the rewrite, and each was found by a control rather than by
+reading the code:
+
+- The tool hung for over an hour. Suspected an infinite loop in a mutant —
+  flipping `<` to `<=` in a loop condition writes one — but timing each step
+  separately showed the copy at 158 ms and the hang inside a comment-skipping
+  loop of the harness's own. **The infinite loop was mine.**
+- The instrumented file did not compile: the mutated text was taken by slicing a
+  buffer whose length had changed, because `<` becomes `<=`, which quietly ate
+  the expression's last character.
+- The instrumented package's suite then failed with nothing selected, which
+  looked exactly like the instrumentation having broken it. The control settled
+  it: the **uninstrumented** binary failed the same way, because the harness ran
+  it from the module root and `go test` runs from the package's directory.
+
+The third is the one worth keeping. It produced the precise appearance of the
+result that would have killed the design, and only a control that removed the
+instrumentation could tell the difference.
