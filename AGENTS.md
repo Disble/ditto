@@ -81,7 +81,9 @@ Beware of proxies. A counter that measures one thing and is documented as
 measuring another holds only until the two diverge — which is exactly when you
 need it. `sourceParsesPerRelease` counted AST-node visits and called them
 parses; that was true only while every parse implied one walk, and it silently
-stopped being true the moment parsing was shared.
+stopped being true the moment parsing was shared. That one is written up in
+full in [`docs/learning-log.md`](docs/learning-log.md), along with the
+measurements that redirected this project's optimisation plan.
 
 ## Parallelism is not a direction
 
@@ -105,3 +107,15 @@ file produces 4 and 4.
 
 When a measurement contradicts something already written down — including in
 this file — the measurement wins, and the claim goes with its evidence.
+
+## Where the reasoning lives
+
+- [`docs/learning-log.md`](docs/learning-log.md) — append-only, one dated line
+  per lesson, newest at the bottom, never rewritten. Append to it when
+  something non-obvious turns out to be true. It explains the _why_; it never
+  replaces a check that enforces the _how_.
+- [`docs/backlog.md`](docs/backlog.md) — observations worth acting on later. An
+  entry whose evidence turns out to be a misreading goes away with the
+  misreading.
+- [`perf/baseline.json`](perf/baseline.json) — the recorded cost, and the only
+  thing entitled to say whether a change made ditto faster.

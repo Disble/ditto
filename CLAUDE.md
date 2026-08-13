@@ -45,8 +45,17 @@ test command in it. The two costs that dominate are that per-mutant repository
 and the `go test` invocation itself — measured at 700–1100ms of fixed overhead
 regardless of how fast the suite being mutated actually is.
 
-`docs/backlog.md` holds observations worth acting on later. An entry whose
-evidence turns out to be a misreading goes away with the misreading.
+[`docs/learning-log.md`](docs/learning-log.md) is the append-only why-log: one
+dated line, newest at the bottom, never rewritten. Read it before optimising
+anything — it holds the measurements that already redirected this project's
+plan, including why the gate counts integers instead of milliseconds and why a
+counter that looked correct reported 12 when the answer was 4. Append to it
+when something non-obvious turns out to be true, and enforce the lesson with a
+check whenever one exists.
+
+[`docs/backlog.md`](docs/backlog.md) holds observations worth acting on later.
+An entry whose evidence turns out to be a misreading goes away with the
+misreading.
 
 ## Commands
 
