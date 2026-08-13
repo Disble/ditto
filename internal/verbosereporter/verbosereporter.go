@@ -1,23 +1,23 @@
 package verbosereporter
 
 import (
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/result"
 )
 
 type VerboseReporter struct {
-	logger   ooze.Logger
-	delegate ooze.Reporter
+	logger   ditto.Logger
+	delegate ditto.Reporter
 }
 
-func New(logger ooze.Logger, delegate ooze.Reporter) *VerboseReporter {
+func New(logger ditto.Logger, delegate ditto.Reporter) *VerboseReporter {
 	return &VerboseReporter{
 		logger:   logger,
 		delegate: delegate,
 	}
 }
 
-func (r *VerboseReporter) AddDiagnostic(diagnostic *ooze.Diagnostic) {
+func (r *VerboseReporter) AddDiagnostic(diagnostic *ditto.Diagnostic) {
 	r.logger.Logf("registering diagnostic…")
 	r.delegate.AddDiagnostic(diagnostic)
 }

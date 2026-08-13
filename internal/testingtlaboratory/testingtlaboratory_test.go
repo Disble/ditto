@@ -3,12 +3,12 @@ package testingtlaboratory_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakelaboratory"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakerepository"
-	"github.com/gtramontina/ooze/internal/oozetesting/faketestingt"
-	"github.com/gtramontina/ooze/internal/result"
-	"github.com/gtramontina/ooze/internal/testingtlaboratory"
+	"github.com/Disble/ditto/internal/dittotesting/fakelaboratory"
+	"github.com/Disble/ditto/internal/dittotesting/fakerepository"
+	"github.com/Disble/ditto/internal/dittotesting/faketestingt"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/internal/testingtlaboratory"
 	"github.com/stretchr/testify/assert"
 )
 

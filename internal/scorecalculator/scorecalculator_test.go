@@ -3,7 +3,7 @@ package scorecalculator_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/scorecalculator"
+	"github.com/Disble/ditto/internal/scorecalculator"
 	"github.com/stretchr/testify/assert"
 )
 

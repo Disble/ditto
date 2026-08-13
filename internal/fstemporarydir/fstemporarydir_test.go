@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/fstemporarydir"
+	"github.com/Disble/ditto/internal/fstemporarydir"
 	"github.com/stretchr/testify/assert"
 )
 

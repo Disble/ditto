@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gtramontina/ooze/internal/gosourcefile"
-	"github.com/gtramontina/ooze/internal/ooze"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/gosourcefile"
 )
 
 type FSRepository struct {
@@ -74,7 +74,7 @@ func (r *FSRepository) ListGoSourceFiles() []*gosourcefile.GoSourceFile {
 	return sourceFiles
 }
 
-func (r *FSRepository) LinkAllToTemporaryRepository(temporaryPath string) ooze.TemporaryRepository {
+func (r *FSRepository) LinkAllToTemporaryRepository(temporaryPath string) ditto.TemporaryRepository {
 	rootSize := len(strings.Split(r.root, string(os.PathSeparator)))
 
 	err := filepath.WalkDir(r.root, func(path string, entry fs.DirEntry, err error) error {

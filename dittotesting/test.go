@@ -1,14 +1,14 @@
-package oozetesting
+package dittotesting
 
 import (
 	"os"
 	"path"
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/gosourcefile"
-	"github.com/gtramontina/ooze/internal/gotextdiff"
-	"github.com/gtramontina/ooze/viruses"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/gosourcefile"
+	"github.com/Disble/ditto/internal/gotextdiff"
+	"github.com/Disble/ditto/viruses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

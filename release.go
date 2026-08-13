@@ -1,55 +1,55 @@
-package ooze
+package ditto
 
 import (
 	"flag"
 	"os"
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/cmdtestrunner"
-	"github.com/gtramontina/ooze/internal/color"
-	"github.com/gtramontina/ooze/internal/consolereporter"
-	"github.com/gtramontina/ooze/internal/fsrepository"
-	"github.com/gtramontina/ooze/internal/fstemporarydir"
-	"github.com/gtramontina/ooze/internal/gotextdiff"
-	"github.com/gtramontina/ooze/internal/ignoredrepository"
-	"github.com/gtramontina/ooze/internal/iologger"
-	"github.com/gtramontina/ooze/internal/laboratory"
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/prettydiff"
-	"github.com/gtramontina/ooze/internal/scorecalculator"
-	"github.com/gtramontina/ooze/internal/testingtlaboratory"
-	"github.com/gtramontina/ooze/internal/verboselaboratory"
-	"github.com/gtramontina/ooze/internal/verbosereporter"
-	"github.com/gtramontina/ooze/internal/verboserepository"
-	"github.com/gtramontina/ooze/internal/verbosetemporarydir"
-	"github.com/gtramontina/ooze/internal/verbosetestrunner"
-	"github.com/gtramontina/ooze/viruses"
-	"github.com/gtramontina/ooze/viruses/arithmetic"
-	"github.com/gtramontina/ooze/viruses/arithmeticassignment"
-	"github.com/gtramontina/ooze/viruses/arithmeticassignmentinvert"
-	"github.com/gtramontina/ooze/viruses/bitwise"
-	"github.com/gtramontina/ooze/viruses/comparison"
-	"github.com/gtramontina/ooze/viruses/comparisoninvert"
-	"github.com/gtramontina/ooze/viruses/comparisonreplace"
-	"github.com/gtramontina/ooze/viruses/floatdecrement"
-	"github.com/gtramontina/ooze/viruses/floatincrement"
-	"github.com/gtramontina/ooze/viruses/integerdecrement"
-	"github.com/gtramontina/ooze/viruses/integerincrement"
-	"github.com/gtramontina/ooze/viruses/loopbreak"
-	"github.com/gtramontina/ooze/viruses/loopcondition"
-	"github.com/gtramontina/ooze/viruses/rangebreak"
+	"github.com/Disble/ditto/internal/cmdtestrunner"
+	"github.com/Disble/ditto/internal/color"
+	"github.com/Disble/ditto/internal/consolereporter"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/fsrepository"
+	"github.com/Disble/ditto/internal/fstemporarydir"
+	"github.com/Disble/ditto/internal/gotextdiff"
+	"github.com/Disble/ditto/internal/ignoredrepository"
+	"github.com/Disble/ditto/internal/iologger"
+	"github.com/Disble/ditto/internal/laboratory"
+	"github.com/Disble/ditto/internal/prettydiff"
+	"github.com/Disble/ditto/internal/scorecalculator"
+	"github.com/Disble/ditto/internal/testingtlaboratory"
+	"github.com/Disble/ditto/internal/verboselaboratory"
+	"github.com/Disble/ditto/internal/verbosereporter"
+	"github.com/Disble/ditto/internal/verboserepository"
+	"github.com/Disble/ditto/internal/verbosetemporarydir"
+	"github.com/Disble/ditto/internal/verbosetestrunner"
+	"github.com/Disble/ditto/viruses"
+	"github.com/Disble/ditto/viruses/arithmetic"
+	"github.com/Disble/ditto/viruses/arithmeticassignment"
+	"github.com/Disble/ditto/viruses/arithmeticassignmentinvert"
+	"github.com/Disble/ditto/viruses/bitwise"
+	"github.com/Disble/ditto/viruses/comparison"
+	"github.com/Disble/ditto/viruses/comparisoninvert"
+	"github.com/Disble/ditto/viruses/comparisonreplace"
+	"github.com/Disble/ditto/viruses/floatdecrement"
+	"github.com/Disble/ditto/viruses/floatincrement"
+	"github.com/Disble/ditto/viruses/integerdecrement"
+	"github.com/Disble/ditto/viruses/integerincrement"
+	"github.com/Disble/ditto/viruses/loopbreak"
+	"github.com/Disble/ditto/viruses/loopcondition"
+	"github.com/Disble/ditto/viruses/rangebreak"
 )
 
-var oozeVerbose *bool //nolint:gochecknoglobals
+var dittoVerbose *bool //nolint:gochecknoglobals
 
 func init() { //nolint:gochecknoinits
-	oozeVerbose = flag.Bool("ooze.v", false, "verbose: print additional output")
+	dittoVerbose = flag.Bool("ditto.v", false, "verbose: print additional output")
 }
 
 var defaultOptions = Options{ //nolint:gochecknoglobals
 	Repository:                fsrepository.New("."),
 	TestRunner:                cmdtestrunner.New("go", "test", "-count=1", "./..."),
-	TemporaryDir:              fstemporarydir.New("ooze-"),
+	TemporaryDir:              fstemporarydir.New("ditto-"),
 	MinimumThreshold:          1.0,
 	Parallel:                  false,
 	IgnoreSourceFilesPatterns: nil,
@@ -71,7 +71,7 @@ var defaultOptions = Options{ //nolint:gochecknoglobals
 	},
 }
 
-// Release releases the ooze! It infects all source files with viruses that
+// Release releases the ditto! It infects all source files with viruses that
 // mutate the source code DNA and perform tests to determine whether the mutants
 // survive.
 //
@@ -99,9 +99,9 @@ func Release(t *testing.T, options ...Option) {
 		opts = option(opts)
 	}
 
-	var logger ooze.Logger = iologger.New(os.Stdout)
+	var logger ditto.Logger = iologger.New(os.Stdout)
 
-	var reporter ooze.Reporter = consolereporter.New(
+	var reporter ditto.Reporter = consolereporter.New(
 		logger,
 		prettydiff.New(gotextdiff.New()),
 		scorecalculator.New(),
@@ -119,7 +119,7 @@ func Release(t *testing.T, options ...Option) {
 		reporter = verbosereporter.New(logger, reporter)
 	}
 
-	var lab ooze.Laboratory = laboratory.New(opts.TestRunner, opts.TemporaryDir)
+	var lab ditto.Laboratory = laboratory.New(opts.TestRunner, opts.TemporaryDir)
 	if verbose() {
 		lab = verboselaboratory.New(logger, lab)
 	}
@@ -134,12 +134,12 @@ func Release(t *testing.T, options ...Option) {
 
 	lab = testingtlaboratory.New(t, lab, opts.Parallel)
 
-	logger.Logf("%s %s", color.Yellow("┃"), color.Green("Releasing Ooze…"))
-	ooze.New(opts.Repository, lab, reporter).Release(
+	logger.Logf("%s %s", color.Yellow("┃"), color.Green("Releasing Ditto…"))
+	ditto.New(opts.Repository, lab, reporter).Release(
 		opts.Viruses...,
 	)
 }
 
 func verbose() bool {
-	return *oozeVerbose || testing.Verbose()
+	return *dittoVerbose || testing.Verbose()
 }

@@ -1,14 +1,14 @@
 package laboratory
 
 import (
-	"github.com/gtramontina/ooze/internal/future"
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/future"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/result"
 )
 
 type TestRunner interface {
-	Test(repository ooze.TemporaryRepository) result.Result[string]
+	Test(repository ditto.TemporaryRepository) result.Result[string]
 }
 
 type TemporaryDirectory interface {
@@ -28,7 +28,7 @@ func New(testRunner TestRunner, temporaryDirectory TemporaryDirectory) *Laborato
 }
 
 func (l *Laboratory) Test(
-	repository ooze.Repository,
+	repository ditto.Repository,
 	file *gomutatedfile.GoMutatedFile,
 ) future.Future[result.Result[string]] {
 	tempRepository := repository.LinkAllToTemporaryRepository(l.temporaryDirectory.New())

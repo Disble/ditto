@@ -4,8 +4,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/result"
 )
 
 type CMDTestRunner struct {
@@ -20,7 +20,7 @@ func New(name string, args ...string) *CMDTestRunner {
 	}
 }
 
-func (t *CMDTestRunner) Test(repository ooze.TemporaryRepository) result.Result[string] {
+func (t *CMDTestRunner) Test(repository ditto.TemporaryRepository) result.Result[string] {
 	command := exec.Command(t.name, t.args...) //nolint:gosec
 	command.Dir = repository.Root()
 	command.Env = os.Environ()

@@ -1,21 +1,21 @@
-package ooze
+package ditto
 
 import (
 	"regexp"
 	"strings"
 
-	"github.com/gtramontina/ooze/internal/cmdtestrunner"
-	"github.com/gtramontina/ooze/internal/color"
-	"github.com/gtramontina/ooze/internal/fsrepository"
-	"github.com/gtramontina/ooze/internal/laboratory"
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/viruses"
+	"github.com/Disble/ditto/internal/cmdtestrunner"
+	"github.com/Disble/ditto/internal/color"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/fsrepository"
+	"github.com/Disble/ditto/internal/laboratory"
+	"github.com/Disble/ditto/viruses"
 )
 
 type Option func(Options) Options
 
 type Options struct {
-	Repository                ooze.Repository
+	Repository                ditto.Repository
 	TestRunner                laboratory.TestRunner
 	TemporaryDir              laboratory.TemporaryDirectory
 	MinimumThreshold          float32
@@ -59,7 +59,7 @@ func WithMinimumThreshold(minimumThreshold float32) func(Options) Options {
 }
 
 // Parallel indicates whether to run the tests on the mutants in parallel. Given
-// Ooze is executed via Go's testing framework, the level of parallelism can be
+// Ditto is executed via Go's testing framework, the level of parallelism can be
 // configured when running the mutation tests. For example, with
 // WithTestCommand(`go test -v -tags=mutation -parallel 3`).
 func Parallel() func(Options) Options {

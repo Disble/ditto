@@ -5,7 +5,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/fsrepository"
+	"github.com/Disble/ditto/internal/fsrepository"
 	"github.com/stretchr/testify/assert"
 )
 

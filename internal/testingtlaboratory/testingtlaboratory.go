@@ -3,10 +3,10 @@ package testingtlaboratory
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/future"
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/future"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/result"
 )
 
 type TestingT interface {
@@ -16,11 +16,11 @@ type TestingT interface {
 
 type TestingTLaboratory struct {
 	t        TestingT
-	delegate ooze.Laboratory
+	delegate ditto.Laboratory
 	parallel bool
 }
 
-func New(t TestingT, delegate ooze.Laboratory, parallel bool) *TestingTLaboratory {
+func New(t TestingT, delegate ditto.Laboratory, parallel bool) *TestingTLaboratory {
 	t.Helper()
 
 	return &TestingTLaboratory{
@@ -31,7 +31,7 @@ func New(t TestingT, delegate ooze.Laboratory, parallel bool) *TestingTLaborator
 }
 
 func (l *TestingTLaboratory) Test(
-	repository ooze.Repository,
+	repository ditto.Repository,
 	file *gomutatedfile.GoMutatedFile,
 ) future.Future[result.Result[string]] {
 	l.t.Helper()

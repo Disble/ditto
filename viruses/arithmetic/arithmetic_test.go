@@ -3,15 +3,15 @@ package arithmetic_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/oozetesting"
-	"github.com/gtramontina/ooze/viruses/arithmetic"
+	"github.com/Disble/ditto/dittotesting"
+	"github.com/Disble/ditto/viruses/arithmetic"
 )
 
 func TestArithmetic(t *testing.T) {
-	oozetesting.Run(t, oozetesting.NewScenarios(
+	dittotesting.Run(t, dittotesting.NewScenarios(
 		"Arithmetic",
 		arithmetic.New(),
-		oozetesting.Mutations{
+		dittotesting.Mutations{
 			"no mutations":                        {"source.0.go", []string{}},
 			"no mutation of string concatenation": {"source.7.go", []string{}},
 			"one mutation + to -": {"source.1.go", []string{

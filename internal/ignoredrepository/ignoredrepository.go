@@ -3,16 +3,16 @@ package ignoredrepository
 import (
 	"regexp"
 
-	"github.com/gtramontina/ooze/internal/gosourcefile"
-	"github.com/gtramontina/ooze/internal/ooze"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/gosourcefile"
 )
 
 type FilteredRepository struct {
 	patterns []*regexp.Regexp
-	delegate ooze.Repository
+	delegate ditto.Repository
 }
 
-func New(patterns []*regexp.Regexp, delegate ooze.Repository) *FilteredRepository {
+func New(patterns []*regexp.Regexp, delegate ditto.Repository) *FilteredRepository {
 	return &FilteredRepository{
 		patterns: patterns,
 		delegate: delegate,
@@ -35,6 +35,6 @@ FILE_LOOP:
 	return filtered
 }
 
-func (r *FilteredRepository) LinkAllToTemporaryRepository(temporaryPath string) ooze.TemporaryRepository {
+func (r *FilteredRepository) LinkAllToTemporaryRepository(temporaryPath string) ditto.TemporaryRepository {
 	return r.delegate.LinkAllToTemporaryRepository(temporaryPath)
 }

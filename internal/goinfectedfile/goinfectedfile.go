@@ -7,7 +7,7 @@ import (
 	"go/format"
 	"go/token"
 
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/gomutatedfile"
 )
 
 type Infection interface {

@@ -3,16 +3,16 @@ package cancelnil_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/oozetesting"
-	"github.com/gtramontina/ooze/viruses/cancelnil"
+	"github.com/Disble/ditto/dittotesting"
+	"github.com/Disble/ditto/viruses/cancelnil"
 )
 
 func TestCancelNil(t *testing.T) {
-	t.Skip("temporarily: https://github.com/gtramontina/ooze/pull/10")
-	oozetesting.Run(t, oozetesting.NewScenarios(
+	t.Skip("temporarily: https://github.com/Disble/ditto/pull/10")
+	dittotesting.Run(t, dittotesting.NewScenarios(
 		"Call cancel(nil)",
 		cancelnil.New(),
-		oozetesting.Mutations{
+		dittotesting.Mutations{
 			"no mutations": {"source.0.go", []string{}},
 			"one mutation": {"source.1.go", []string{
 				"source.1.mut.1.go",

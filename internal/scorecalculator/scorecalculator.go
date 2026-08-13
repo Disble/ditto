@@ -1,10 +1,10 @@
 package scorecalculator
 
 import (
-	"github.com/gtramontina/ooze/internal/ooze"
+	"github.com/Disble/ditto/internal/ditto"
 )
 
-func New() ooze.ScoreCalculator {
+func New() ditto.ScoreCalculator {
 	return func(total, killed int) float32 {
 		var score float32 = -1
 		if total > 0 {

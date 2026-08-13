@@ -3,15 +3,15 @@ package floatdecrement_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/oozetesting"
-	"github.com/gtramontina/ooze/viruses/floatdecrement"
+	"github.com/Disble/ditto/dittotesting"
+	"github.com/Disble/ditto/viruses/floatdecrement"
 )
 
 func TestFloatDecrement_32(t *testing.T) {
-	oozetesting.Run(t, oozetesting.NewScenarios(
+	dittotesting.Run(t, dittotesting.NewScenarios(
 		"Float Decrement",
 		floatdecrement.New(),
-		oozetesting.Mutations{
+		dittotesting.Mutations{
 			"no mutations": {"source32.0.go", []string{}},
 			"one mutation": {"source32.1.go", []string{
 				"source32.1.mut.1.go",
@@ -33,10 +33,10 @@ func TestFloatDecrement_32(t *testing.T) {
 }
 
 func TestFloatDecrement_64(t *testing.T) {
-	oozetesting.Run(t, oozetesting.NewScenarios(
+	dittotesting.Run(t, dittotesting.NewScenarios(
 		"Float Decrement",
 		floatdecrement.New(),
-		oozetesting.Mutations{
+		dittotesting.Mutations{
 			"no mutations": {"source64.0.go", []string{}},
 			"one mutation": {"source64.1.go", []string{
 				"source64.1.mut.1.go",

@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gtramontina/ooze/internal/gosourcefile"
-	"github.com/gtramontina/ooze/internal/ooze"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/gosourcefile"
 )
 
 type FS map[string][]byte
@@ -52,7 +52,7 @@ func (r *FakeRepository) ListGoSourceFiles() []*gosourcefile.GoSourceFile {
 	return sources
 }
 
-func (r *FakeRepository) LinkAllToTemporaryRepository(directoryPath string) ooze.TemporaryRepository {
+func (r *FakeRepository) LinkAllToTemporaryRepository(directoryPath string) ditto.TemporaryRepository {
 	if r.tempCount >= len(r.temps) {
 		panic("fakerepository: temporary repositories not setup")
 	}

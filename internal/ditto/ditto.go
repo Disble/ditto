@@ -1,12 +1,12 @@
-package ooze
+package ditto
 
 import (
-	"github.com/gtramontina/ooze/internal/future"
-	"github.com/gtramontina/ooze/internal/goinfectedfile"
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/gosourcefile"
-	"github.com/gtramontina/ooze/internal/result"
-	"github.com/gtramontina/ooze/viruses"
+	"github.com/Disble/ditto/internal/future"
+	"github.com/Disble/ditto/internal/goinfectedfile"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/gosourcefile"
+	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/viruses"
 )
 
 type Logger interface {
@@ -59,21 +59,21 @@ type Reporter interface {
 	Summarize() result.Result[any]
 }
 
-type Ooze struct {
+type Ditto struct {
 	repository Repository
 	laboratory Laboratory
 	reporter   Reporter
 }
 
-func New(repository Repository, laboratory Laboratory, reporter Reporter) *Ooze {
-	return &Ooze{
+func New(repository Repository, laboratory Laboratory, reporter Reporter) *Ditto {
+	return &Ditto{
 		repository: repository,
 		laboratory: laboratory,
 		reporter:   reporter,
 	}
 }
 
-func (o *Ooze) Release(viri ...viruses.Virus) {
+func (o *Ditto) Release(viri ...viruses.Virus) {
 	sources := o.repository.ListGoSourceFiles()
 
 	var incubated []*goinfectedfile.GoInfectedFile

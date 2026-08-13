@@ -5,7 +5,7 @@ import (
 	"go/token"
 	"go/types"
 
-	"github.com/gtramontina/ooze/viruses"
+	"github.com/Disble/ditto/viruses"
 )
 
 type ComparisonInvert struct {

@@ -6,8 +6,8 @@ import (
 	"go/parser"
 	"go/token"
 
-	"github.com/gtramontina/ooze/internal/goinfectedfile"
-	"github.com/gtramontina/ooze/viruses"
+	"github.com/Disble/ditto/internal/goinfectedfile"
+	"github.com/Disble/ditto/viruses"
 )
 
 type GoSourceFile struct {

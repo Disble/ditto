@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/iologger"
+	"github.com/Disble/ditto/internal/iologger"
 	"github.com/stretchr/testify/assert"
 )
 

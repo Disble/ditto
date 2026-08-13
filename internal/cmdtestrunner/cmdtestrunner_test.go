@@ -4,9 +4,9 @@ import (
 	"path"
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/cmdtestrunner"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakerepository"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/cmdtestrunner"
+	"github.com/Disble/ditto/internal/dittotesting/fakerepository"
+	"github.com/Disble/ditto/internal/result"
 	"github.com/stretchr/testify/assert"
 )
 

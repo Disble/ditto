@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakediffer"
+	"github.com/Disble/ditto/internal/dittotesting/fakediffer"
+	"github.com/Disble/ditto/internal/gomutatedfile"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -3,9 +3,9 @@ package prettydiff_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/color"
-	"github.com/gtramontina/ooze/internal/oozetesting/stubdiffer"
-	"github.com/gtramontina/ooze/internal/prettydiff"
+	"github.com/Disble/ditto/internal/color"
+	"github.com/Disble/ditto/internal/dittotesting/stubdiffer"
+	"github.com/Disble/ditto/internal/prettydiff"
 	"github.com/stretchr/testify/assert"
 )
 

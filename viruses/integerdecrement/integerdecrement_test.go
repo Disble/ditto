@@ -3,15 +3,15 @@ package integerdecrement_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/oozetesting"
-	"github.com/gtramontina/ooze/viruses/integerdecrement"
+	"github.com/Disble/ditto/dittotesting"
+	"github.com/Disble/ditto/viruses/integerdecrement"
 )
 
 func TestIntegerDecrement(t *testing.T) {
-	oozetesting.Run(t, oozetesting.NewScenarios(
+	dittotesting.Run(t, dittotesting.NewScenarios(
 		"Integer Decrement",
 		integerdecrement.New(),
-		oozetesting.Mutations{
+		dittotesting.Mutations{
 			"no mutations": {"source.0.go", []string{}},
 			"one mutation": {"source.1.go", []string{
 				"source.1.mut.1.go",

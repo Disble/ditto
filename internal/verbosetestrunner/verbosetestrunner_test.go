@@ -3,11 +3,11 @@ package verbosetestrunner_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/oozetesting/fakelogger"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakerepository"
-	"github.com/gtramontina/ooze/internal/oozetesting/faketestrunner"
-	"github.com/gtramontina/ooze/internal/result"
-	"github.com/gtramontina/ooze/internal/verbosetestrunner"
+	"github.com/Disble/ditto/internal/dittotesting/fakelogger"
+	"github.com/Disble/ditto/internal/dittotesting/fakerepository"
+	"github.com/Disble/ditto/internal/dittotesting/faketestrunner"
+	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/internal/verbosetestrunner"
 	"github.com/stretchr/testify/assert"
 )
 

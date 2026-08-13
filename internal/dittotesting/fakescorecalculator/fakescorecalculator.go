@@ -1,10 +1,10 @@
 package fakescorecalculator
 
 import (
-	"github.com/gtramontina/ooze/internal/ooze"
+	"github.com/Disble/ditto/internal/ditto"
 )
 
-func Always(score float32) ooze.ScoreCalculator {
+func Always(score float32) ditto.ScoreCalculator {
 	return func(_total, _killed int) float32 { //nolint:revive
 		return score
 	}

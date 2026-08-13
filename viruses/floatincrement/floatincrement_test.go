@@ -3,15 +3,15 @@ package floatincrement_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/oozetesting"
-	"github.com/gtramontina/ooze/viruses/floatincrement"
+	"github.com/Disble/ditto/dittotesting"
+	"github.com/Disble/ditto/viruses/floatincrement"
 )
 
 func TestFloatIncrement_32(t *testing.T) {
-	oozetesting.Run(t, oozetesting.NewScenarios(
+	dittotesting.Run(t, dittotesting.NewScenarios(
 		"Float Increment",
 		floatincrement.New(),
-		oozetesting.Mutations{
+		dittotesting.Mutations{
 			"no mutations": {"source32.0.go", []string{}},
 			"one mutation": {"source32.1.go", []string{
 				"source32.1.mut.1.go",
@@ -33,10 +33,10 @@ func TestFloatIncrement_32(t *testing.T) {
 }
 
 func TestFloatIncrement_64(t *testing.T) {
-	oozetesting.Run(t, oozetesting.NewScenarios(
+	dittotesting.Run(t, dittotesting.NewScenarios(
 		"Float Increment",
 		floatincrement.New(),
-		oozetesting.Mutations{
+		dittotesting.Mutations{
 			"no mutations": {"source64.0.go", []string{}},
 			"one mutation": {"source64.1.go", []string{
 				"source64.1.mut.1.go",

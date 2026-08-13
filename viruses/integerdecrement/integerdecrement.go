@@ -6,7 +6,7 @@ import (
 	"go/types"
 	"strconv"
 
-	"github.com/gtramontina/ooze/viruses"
+	"github.com/Disble/ditto/viruses"
 )
 
 type IntegerDecrement struct{}

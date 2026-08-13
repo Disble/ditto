@@ -1,13 +1,13 @@
 package verboserepository
 
-import "github.com/gtramontina/ooze/internal/ooze"
+import "github.com/Disble/ditto/internal/ditto"
 
 type VerboseTemporaryRepository struct {
-	logger   ooze.Logger
-	delegate ooze.TemporaryRepository
+	logger   ditto.Logger
+	delegate ditto.TemporaryRepository
 }
 
-func NewVerboseTemporaryRepository(logger ooze.Logger, delegate ooze.TemporaryRepository) *VerboseTemporaryRepository {
+func NewVerboseTemporaryRepository(logger ditto.Logger, delegate ditto.TemporaryRepository) *VerboseTemporaryRepository {
 	return &VerboseTemporaryRepository{
 		logger:   logger,
 		delegate: delegate,

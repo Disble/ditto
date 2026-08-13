@@ -1,16 +1,16 @@
 package verboserepository
 
 import (
-	"github.com/gtramontina/ooze/internal/gosourcefile"
-	"github.com/gtramontina/ooze/internal/ooze"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/gosourcefile"
 )
 
 type VerboseRepository struct {
-	logger   ooze.Logger
-	delegate ooze.Repository
+	logger   ditto.Logger
+	delegate ditto.Repository
 }
 
-func New(logger ooze.Logger, delegate ooze.Repository) *VerboseRepository {
+func New(logger ditto.Logger, delegate ditto.Repository) *VerboseRepository {
 	return &VerboseRepository{
 		logger:   logger,
 		delegate: delegate,
@@ -25,7 +25,7 @@ func (r *VerboseRepository) ListGoSourceFiles() []*gosourcefile.GoSourceFile {
 	return files
 }
 
-func (r *VerboseRepository) LinkAllToTemporaryRepository(temporaryPath string) ooze.TemporaryRepository {
+func (r *VerboseRepository) LinkAllToTemporaryRepository(temporaryPath string) ditto.TemporaryRepository {
 	r.logger.Logf("linking all files to temporary path '%s'…", temporaryPath)
 	repository := r.delegate.LinkAllToTemporaryRepository(temporaryPath)
 	r.logger.Logf("linked all files to temporary path '%s'", temporaryPath)

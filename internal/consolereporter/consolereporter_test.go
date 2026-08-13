@@ -3,15 +3,15 @@ package consolereporter_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/color"
-	"github.com/gtramontina/ooze/internal/consolereporter"
-	"github.com/gtramontina/ooze/internal/future"
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakelogger"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakescorecalculator"
-	"github.com/gtramontina/ooze/internal/oozetesting/stubdiffer"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/color"
+	"github.com/Disble/ditto/internal/consolereporter"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/dittotesting/fakelogger"
+	"github.com/Disble/ditto/internal/dittotesting/fakescorecalculator"
+	"github.com/Disble/ditto/internal/dittotesting/stubdiffer"
+	"github.com/Disble/ditto/internal/future"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/result"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,7 +35,7 @@ func TestConsoleReporterSummary(t *testing.T) {
 	t.Run("reports summary when there is one positive diagnostic", func(t *testing.T) {
 		logger := fakelogger.New()
 		reporter := consolereporter.New(logger, stubdiffer.New("+dummy diff"), fakescorecalculator.Always(0), 0)
-		reporter.AddDiagnostic(ooze.NewDiagnostic(
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Ok("mutant killed")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil)),
 		)
@@ -55,7 +55,7 @@ func TestConsoleReporterSummary(t *testing.T) {
 	t.Run("reports summary when there is one negative diagnostic", func(t *testing.T) {
 		logger := fakelogger.New()
 		reporter := consolereporter.New(logger, stubdiffer.New("+dummy diff"), fakescorecalculator.Always(0), 0)
-		reporter.AddDiagnostic(ooze.NewDiagnostic(
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Err[string]("mutant survived")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil)),
 		)
@@ -80,35 +80,35 @@ func TestConsoleReporterSummary(t *testing.T) {
 	t.Run("reports summary when there are multiple mixed diagnostics", func(t *testing.T) {
 		logger := fakelogger.New()
 		reporter := consolereporter.New(logger, stubdiffer.New("+dummy diff"), fakescorecalculator.Always(0), 0)
-		reporter.AddDiagnostic(ooze.NewDiagnostic(
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Err[string]("mutant survived")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil)),
 		)
-		reporter.AddDiagnostic(ooze.NewDiagnostic(
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Ok("mutant killed")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil)),
 		)
-		reporter.AddDiagnostic(ooze.NewDiagnostic(
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Ok("mutant killed")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil)),
 		)
-		reporter.AddDiagnostic(ooze.NewDiagnostic(
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Ok("mutant killed")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil)),
 		)
-		reporter.AddDiagnostic(ooze.NewDiagnostic(
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Err[string]("mutant survived")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil)),
 		)
-		reporter.AddDiagnostic(ooze.NewDiagnostic(
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Err[string]("mutant survived")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil)),
 		)
-		reporter.AddDiagnostic(ooze.NewDiagnostic(
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Ok("mutant killed")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil)),
 		)
-		reporter.AddDiagnostic(ooze.NewDiagnostic(
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Ok("mutant killed")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil)),
 		)

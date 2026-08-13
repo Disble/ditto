@@ -4,9 +4,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/gosourcefile"
-	"github.com/gtramontina/ooze/internal/ignoredrepository"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakerepository"
+	"github.com/Disble/ditto/internal/dittotesting/fakerepository"
+	"github.com/Disble/ditto/internal/gosourcefile"
+	"github.com/Disble/ditto/internal/ignoredrepository"
 	"github.com/stretchr/testify/assert"
 )
 

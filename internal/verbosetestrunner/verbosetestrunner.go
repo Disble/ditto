@@ -1,24 +1,24 @@
 package verbosetestrunner
 
 import (
-	"github.com/gtramontina/ooze/internal/laboratory"
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/laboratory"
+	"github.com/Disble/ditto/internal/result"
 )
 
 type VerboseTestRunner struct {
-	logger   ooze.Logger
+	logger   ditto.Logger
 	delegate laboratory.TestRunner
 }
 
-func New(logger ooze.Logger, delegate laboratory.TestRunner) *VerboseTestRunner {
+func New(logger ditto.Logger, delegate laboratory.TestRunner) *VerboseTestRunner {
 	return &VerboseTestRunner{
 		logger:   logger,
 		delegate: delegate,
 	}
 }
 
-func (r *VerboseTestRunner) Test(repository ooze.TemporaryRepository) result.Result[string] {
+func (r *VerboseTestRunner) Test(repository ditto.TemporaryRepository) result.Result[string] {
 	r.logger.Logf("running tests on '%s'…", repository.Root())
 	output := r.delegate.Test(repository)
 

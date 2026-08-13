@@ -3,24 +3,24 @@ package laboratory_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/laboratory"
-	"github.com/gtramontina/ooze/internal/oozetesting"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakerepository"
-	"github.com/gtramontina/ooze/internal/oozetesting/faketempdirectory"
-	"github.com/gtramontina/ooze/internal/oozetesting/faketestrunner"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/dittotesting"
+	"github.com/Disble/ditto/internal/dittotesting/fakerepository"
+	"github.com/Disble/ditto/internal/dittotesting/faketempdirectory"
+	"github.com/Disble/ditto/internal/dittotesting/faketestrunner"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/laboratory"
+	"github.com/Disble/ditto/internal/result"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestLaboratory(t *testing.T) {
-	source := oozetesting.Source(`
+	source := dittotesting.Source(`
 	|package source
 	|
 	|var number = 1
 	|`)
 
-	sourceIntegerdecrementMutation1 := oozetesting.Source(`
+	sourceIntegerdecrementMutation1 := dittotesting.Source(`
 	|package source
 	|
 	|var number = 0

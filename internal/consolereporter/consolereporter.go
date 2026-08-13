@@ -3,24 +3,24 @@ package consolereporter
 import (
 	"strings"
 
-	"github.com/gtramontina/ooze/internal/color"
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/color"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/result"
 )
 
 type ConsoleReporter struct {
-	logger           ooze.Logger
+	logger           ditto.Logger
 	differ           gomutatedfile.Differ
-	calculator       ooze.ScoreCalculator
+	calculator       ditto.ScoreCalculator
 	minimumThreshold float32
-	diagnostics      []*ooze.Diagnostic
+	diagnostics      []*ditto.Diagnostic
 }
 
 func New(
-	logger ooze.Logger,
+	logger ditto.Logger,
 	differ gomutatedfile.Differ,
-	calculator ooze.ScoreCalculator,
+	calculator ditto.ScoreCalculator,
 	minimumThreshold float32,
 ) *ConsoleReporter {
 	return &ConsoleReporter{
@@ -28,11 +28,11 @@ func New(
 		differ:           differ,
 		calculator:       calculator,
 		minimumThreshold: minimumThreshold,
-		diagnostics:      []*ooze.Diagnostic{},
+		diagnostics:      []*ditto.Diagnostic{},
 	}
 }
 
-func (r *ConsoleReporter) AddDiagnostic(diagnostic *ooze.Diagnostic) {
+func (r *ConsoleReporter) AddDiagnostic(diagnostic *ditto.Diagnostic) {
 	r.diagnostics = append(r.diagnostics, diagnostic)
 }
 
@@ -72,7 +72,7 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 	return res
 }
 
-func (r *ConsoleReporter) logDiff(diagnostic *ooze.Diagnostic) {
+func (r *ConsoleReporter) logDiff(diagnostic *ditto.Diagnostic) {
 	r.logger.Logf("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅")
 	r.logger.Logf("┃ 🧬 "+color.BoldRed("Mutant survived:")+" %s", diagnostic.Label())
 	r.logger.Logf("┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")

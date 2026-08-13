@@ -3,8 +3,8 @@ package prettydiff
 import (
 	"strings"
 
-	"github.com/gtramontina/ooze/internal/color"
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/color"
+	"github.com/Disble/ditto/internal/gomutatedfile"
 )
 
 type PrettyDiff struct {

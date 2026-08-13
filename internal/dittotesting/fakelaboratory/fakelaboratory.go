@@ -3,10 +3,10 @@ package fakelaboratory
 import (
 	"reflect"
 
-	"github.com/gtramontina/ooze/internal/future"
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/future"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/result"
 )
 
 type FakeLaboratory struct {
@@ -15,13 +15,13 @@ type FakeLaboratory struct {
 }
 
 type Result struct {
-	expectedRepository  ooze.Repository
+	expectedRepository  ditto.Repository
 	expectedMutatedFile *gomutatedfile.GoMutatedFile
 	output              result.Result[string]
 }
 
 func NewResult(
-	expectedRepository ooze.Repository,
+	expectedRepository ditto.Repository,
 	expectedMutatedFile *gomutatedfile.GoMutatedFile,
 	output result.Result[string],
 ) *Result {
@@ -47,7 +47,7 @@ func NewAlways(output result.Result[string]) *FakeLaboratory {
 }
 
 func (l *FakeLaboratory) Test(
-	repository ooze.Repository,
+	repository ditto.Repository,
 	file *gomutatedfile.GoMutatedFile,
 ) future.Future[result.Result[string]] {
 	if l.always != nil {

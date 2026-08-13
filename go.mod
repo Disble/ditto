@@ -1,14 +1,6 @@
-module github.com/gtramontina/ooze
+module github.com/Disble/ditto
 
 go 1.22
-
-retract (
-	// This version contains retractions only.
-	v0.3.1
-	// This version contains an issue that prevents Ooze from running on
-	// internal packages. See https://github.com/gtramontina/ooze/issues/9.
-	v0.3.0
-)
 
 require (
 	github.com/fatih/color v1.18.0

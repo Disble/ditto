@@ -3,9 +3,9 @@ package verbosetemporarydir_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/oozetesting/fakelogger"
-	"github.com/gtramontina/ooze/internal/oozetesting/faketempdirectory"
-	"github.com/gtramontina/ooze/internal/verbosetemporarydir"
+	"github.com/Disble/ditto/internal/dittotesting/fakelogger"
+	"github.com/Disble/ditto/internal/dittotesting/faketempdirectory"
+	"github.com/Disble/ditto/internal/verbosetemporarydir"
 	"github.com/stretchr/testify/assert"
 )
 

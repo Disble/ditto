@@ -3,9 +3,9 @@ package verboserepository_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/oozetesting/fakelogger"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakerepository"
-	"github.com/gtramontina/ooze/internal/verboserepository"
+	"github.com/Disble/ditto/internal/dittotesting/fakelogger"
+	"github.com/Disble/ditto/internal/dittotesting/fakerepository"
+	"github.com/Disble/ditto/internal/verboserepository"
 	"github.com/stretchr/testify/assert"
 )
 

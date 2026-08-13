@@ -3,15 +3,15 @@ package comparisonreplace_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/oozetesting"
-	"github.com/gtramontina/ooze/viruses/comparisonreplace"
+	"github.com/Disble/ditto/dittotesting"
+	"github.com/Disble/ditto/viruses/comparisonreplace"
 )
 
 func TestComparisonInvert(t *testing.T) {
-	oozetesting.Run(t, oozetesting.NewScenarios(
+	dittotesting.Run(t, dittotesting.NewScenarios(
 		"Comparison Replace",
 		comparisonreplace.New(),
-		oozetesting.Mutations{
+		dittotesting.Mutations{
 			"no mutations": {"source.0.go", []string{}},
 			"mutate && left and right to true": {"source.1.go", []string{
 				"source.1.mut.1.go",

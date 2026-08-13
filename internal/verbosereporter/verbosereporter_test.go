@@ -3,13 +3,13 @@ package verbosereporter_test
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/future"
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakelogger"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakereporter"
-	"github.com/gtramontina/ooze/internal/result"
-	"github.com/gtramontina/ooze/internal/verbosereporter"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/dittotesting/fakelogger"
+	"github.com/Disble/ditto/internal/dittotesting/fakereporter"
+	"github.com/Disble/ditto/internal/future"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/internal/verbosereporter"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,7 +20,7 @@ func TestVerboseReporter(t *testing.T) {
 		verbosereporter.New(
 			logger,
 			fakereporter.New(),
-		).AddDiagnostic(ooze.NewDiagnostic(
+		).AddDiagnostic(ditto.NewDiagnostic(
 			future.Resolved(result.Ok("dummy")),
 			gomutatedfile.New("dummy", "dummy.go", nil, nil),
 		))

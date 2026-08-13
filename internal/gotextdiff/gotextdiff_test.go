@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/gotextdiff"
+	"github.com/Disble/ditto/internal/gotextdiff"
 	"github.com/stretchr/testify/assert"
 )
 

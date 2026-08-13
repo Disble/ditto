@@ -1,26 +1,26 @@
-package ooze_test
+package ditto_test
 
 import (
 	"testing"
 
-	"github.com/gtramontina/ooze/internal/gomutatedfile"
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/oozetesting"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakelaboratory"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakereporter"
-	"github.com/gtramontina/ooze/internal/oozetesting/fakerepository"
-	"github.com/gtramontina/ooze/internal/result"
-	"github.com/gtramontina/ooze/viruses/integerdecrement"
-	"github.com/gtramontina/ooze/viruses/integerincrement"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/dittotesting"
+	"github.com/Disble/ditto/internal/dittotesting/fakelaboratory"
+	"github.com/Disble/ditto/internal/dittotesting/fakereporter"
+	"github.com/Disble/ditto/internal/dittotesting/fakerepository"
+	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/viruses/integerdecrement"
+	"github.com/Disble/ditto/viruses/integerincrement"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestOoze_nothing_to_test(t *testing.T) {
-	source0 := oozetesting.Source(`
+func TestDitto_nothing_to_test(t *testing.T) {
+	source0 := dittotesting.Source(`
 	|package dummy
 	|`)
 
-	source1 := oozetesting.Source(`
+	source1 := dittotesting.Source(`
 	|package source
 	|
 	|var text = "value"
@@ -28,7 +28,7 @@ func TestOoze_nothing_to_test(t *testing.T) {
 
 	t.Run("no files", func(t *testing.T) {
 		reporter := fakereporter.New()
-		ooze.New(
+		ditto.New(
 			fakerepository.New(fakerepository.FS{}),
 			fakelaboratory.New(),
 			reporter,
@@ -43,7 +43,7 @@ func TestOoze_nothing_to_test(t *testing.T) {
 
 	t.Run("no viruses yields failed result", func(t *testing.T) {
 		reporter := fakereporter.New()
-		ooze.New(
+		ditto.New(
 			fakerepository.New(fakerepository.FS{"source0.go": source0}),
 			fakelaboratory.New(),
 			reporter,
@@ -58,7 +58,7 @@ func TestOoze_nothing_to_test(t *testing.T) {
 
 	t.Run("one file, one virus and no infections yields failed result", func(t *testing.T) {
 		reporter := fakereporter.New()
-		ooze.New(
+		ditto.New(
 			fakerepository.New(fakerepository.FS{"source1.go": source1}),
 			fakelaboratory.New(),
 			reporter,
@@ -80,35 +80,35 @@ type scenario struct {
 	expectedSummary       *fakereporter.Summary
 }
 
-func TestOoze_with_mutations(t *testing.T) {
-	source2 := oozetesting.Source(`
+func TestDitto_with_mutations(t *testing.T) {
+	source2 := dittotesting.Source(`
 	|package source
 	|
 	|var number = 0
 	|`)
 
-	source2integerincrementMutation1 := gomutatedfile.New("Integer Increment", "source2.go", source2, oozetesting.Source(`
+	source2integerincrementMutation1 := gomutatedfile.New("Integer Increment", "source2.go", source2, dittotesting.Source(`
 	|package source
 	|
 	|var number = 1
 	|`),
 	)
 
-	source2integerdecrementMutation1 := gomutatedfile.New("Integer Decrement", "source2.go", source2, oozetesting.Source(`
+	source2integerdecrementMutation1 := gomutatedfile.New("Integer Decrement", "source2.go", source2, dittotesting.Source(`
 	|package source
 	|
 	|var number = -1
 	|`),
 	)
 
-	source3 := oozetesting.Source(`
+	source3 := dittotesting.Source(`
 	|package source
 	|
 	|var number0 = 0
 	|var number1 = 1
 	|`)
 
-	source3integerincrementMutation1 := gomutatedfile.New("Integer Increment", "source3.go", source3, oozetesting.Source(`
+	source3integerincrementMutation1 := gomutatedfile.New("Integer Increment", "source3.go", source3, dittotesting.Source(`
 	|package source
 	|
 	|var number0 = 1
@@ -116,7 +116,7 @@ func TestOoze_with_mutations(t *testing.T) {
 	|`),
 	)
 
-	source3integerincrementMutation2 := gomutatedfile.New("Integer Increment", "source3.go", source3, oozetesting.Source(`
+	source3integerincrementMutation2 := gomutatedfile.New("Integer Increment", "source3.go", source3, dittotesting.Source(`
 	|package source
 	|
 	|var number0 = 0
@@ -124,13 +124,13 @@ func TestOoze_with_mutations(t *testing.T) {
 	|`),
 	)
 
-	source4 := oozetesting.Source(`
+	source4 := dittotesting.Source(`
 	|package source
 	|
 	|var anotherNumber = 0
 	|`)
 
-	source4integerincrementMutation1 := gomutatedfile.New("Integer Increment", "source4.go", source4, oozetesting.Source(`
+	source4integerincrementMutation1 := gomutatedfile.New("Integer Increment", "source4.go", source4, dittotesting.Source(`
 	|package source
 	|
 	|var anotherNumber = 1
@@ -140,7 +140,7 @@ func TestOoze_with_mutations(t *testing.T) {
 	t.Run("one file, one virus and one infection", func(t *testing.T) {
 		reporter := fakereporter.New()
 		repository := fakerepository.New(fakerepository.FS{"source2.go": source2})
-		ooze.New(
+		ditto.New(
 			repository,
 			fakelaboratory.New(
 				fakelaboratory.NewResult(
@@ -194,7 +194,7 @@ func TestOoze_with_mutations(t *testing.T) {
 				t.Run(scene.description, func(t *testing.T) {
 					reporter := fakereporter.New()
 					repository := fakerepository.New(fakerepository.FS{"source3.go": source3})
-					ooze.New(
+					ditto.New(
 						repository,
 						fakelaboratory.New(
 							fakelaboratory.NewResult(
@@ -253,7 +253,7 @@ func TestOoze_with_mutations(t *testing.T) {
 				t.Run(scene.description, func(t *testing.T) {
 					reporter := fakereporter.New()
 					repository := fakerepository.New(fakerepository.FS{"source2.go": source2})
-					ooze.New(
+					ditto.New(
 						repository,
 						fakelaboratory.New(
 							fakelaboratory.NewResult(
@@ -318,7 +318,7 @@ func TestOoze_with_mutations(t *testing.T) {
 						"source2.go": source2,
 						"source4.go": source4,
 					})
-					ooze.New(
+					ditto.New(
 						repository,
 						fakelaboratory.New(
 							fakelaboratory.NewResult(

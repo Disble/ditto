@@ -1,4 +1,4 @@
-package oozetesting
+package dittotesting
 
 import "regexp"
 

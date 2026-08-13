@@ -1,23 +1,23 @@
 package fakereporter
 
 import (
-	"github.com/gtramontina/ooze/internal/ooze"
-	"github.com/gtramontina/ooze/internal/result"
+	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/result"
 )
 
 type FakeReporter struct {
-	diagnostics []*ooze.Diagnostic
+	diagnostics []*ditto.Diagnostic
 	summary     *Summary
 }
 
 func New() *FakeReporter {
 	return &FakeReporter{
-		diagnostics: []*ooze.Diagnostic{},
+		diagnostics: []*ditto.Diagnostic{},
 		summary:     nil,
 	}
 }
 
-func (r *FakeReporter) AddDiagnostic(diagnostic *ooze.Diagnostic) {
+func (r *FakeReporter) AddDiagnostic(diagnostic *ditto.Diagnostic) {
 	r.diagnostics = append(r.diagnostics, diagnostic)
 }
 

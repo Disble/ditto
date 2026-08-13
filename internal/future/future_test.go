@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gtramontina/ooze/internal/future"
+	"github.com/Disble/ditto/internal/future"
 	"github.com/stretchr/testify/assert"
 )
 
