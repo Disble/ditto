@@ -40,10 +40,18 @@ worktree:
 Both times **the command succeeded**. That is the trap: a misdirected Git
 command does not fail, so the damage is silent and the test still passes.
 
-Ditto's own process spawning now strips `GIT_DIR`, `GIT_INDEX_FILE`,
-`GIT_WORK_TREE`, `GIT_OBJECT_DIRECTORY` and `GIT_COMMON_DIR`. That closes the
-path we found. It does not make the rule optional — the next such path will be
-found the same way this one was.
+Ditto's own process spawning strips `GIT_DIR`, `GIT_INDEX_FILE`,
+`GIT_WORK_TREE`, `GIT_OBJECT_DIRECTORY` and `GIT_COMMON_DIR`, in
+`internal/cmdtestrunner`. That closes the path we found. It does not make the
+rule optional — the next such path will be found the same way this one was.
+
+This paragraph claimed that before any code did it: the fix from the incident
+landed in the consuming wrapper, and this file was written as though ditto had
+absorbed it. A decoy test — `cannot reach a repository outside the sandbox`, in
+`internal/cmdtestrunner` — reproduced the incident against the unchanged code on
+its first run, and now fails if the stripping is ever removed. **A sentence in
+this file is not a guard.** If something here describes a safety property, look
+for the test that refuses without it.
 
 ### How to verify isolation without risking anything
 
