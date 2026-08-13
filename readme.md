@@ -1,6 +1,6 @@
 <h1 align="center">
 <a href="https://github.com/Disble/ditto">
-	<img src=".assets/logo.svg" alt="ditto logo">
+	<img src=".assets/logo.png" alt="ditto logo" width="147" height="100">
 </a>
 </h1>
 
@@ -23,7 +23,7 @@ The fork exists to push on two things, in this order:
 built for the other place: inside a TDD loop, on staged changes, while you are
 still writing the code. That means the target is not throughput on a build
 server, it is latency on the laptop you are also editing in — and it means
-deliberately *not* buying speed with parallelism that makes the machine
+deliberately _not_ buying speed with parallelism that makes the machine
 unusable.
 
 **Well made.** A fast answer that is wrong is worse than no answer, because you
@@ -38,13 +38,13 @@ For a library whose reason to exist is being cheap enough to run, "it got
 slower" is the same statement as "it stopped working". So the cost is recorded
 rather than remembered:
 
-* `perf/baseline.json` holds exact counters — files linked per mutant, parses
+- `perf/baseline.json` holds exact counters — files linked per mutant, parses
   per release, test-command runs per release. Integers, identical on every
   machine, unaffected by whatever else the machine is doing.
-* `internal/perfbench` enforces them. A counter that grows fails the build. A
+- `internal/perfbench` enforces them. A counter that grows fails the build. A
   counter that shrinks also fails the build, until the gain is written down, so
   an improvement cannot be quietly handed back later.
-* Wall clock is measured and reported, never gated. On a real development
+- Wall clock is measured and reported, never gated. On a real development
   machine the same workload has varied here by more than fifty percent between
   runs; a threshold tight enough to catch a regression would fire on the
   weather, and a gate that cries wolf is a gate people learn to ignore.
@@ -58,11 +58,11 @@ Mutation testing is a technique used to assess the quality and coverage of test 
 
 There are different types of changes that mutation tests can perform. A common collection usually include:
 
-* Changing an operator;
-* Replacing a constant;
-* Removing a statement;
-* Increasing/decreasing numbers;
-* Flipping booleans;
+- Changing an operator;
+- Replacing a constant;
+- Removing a statement;
+- Increasing/decreasing numbers;
+- Flipping booleans;
 
 Mutations can also be domain/application-specific. Although, these are up to the maintainers of such application to develop.
 
@@ -82,44 +82,44 @@ When Ditto reports that it found a living mutant, it will print a diff of the ch
 
 1. Install ditto:
 
-	```shell
-	go get github.com/Disble/ditto
-	```
+   ```shell
+   go get github.com/Disble/ditto
+   ```
 
-	This pulls the latest version of Ditto and updates your `go.mod` and `go.sum` to reference this new dependency.
+   This pulls the latest version of Ditto and updates your `go.mod` and `go.sum` to reference this new dependency.
 
 2. Create a `mutation_test.go` file in the root of your repository and add the following:
 
-	```go
-	//go:build mutation
+   ```go
+   //go:build mutation
 
-	package main_test
+   package main_test
 
-	import (
-		"testing"
+   import (
+   	"testing"
 
-		"github.com/Disble/ditto"
-	)
+   	"github.com/Disble/ditto"
+   )
 
-	func TestMutation(t *testing.T) {
-		ditto.Release(t)
-	}
-	```
+   func TestMutation(t *testing.T) {
+   	ditto.Release(t)
+   }
+   ```
 
-	The build tag is so you can better control _when_ to run these tests (see the next step). This is a test as you'd write any other Go test. What differs is what the test actually does. And this is where it delegates to Ditto, by `Release`ing it.
+   The build tag is so you can better control _when_ to run these tests (see the next step). This is a test as you'd write any other Go test. What differs is what the test actually does. And this is where it delegates to Ditto, by `Release`ing it.
 
 3. Run with:
 
-	```shell
-	go test -v -tags=mutation
-	```
+   ```shell
+   go test -v -tags=mutation
+   ```
 
-	This will execute all tests in the current package including the sources tagged with `mutation`. This assumes that the above is the only test file in the root of your project. If you have other tests, you may want to put the mutation tests in a separate package, under `./mutation` for example, and configure Ditto to use `..` as the repository root (see [`WithRepositoryRoot`](#Settings) below).
+   This will execute all tests in the current package including the sources tagged with `mutation`. This assumes that the above is the only test file in the root of your project. If you have other tests, you may want to put the mutation tests in a separate package, under `./mutation` for example, and configure Ditto to use `..` as the repository root (see [`WithRepositoryRoot`](#Settings) below).
 
-	If `-v` is enabled, Ditto will also be verbose. To enable Ditto's verbose mode only without the test framework verbosity, use `-ditto.v`.
+   If `-v` is enabled, Ditto will also be verbose. To enable Ditto's verbose mode only without the test framework verbosity, use `-ditto.v`.
 
-	> **Note**
-	> printing to `stdout` while Go tests are running has its intricacies. Running the tests at a particular package (without specifying which test file or subpackages, like `./...`), allows for Ditto to print progress and reports as they happen. Otherwise, the output is buffered and printed at the end of the test run and, in some cases, only if a test fails. This is a limitation of Go's testing framework.
+   > **Note**
+   > printing to `stdout` while Go tests are running has its intricacies. Running the tests at a particular package (without specifying which test file or subpackages, like `./...`), allows for Ditto to print progress and reports as they happen. Otherwise, the output is buffered and printed at the end of the test run and, in some cases, only if a test fails. This is a limitation of Go's testing framework.
 
 ### Results
 
@@ -146,20 +146,20 @@ ditto.Release(
 
 The table below presents all available options.
 
-| Option                 | Default                               | Description                                                                                                                                                                                                                                                                   |
-|------------------------|---------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `WithRepositoryRoot`   | `.`                                   | A string that configures which directory is the repository root. This is usually required when your mutation test file lives some other place that is not root itself.                                                                                                        |
-| `WithTestCommand`      | `go test -count=1 ./...`              | The test command to run, as string. You may configure it as you wish, as a `makefile` phony target, for example. Or simply run the standard `go test` command with extra flags, such as `timeout` and `tags`.                                                                 |
-| `WithMinimumThreshold` | `1.0`                                 | A float between `0.0` and `1.0`. This represents the minimum mutation test score to consider the execution successful.                                                                                                                                                        |
+| Option                 | Default                               | Description                                                                                                                                                                                                                                                                    |
+| ---------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `WithRepositoryRoot`   | `.`                                   | A string that configures which directory is the repository root. This is usually required when your mutation test file lives some other place that is not root itself.                                                                                                         |
+| `WithTestCommand`      | `go test -count=1 ./...`              | The test command to run, as string. You may configure it as you wish, as a `makefile` phony target, for example. Or simply run the standard `go test` command with extra flags, such as `timeout` and `tags`.                                                                  |
+| `WithMinimumThreshold` | `1.0`                                 | A float between `0.0` and `1.0`. This represents the minimum mutation test score to consider the execution successful.                                                                                                                                                         |
 | `Parallel`             | `false`                               | Indicates whether to run the tests on the mutants in parallel. Given Ditto is executed via Go's testing framework, the level of parallelism can be configured when running the mutation tests from the command line. For example with `go test -v -tags=mutation -parallel 3`. |
-| `IgnoreSourceFiles`    | `nil`                                 | Regular expression representing source files to be filtered out and not suffer any mutations.                                                                                                                                                                                 |
-| `WithViruses`          | all available ([see below](#Viruses)) | A list of viruses to infect the source files with. You can also implement your own viruses (generic or even application-specific).                                                                                                                                            |
-| `ForceColors`          | `false`                               | Forces colors in logs. This is useful when running the mutation tests in a CI environment, for example.                                                                                                                                                                       |
+| `IgnoreSourceFiles`    | `nil`                                 | Regular expression representing source files to be filtered out and not suffer any mutations.                                                                                                                                                                                  |
+| `WithViruses`          | all available ([see below](#Viruses)) | A list of viruses to infect the source files with. You can also implement your own viruses (generic or even application-specific).                                                                                                                                             |
+| `ForceColors`          | `false`                               | Forces colors in logs. This is useful when running the mutation tests in a CI environment, for example.                                                                                                                                                                        |
 
 ## Viruses
 
 | Virus                                                                                            | Name                         | Description                                                                                                                                                                                                                     |
-|--------------------------------------------------------------------------------------------------|------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ------------------------------------------------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`arithmetic`](viruses/arithmetic/arithmetic.go)                                                 | Arithmetic                   | Replaces `+` with `-`, `*` with `/`, `%` with `*` and vice versa.                                                                                                                                                               |
 | [`arithmeticassignment`](viruses/arithmeticassignment/arithmeticassignment.go)                   | Arithmetic Assignment        | Replaces `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, <code>&#124;=</code>, `^=`, `<<=`, `>>=` and `&^=` with `=`.                                                                                                                       |
 | [`arithmeticassignmentinvert`](viruses/arithmeticassignmentinvert/arithmeticassignmentinvert.go) | Arithmetic Assignment Invert | Replaces `+=` with `-=`, `*=` with `/=`, `%=` with `*=` and vice versa.                                                                                                                                                         |
@@ -201,5 +201,5 @@ Ditto is open-source software released under the [MIT License](LICENSE).
 ---
 
 <a href="https://github.com/Disble/ditto">
-	<img src=".assets/icon.svg" width="24" align="right" alt="ditto icon">
+	<img src=".assets/icon.png" width="24" align="right" alt="ditto icon">
 </a>
