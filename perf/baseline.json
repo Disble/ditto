@@ -1,0 +1,21 @@
+{
+  "recorded": "2026-08-13",
+  "note": "Exact counters measured against the synthetic fixture in internal/perfbench. These are integers, not timings: identical on every machine, unaffected by ambient load. internal/perfbench/counters_test.go fails when one grows (a regression) and also when one shrinks (an unrecorded gain). Wall clock is never gated here; see the benchmarks for why.",
+  "fixture": {
+    "sourceFiles": 4,
+    "functionsPerFile": 3,
+    "gitFiles": 5,
+    "otherFiles": 2,
+    "totalFiles": 11
+  },
+  "counters": {
+    "filesLinkedPerMutant": 11,
+    "sourceParsesPerReleaseWithThreeViruses": 12,
+    "laboratoryRunsPerReleaseWholeFixture": 48
+  },
+  "targets": {
+    "filesLinkedPerMutant": "6. Laboratory.Test rebuilds the whole temporary repository for every mutant, and the walk includes .git, so 5 of these 11 links are for objects nobody can mutate. Measured at ~0.45ms per file per mutant on real trees. Building the sandbox once per run instead of once per mutant takes this to 0.",
+    "sourceParsesPerReleaseWithThreeViruses": "4, one parse per source file. Ditto.Release loops files outside and mutators inside, and GoSourceFile.Incubate parses on every call, so each file is parsed once per mutator. With the default 14 mutators that is 14 parses where 1 would do.",
+    "laboratoryRunsPerReleaseWholeFixture": "48 is correct for whole-fixture scope and must not grow. The staged goal is different: a native scope should let a caller ask for the mutants a change justifies and pay only for those. Each run costs one `go test` invocation, measured at 700-1100ms of fixed overhead regardless of how fast the suite itself is."
+  }
+}
