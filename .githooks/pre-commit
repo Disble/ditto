@@ -1,3 +1,25 @@
 #!/usr/bin/env sh
 
-CPUS=1 make lint test.failfast
+# GNU make answers to more than one name, and calling only `make` made this hook
+# unrunnable on a machine that has make under another one — a gate that cannot
+# start is not a gate, and the commit goes through unchecked.
+#
+# On Windows the name matters twice over. The MSYS2 build of `make` shares no
+# runtime with Git Bash, and its recipes lose the environment they were given:
+# go reports "neither GOMODCACHE nor GOPATH is set" and golangci-lint reports
+# "%LocalAppData% is not defined", while the same commands run fine on their own.
+# `mingw32-make` is a native build and does not lose it.
+for candidate in make mingw32-make gmake; do
+	if command -v "$candidate" >/dev/null 2>&1; then
+		MAKE="$candidate"
+		break
+	fi
+done
+
+if [ -z "${MAKE:-}" ]; then
+	echo "pre-commit: no GNU make on PATH; looked for make, mingw32-make, gmake" >&2
+	echo "Nothing was committed. Install one and commit again." >&2
+	exit 1
+fi
+
+CPUS=1 "$MAKE" lint test.failfast
