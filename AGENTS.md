@@ -116,6 +116,12 @@ file produces 4 and 4.
 When a measurement contradicts something already written down — including in
 this file — the measurement wins, and the claim goes with its evidence.
 
+The operational form of this section — the note written before the run, the
+control, counters against wall clock, and the cases that earned each rule — is
+[`.claude/skills/falsifiable-measurement`](.claude/skills/falsifiable-measurement/SKILL.md).
+Load it before measuring anything. Its case studies are the measurements
+themselves, three of which killed a claim already made out loud.
+
 ## Where the reasoning lives
 
 - [`docs/learning-log.md`](docs/learning-log.md) — append-only, one dated line
