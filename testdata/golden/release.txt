@@ -1,0 +1,54 @@
+┃ Releasing Ditto…
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┃ 🧬 Mutant survived: calc/calc.go → Arithmetic
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+┃ --- calc/calc.go (original)
+┃ +++ calc/calc.go (mutated with 'Arithmetic')
+┃ @@ -9,7 +9,7 @@
+┃  		return a - b
+┃  	}
+┃  
+┃ -	return b - a
+┃ +	return b + a
+┃  }
+┃  
+┃  // Uncovered is never called, so every mutant of it lives.
+┃ 
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┃ 🧬 Mutant survived: calc/calc.go → Arithmetic
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+┃ --- calc/calc.go (original)
+┃ +++ calc/calc.go (mutated with 'Arithmetic')
+┃ @@ -13,4 +13,4 @@
+┃  }
+┃  
+┃  // Uncovered is never called, so every mutant of it lives.
+┃ -func Uncovered(a, b int) int { return a + b }
+┃ +func Uncovered(a, b int) int { return a - b }
+┃ 
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┃ 🧬 Mutant survived: calc/calc.go → Comparison
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+┃ --- calc/calc.go (original)
+┃ +++ calc/calc.go (mutated with 'Comparison')
+┃ @@ -5,7 +5,7 @@
+┃  
+┃  // Partly is exercised from one side only, so some of its mutants live.
+┃  func Partly(a, b int) int {
+┃ -	if a > b {
+┃ +	if a >= b {
+┃  		return a - b
+┃  	}
+┃  
+┃ 
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ • Total:        7                    ┃
+┃ • Killed:       4                    ┃
+┃ • Survived:     3                    ┃
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┨
+┃ ✓ Score:     0.57 (minimum: 0.00)    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+PASS
