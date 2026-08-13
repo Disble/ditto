@@ -50,8 +50,13 @@ func BenchmarkListGoSourceFiles(b *testing.B) {
 	}
 }
 
-// TestReportBenchShape prints what the walk actually traverses, which is the
-// number the per-mutant cost scales with.
+// TestReportBenchShape prints the shape of the tree the benchmarks run
+// against, separating what is linked per mutant from what is skipped.
+//
+// The two are reported apart on purpose. While .git was linked they were the
+// same number, and a single "files walked" figure said something true; it
+// stopped being true the moment the walk started skipping it, which is the sort
+// of quiet drift docs/learning-log.md exists to warn about.
 func TestReportBenchShape(t *testing.T) {
 	root := os.Getenv("OOZE_BENCH_ROOT")
 	if root == "" {
@@ -82,5 +87,6 @@ func TestReportBenchShape(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Logf("files walked per mutant: %d (of which .git: %d), go sources: %d", all, git, goSource)
+	t.Logf("tree holds %d files; linked per mutant: %d; skipped as .git: %d; go sources: %d",
+		all, all-git, git, goSource)
 }

@@ -9,13 +9,13 @@
     "totalFiles": 11
   },
   "counters": {
-    "filesLinkedPerMutant": 11,
+    "filesLinkedPerMutant": 6,
     "sourceParsesPerReleaseWithThreeViruses": 4,
     "laboratoryRunsPerReleaseWholeFixture": 48,
     "astWalksPerReleaseWithThreeViruses": 12
   },
   "targets": {
-    "filesLinkedPerMutant": "6. Laboratory.Test rebuilds the whole temporary repository for every mutant, and the walk includes .git, so 5 of these 11 links are for objects nobody can mutate. Measured at ~0.45ms per file per mutant on real trees. Building the sandbox once per run instead of once per mutant takes this to 0.",
+    "filesLinkedPerMutant": "Reached 6, down from 11: the walk no longer descends into .git. The remaining 6 are the fixture working files, and Laboratory.Test still rebuilds them for every mutant \u2014 building the sandbox once per run instead takes this to 0. Measured at ~0.45ms per file per mutant on real trees.",
     "sourceParsesPerReleaseWithThreeViruses": "Reached: 4, one parse per source file, down from 12. GoSourceFile.Incubate now takes the whole mutator set and parses once for all of them. With the default 14 mutators this is 14 parses per file reduced to 1.",
     "astWalksPerReleaseWithThreeViruses": "12 is correct and must not grow. Each mutator needs its own pass over the tree, so this scales with the mutator count by design. It is recorded separately from parses because the two were the same number until the parse was shared, which is what let an earlier counter claim to measure parses while only ever measuring walks.",
     "laboratoryRunsPerReleaseWholeFixture": "48 is correct for whole-fixture scope and must not grow. The staged goal is different: a native scope should let a caller ask for the mutants a change justifies and pay only for those. Each run costs one `go test` invocation, measured at 700-1100ms of fixed overhead regardless of how fast the suite itself is."
