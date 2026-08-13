@@ -68,7 +68,12 @@ func (r *FSRepository) ListGoSourceFiles() []*gosourcefile.GoSourceFile {
 	for i, path := range paths {
 		data, _ := os.ReadFile(path)
 		relativePath, _ := filepath.Rel(r.root, path)
-		sourceFiles[i] = gosourcefile.New(relativePath, data)
+		// This string is the file's identity: IgnoreSourceFiles matches
+		// patterns against it and every report prints it. Leaving the host
+		// separator in makes that identity platform-dependent, so a pattern
+		// written with '/' matches nothing on Windows and the same run reports
+		// different names on different machines.
+		sourceFiles[i] = gosourcefile.New(filepath.ToSlash(relativePath), data)
 	}
 
 	return sourceFiles

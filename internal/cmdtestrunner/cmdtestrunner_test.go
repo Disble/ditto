@@ -1,7 +1,7 @@
 package cmdtestrunner_test
 
 import (
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/Disble/ditto/internal/cmdtestrunner"
@@ -30,7 +30,7 @@ func TestCMDTestRunner(t *testing.T) {
 		temporaryRepository := fakerepository.NewTemporaryAt(dir)
 
 		output := cmdtestrunner.New("sh", "-c", "basename $(pwd)").Test(temporaryRepository)
-		assert.Equal(t, result.Err[string](path.Base(dir)+"\n"), output)
+		assert.Equal(t, result.Err[string](filepath.Base(dir)+"\n"), output)
 	})
 
 	t.Run("makes all environment variables available to the subprocess", func(t *testing.T) {

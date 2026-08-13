@@ -2,7 +2,6 @@ package fsrepository_test
 
 import (
 	"os"
-	"syscall"
 	"testing"
 
 	"github.com/Disble/ditto/internal/fsrepository"
@@ -48,9 +47,7 @@ func TestFSTemporaryRepository(t *testing.T) {
 
 			stat, err := os.Stat(dir + "/file.txt")
 			assert.NoError(t, err)
-			mask := syscall.Umask(0)
-			defer syscall.Umask(mask)
-			assert.Equal(t, os.ModePerm^os.FileMode(mask), stat.Mode()) //nolint:gosec
+			assertOverwrittenMode(t, stat)
 		})
 
 		t.Run("an existing linked file", func(t *testing.T) {

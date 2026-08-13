@@ -155,13 +155,16 @@ func TestFSRepository_LinkAllToTemporaryRepository(t *testing.T) {
 			return nil
 		})
 		assert.NoError(t, err)
+		// WalkDir yields host-native paths, and LinkAllToTemporaryRepository
+		// builds them with filepath.Join, so the expectation has to be built
+		// the same way rather than with hardcoded forward slashes.
 		assert.Equal(t, []string{
-			dir + "/linked/child_a/child_b/test_d.go",
-			dir + "/linked/child_a/test_c.go",
-			dir + "/linked/makefile",
-			dir + "/linked/readme.md",
-			dir + "/linked/test_a.go",
-			dir + "/linked/test_b.go",
+			filepath.Join(dir, "linked", "child_a", "child_b", "test_d.go"),
+			filepath.Join(dir, "linked", "child_a", "test_c.go"),
+			filepath.Join(dir, "linked", "makefile"),
+			filepath.Join(dir, "linked", "readme.md"),
+			filepath.Join(dir, "linked", "test_a.go"),
+			filepath.Join(dir, "linked", "test_b.go"),
 		}, files)
 	})
 

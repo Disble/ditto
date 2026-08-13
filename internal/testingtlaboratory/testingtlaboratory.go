@@ -18,15 +18,23 @@ type TestingTLaboratory struct {
 	t        TestingT
 	delegate ditto.Laboratory
 	parallel bool
+	// goParallel is a seam, not a configuration point. Observing that a
+	// subtest was marked parallel otherwise means reading testing.T's
+	// unexported state, which is not observable from outside: T.Parallel
+	// returns early when its parent has no barrier, and supplying one makes it
+	// block forever on a nil signal channel. Both are private details that
+	// have changed between Go releases and will change again.
+	goParallel func(*testing.T)
 }
 
 func New(t TestingT, delegate ditto.Laboratory, parallel bool) *TestingTLaboratory {
 	t.Helper()
 
 	return &TestingTLaboratory{
-		t:        t,
-		delegate: delegate,
-		parallel: parallel,
+		t:          t,
+		delegate:   delegate,
+		parallel:   parallel,
+		goParallel: (*testing.T).Parallel,
 	}
 }
 
@@ -40,7 +48,7 @@ func (l *TestingTLaboratory) Test(
 
 	l.t.Run(file.Label(), func(t *testing.T) { //nolint:thelper
 		if l.parallel {
-			t.Parallel()
+			l.goParallel(t)
 		}
 
 		fut.Resolve(l.delegate.Test(repository, file).Await())
