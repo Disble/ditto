@@ -3,6 +3,6 @@
   "packages": {
     "go":            "1.25.0",
     "gotestsum":     "1.13.0",
-    "golangci-lint": "latest"
+    "golangci-lint": "2.12.2"
   }
 }

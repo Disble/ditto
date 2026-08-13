@@ -106,9 +106,10 @@ which is what this tool does, and `noctx` wants `exec.CommandContext` for the
 configured test command, which has no cancellation contract today. Giving it
 one is an API decision.
 
-`golangci-lint` is pinned to `latest` in `devbox.json` so CI can run at all.
-That should become a real pin once a working version is known — an unpinned
-linter means somebody else's release can turn this build red.
+`golangci-lint` is pinned to 2.12.2, which is what `latest` resolved to on the
+first green run and what the maintainer runs locally. Pinned rather than
+floating because an unpinned linter means somebody else's release can turn this
+build red.
 
 ## 5. The logo still belongs to upstream
 
