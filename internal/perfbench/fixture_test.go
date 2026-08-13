@@ -1,4 +1,4 @@
-package perfbench
+package perfbench_test
 
 import (
 	"bytes"
@@ -33,21 +33,25 @@ const (
 // It includes a .git directory holding real files because the cost being
 // tracked includes them: LinkAllToTemporaryRepository walks the whole root and
 // links everything it finds, and nobody mutates a git object.
-func writeFixtureRepository(t testing.TB) string {
-	t.Helper()
+func writeFixtureRepository(tb testing.TB) string {
+	tb.Helper()
 
-	root := t.TempDir()
+	root := tb.TempDir()
 
 	write := func(name, content string) {
-		t.Helper()
+		tb.Helper()
 
 		path := filepath.Join(root, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
+
+		err := os.MkdirAll(filepath.Dir(path), 0o755)
+		if err != nil {
+			tb.Fatal(err)
 		}
 
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
+		// Fixture sources, readable on purpose: a mutation run reads them back.
+		err = os.WriteFile(path, []byte(content), 0o644) //nolint:gosec
+		if err != nil {
+			tb.Fatal(err)
 		}
 	}
 
@@ -77,8 +81,8 @@ func writeFixtureRepository(t testing.TB) string {
 
 // countFiles reports how many regular files a tree holds, which is the unit
 // LinkAllToTemporaryRepository pays per mutant.
-func countFiles(t testing.TB, root string) int {
-	t.Helper()
+func countFiles(tb testing.TB, root string) int {
+	tb.Helper()
 
 	count := 0
 
@@ -94,7 +98,7 @@ func countFiles(t testing.TB, root string) int {
 		return nil
 	})
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 
 	return count
@@ -107,12 +111,12 @@ func countFiles(t testing.TB, root string) int {
 // k occupies the same range in every file. That is deliberate: it is the shape
 // that makes a scope which has lost track of which file a range came from
 // mutate the wrong file, and the only way to prove it does not.
-func gateRange(t testing.TB, root string, gate int) gosourcefile.Range {
-	t.Helper()
+func gateRange(tb testing.TB, root string, gate int) gosourcefile.Range {
+	tb.Helper()
 
 	content, err := os.ReadFile(filepath.Join(root, "pkg0", "gate.go"))
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 
 	marker := []byte("return " + fixtureMutablePosition)
@@ -121,7 +125,7 @@ func gateRange(t testing.TB, root string, gate int) gosourcefile.Range {
 	for range gate + 1 {
 		found := bytes.Index(content[offset:], marker)
 		if found < 0 {
-			t.Fatalf("fixture holds fewer than %d mutable lines", gate+1)
+			tb.Fatalf("fixture holds fewer than %d mutable lines", gate+1)
 		}
 
 		offset += found + 1
@@ -137,6 +141,7 @@ func TestGateRangesAreIdenticalAcrossFixtureFiles(t *testing.T) {
 	t.Parallel()
 
 	root := writeFixtureRepository(t)
+
 	first, err := os.ReadFile(filepath.Join(root, "pkg0", "gate.go"))
 	if err != nil {
 		t.Fatal(err)

@@ -122,12 +122,16 @@ func (r *FSRepository) LinkAllToTemporaryRepository(temporaryPath string) ditto.
 		}
 
 		linkPath := filepath.Join(temporaryPath, filepath.Join(strings.Split(path, string(os.PathSeparator))[rootSize:]...))
+
 		err = os.MkdirAll(filepath.Dir(linkPath), os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("failed creating directory tree for '%s': %w", linkPath, err)
 		}
 
-		err = os.Symlink(absolutePath, linkPath)
+		// G122 wants a root-scoped API here. Mirroring a repository as symlinks
+		// is what this function is for, and os.Root cannot express a link that
+		// points outside the temporary tree on purpose.
+		err = os.Symlink(absolutePath, linkPath) //nolint:gosec
 		if err != nil {
 			return fmt.Errorf("failed creating link from '%s' to '%s': %w", path, linkPath, err)
 		}

@@ -50,8 +50,13 @@ func (r *FSTemporaryRepository) Overwrite(filePath string, data []byte) {
 		panic(fmt.Errorf("%w: resolved path '%s' does not belong to root '%s'", errNotAllowed, fullPath, r.root))
 	}
 
-	if _, err := os.Stat(fullPath); err == nil && os.Remove(fullPath) != nil {
-		panic(fmt.Errorf("failed removing existing file '%s': %w", filePath, err))
+	// The removal error is the one worth reporting. Folding both checks into
+	// one condition meant the branch could only be entered while Stat's error
+	// was nil, so the panic wrapped nil and named no cause at all.
+	if _, statErr := os.Stat(fullPath); statErr == nil {
+		if err := os.Remove(fullPath); err != nil {
+			panic(fmt.Errorf("failed removing existing file '%s': %w", filePath, err))
+		}
 	}
 
 	err := os.WriteFile(fullPath, data, os.ModePerm) //nolint:gosec

@@ -140,8 +140,10 @@ func TestFSRepository_LinkAllToTemporaryRepository(t *testing.T) {
 
 	t.Run("creates a link of all files recursively", func(t *testing.T) {
 		var files []string
+
 		err := filepath.WalkDir(dir+"/linked", func(path string, entry fs.DirEntry, err error) error {
 			assert.NoError(t, err)
+
 			if entry.IsDir() {
 				return nil
 			}

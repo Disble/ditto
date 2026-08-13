@@ -21,7 +21,10 @@ func New(name string, args ...string) *CMDTestRunner {
 }
 
 func (t *CMDTestRunner) Test(repository ditto.TemporaryRepository) result.Result[string] {
-	command := exec.Command(t.name, t.args...) //nolint:gosec
+	// noctx wants CommandContext. The configured test command has no
+	// cancellation contract today, and giving it one is an API decision rather
+	// than a lint fix; recorded in docs/backlog.md.
+	command := exec.Command(t.name, t.args...) //nolint:gosec,noctx
 	command.Dir = repository.Root()
 	command.Env = os.Environ()
 

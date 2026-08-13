@@ -24,6 +24,7 @@ func TestFSTemporaryDir(t *testing.T) {
 		statDirPathA, err := os.Stat(temporaryDirPathA)
 		assert.NoError(t, err)
 		assert.True(t, statDirPathA.IsDir())
+
 		statDirPathB, err := os.Stat(temporaryDirPathB)
 		assert.NoError(t, err)
 		assert.True(t, statDirPathB.IsDir())

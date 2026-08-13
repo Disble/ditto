@@ -1,4 +1,4 @@
-package perfbench
+package perfbench_test
 
 import (
 	"encoding/json"
@@ -176,6 +176,7 @@ func TestCounterSandboxesBuiltPerRelease(t *testing.T) {
 	repository := &countingRepository{inner: fsrepository.New(root)}
 
 	temporaryDir := fstemporarydir.New("dittoperf-")
+
 	t.Cleanup(func() { _ = temporaryDir.RemoveAll() })
 
 	ditto.New(repository, laboratory.New(silentRunner{}, temporaryDir), fakereporter.New()).

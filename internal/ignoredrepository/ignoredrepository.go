@@ -29,6 +29,7 @@ FILE_LOOP:
 				continue FILE_LOOP
 			}
 		}
+
 		filtered = append(filtered, file)
 	}
 

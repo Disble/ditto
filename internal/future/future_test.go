@@ -43,6 +43,7 @@ func TestDeferred(t *testing.T) {
 		fut := future.Deferred[int]()
 
 		group := sync.WaitGroup{}
+
 		group.Add(3)
 		go func() { defer group.Done(); assert.Equal(t, 10, fut.Await()) }()
 		go func() { defer group.Done(); assert.Equal(t, 10, fut.Await()) }()

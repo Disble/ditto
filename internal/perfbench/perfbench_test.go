@@ -30,12 +30,7 @@ func BenchmarkLinkAllToTemporaryRepository(b *testing.B) {
 	repository := fsrepository.New(root)
 
 	for b.Loop() {
-		temporary, err := os.MkdirTemp("", "dittobench-")
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		repository.LinkAllToTemporaryRepository(temporary).Remove()
+		repository.LinkAllToTemporaryRepository(b.TempDir()).Remove()
 	}
 }
 
@@ -65,9 +60,11 @@ func TestReportBenchShape(t *testing.T) {
 
 	var all, git, goSource int
 
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+	// The root is an operator-supplied benchmark target; walking it is the
+	// measurement.
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error { //nolint:gosec
 		if err != nil || entry.IsDir() {
-			return err //nolint:wrapcheck
+			return err
 		}
 
 		all++

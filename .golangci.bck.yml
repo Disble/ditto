@@ -1,0 +1,40 @@
+# Reference:
+# https://github.com/golangci/golangci-lint/blob/master/.golangci.reference.yml
+
+linters:
+  enable-all: true
+  disable:
+    - ireturn # overly strict
+    - paralleltest # not very helpful
+
+    # deprecated/replaced
+    - deadcode
+    - execinquery
+    - exhaustivestruct
+    - exportloopref
+    - golint
+    - gomnd
+    - ifshort
+    - interfacer
+    - maligned
+    - nosnakecase
+    - scopelint
+    - structcheck
+    - varcheck
+
+    # to review
+    - depguard
+    - testifylint
+    - wsl
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  fix: true
+
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
+        - funlen
+        - goerr113

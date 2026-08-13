@@ -69,9 +69,11 @@ func TestFSTemporaryRepository(t *testing.T) {
 			assert.NoError(t, os.WriteFile(dir+"/cant-overwrite/original.txt", []byte("original data"), 0o600))
 
 			repository := fsrepository.NewTemporary(dir + "/cant-overwrite/child")
+
 			assert.Panics(t, func() {
 				repository.Overwrite("../original.txt", []byte("new data"))
 			})
+
 			data, err := os.ReadFile(dir + "/cant-overwrite/original.txt")
 			assert.NoError(t, err)
 			assert.Equal(t, []byte("original data"), data)

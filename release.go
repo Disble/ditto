@@ -44,7 +44,7 @@ import (
 
 var dittoVerbose *bool //nolint:gochecknoglobals
 
-func init() { //nolint:gochecknoinits
+func init() { //nolint:gochecknoinits // a flag must be registered before flag.Parse runs
 	dittoVerbose = flag.Bool("ditto.v", false, "verbose: print additional output")
 }
 
@@ -119,7 +119,8 @@ func Release(t *testing.T, options ...Option) {
 	// do not forward this.
 	if sandboxes, ok := opts.TemporaryDir.(interface{ RemoveAll() error }); ok {
 		t.Cleanup(func() {
-			if err := sandboxes.RemoveAll(); err != nil {
+			err := sandboxes.RemoveAll()
+			if err != nil {
 				logger.Logf("%s %s", color.Yellow("┃"), err)
 			}
 		})
@@ -147,6 +148,7 @@ func Release(t *testing.T, options ...Option) {
 
 	t.Cleanup(func() {
 		t.Helper()
+
 		res := reporter.Summarize()
 		if !res.IsOk() {
 			t.Fail()

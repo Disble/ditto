@@ -21,6 +21,7 @@ func NewInfection(name string, infect Infect, disinfect Disinfect) *Infection {
 
 func (i *Infection) Infect(fn func()) {
 	defer i.disinfect()
+
 	i.infect()
 	fn()
 }

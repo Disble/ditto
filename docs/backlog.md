@@ -79,7 +79,38 @@ exception nobody remembered.
 What would close it: point the self-check at a fixture project built for the
 run, or state in the file itself that it is CI-only and why.
 
-## 4. The logo still belongs to upstream
+## 4. Linters turned off to get CI running again, not because they were wrong
+
+**Recorded 2026-08-13**, while making CI run for the first time.
+
+Raising the Go floor to 1.25 broke `make lint`: golangci-lint 1.61.0 is built
+with go1.23 and refuses a config targeting a newer language version. Upgrading
+it meant migrating `.golangci.yml` from the v1 format to v2, and the newer
+linter enables checks that did not exist when this code was written. That
+surfaced 58 findings, roughly three quarters of them in inherited code.
+
+Seven linters are disabled in `.golangci.yml` to keep the check meaningful
+rather than deafening: `exhaustruct`, `funcorder`, `goconst`, `lll`,
+`noinlineerr`, `prealloc`, `varnamelen`. Each flags style on code that predates
+it. None of them was judged and rejected; they were postponed.
+
+One finding was a real defect and is fixed: `nilnesserr` caught
+`FSTemporaryRepository.Overwrite` folding two checks into one condition, so the
+branch could only be entered while `Stat`'s error was nil and the panic wrapped
+that nil — the removal error that actually mattered was discarded. It is on the
+path every mutant now takes.
+
+Two more are annotated at the site rather than disabled, because the reason is
+local: `gosec` objects to walking a repository and mirroring it with symlinks,
+which is what this tool does, and `noctx` wants `exec.CommandContext` for the
+configured test command, which has no cancellation contract today. Giving it
+one is an API decision.
+
+`golangci-lint` is pinned to `latest` in `devbox.json` so CI can run at all.
+That should become a real pin once a working version is known — an unpinned
+linter means somebody else's release can turn this build red.
+
+## 5. The logo still belongs to upstream
 
 `.assets/logo.svg` is ooze's. The licence permits reuse, but the mark is the
 one thing a fork should not inherit — it is upstream's identity, not its code.

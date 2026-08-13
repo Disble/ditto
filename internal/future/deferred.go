@@ -12,6 +12,7 @@ type DeferredFuture[T any] struct {
 
 func (f *DeferredFuture[T]) Await() T {
 	defer f.mutex.Unlock()
+
 	f.mutex.Lock()
 
 	if !f.resolved {
@@ -26,6 +27,7 @@ func (f *DeferredFuture[T]) Resolve(value T) {
 	f.once.Do(func() {
 		go func() {
 			f.channel <- value
+
 			close(f.channel)
 		}()
 	})

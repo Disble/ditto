@@ -46,6 +46,7 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 			killed++
 		} else {
 			survived++
+
 			r.logDiff(diagnostic)
 		}
 	}
@@ -78,7 +79,7 @@ func (r *ConsoleReporter) logDiff(diagnostic *ditto.Diagnostic) {
 	r.logger.Logf("┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
 
 	diff := []string{}
-	for _, line := range strings.Split(diagnostic.Diff(r.differ), "\n") {
+	for line := range strings.SplitSeq(diagnostic.Diff(r.differ), "\n") {
 		diff = append(diff, "┃ "+line)
 	}
 

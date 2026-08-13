@@ -60,7 +60,8 @@ func (f *FSTemporaryDir) New() string {
 	child := filepath.Join(f.parent, strconv.Itoa(f.next))
 	f.next++
 
-	if err := os.MkdirAll(child, os.ModePerm); err != nil {
+	err := os.MkdirAll(child, os.ModePerm)
+	if err != nil {
 		panic(err)
 	}
 

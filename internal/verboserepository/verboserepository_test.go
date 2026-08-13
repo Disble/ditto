@@ -62,6 +62,7 @@ func TestTemporaryRepository(t *testing.T) {
 		)
 
 		temporary := repository.LinkAllToTemporaryRepository("some-path")
+
 		logger.Clear()
 
 		temporary.Overwrite("source.go", []byte("dummy"))
@@ -83,6 +84,7 @@ func TestTemporaryRepository(t *testing.T) {
 		)
 
 		temporary := repository.LinkAllToTemporaryRepository("some-path")
+
 		logger.Clear()
 
 		temporary.Remove()
