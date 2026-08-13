@@ -10,9 +10,17 @@ import (
 	"github.com/Disble/ditto/viruses"
 )
 
+// Range is a half-open byte range within one file.
+type Range struct {
+	Start int
+	End   int
+}
+
 type GoSourceFile struct {
 	relativePath string
 	rawContent   []byte
+	// ranges limits mutation to part of this file. Empty means the whole file.
+	ranges []Range
 }
 
 func New(relativePath string, rawContent []byte) *GoSourceFile {
@@ -20,6 +28,43 @@ func New(relativePath string, rawContent []byte) *GoSourceFile {
 		relativePath: relativePath,
 		rawContent:   rawContent,
 	}
+}
+
+// Restrict returns the same file mutated only within the given byte ranges.
+//
+// The ranges belong to the file rather than to the run, and that is the whole
+// point. Offsets are only meaningful against the file they were measured in —
+// every file is parsed with its own token.FileSet, so every file's positions
+// start from the same base — and a scope held anywhere other than beside its
+// file cannot tell them apart. Merging several files' ranges into one set makes
+// each file answer to all of them, which mutates code no change touched and
+// grows the work as the square of the number of files.
+func (f *GoSourceFile) Restrict(ranges []Range) *GoSourceFile {
+	return &GoSourceFile{
+		relativePath: f.relativePath,
+		rawContent:   f.rawContent,
+		ranges:       ranges,
+	}
+}
+
+// inScope reports whether a node position falls inside this file's ranges.
+//
+// token.Pos is one past the byte offset when the file was parsed on its own,
+// which is how GoSourceFile parses. A node with no position carries no scope
+// information, so it is let through rather than silently dropped.
+func (f *GoSourceFile) inScope(node ast.Node) bool {
+	if len(f.ranges) == 0 || node == nil || node.Pos() == token.NoPos {
+		return true
+	}
+
+	offset := int(node.Pos()) - 1
+	for _, span := range f.ranges {
+		if offset >= span.Start && offset < span.End {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Incubate parses the file once and offers it to every mutator given.
@@ -43,6 +88,12 @@ func (f *GoSourceFile) Incubate(viri ...viruses.Virus) []*goinfectedfile.GoInfec
 
 	for _, virus := range viri {
 		ast.Inspect(fileTree, func(node ast.Node) bool {
+			if !f.inScope(node) {
+				// Keep descending: a node outside the ranges can still hold
+				// children inside them.
+				return true
+			}
+
 			for _, infection := range virus.Incubate(node, nil) {
 				infectedFiles = append(infectedFiles, goinfectedfile.New(f.relativePath, f.rawContent, infection, fileSet, fileTree))
 			}

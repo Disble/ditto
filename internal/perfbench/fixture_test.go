@@ -1,11 +1,14 @@
 package perfbench
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Disble/ditto/internal/gosourcefile"
 )
 
 // Fixture shape. These numbers are part of the contract: the counters in
@@ -95,6 +98,61 @@ func countFiles(t testing.TB, root string) int {
 	}
 
 	return count
+}
+
+// gateRange returns the byte range of one gate's mutable line.
+//
+// Every fixture source file is written to the same byte layout — the package
+// number, the gate number and the literal are all one character wide — so gate
+// k occupies the same range in every file. That is deliberate: it is the shape
+// that makes a scope which has lost track of which file a range came from
+// mutate the wrong file, and the only way to prove it does not.
+func gateRange(t testing.TB, root string, gate int) gosourcefile.Range {
+	t.Helper()
+
+	content, err := os.ReadFile(filepath.Join(root, "pkg0", "gate.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	marker := []byte("return " + fixtureMutablePosition)
+	offset := 0
+
+	for range gate + 1 {
+		found := bytes.Index(content[offset:], marker)
+		if found < 0 {
+			t.Fatalf("fixture holds fewer than %d mutable lines", gate+1)
+		}
+
+		offset += found + 1
+	}
+
+	start := offset - 1
+	end := start + bytes.IndexByte(content[start:], '\n')
+
+	return gosourcefile.Range{Start: start, End: end}
+}
+
+func TestGateRangesAreIdenticalAcrossFixtureFiles(t *testing.T) {
+	t.Parallel()
+
+	root := writeFixtureRepository(t)
+	first, err := os.ReadFile(filepath.Join(root, "pkg0", "gate.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for file := 1; file < fixtureSourceFiles; file++ {
+		other, err := os.ReadFile(filepath.Join(root, fmt.Sprintf("pkg%d", file), "gate.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(other) != len(first) {
+			t.Fatalf("pkg%d/gate.go is %d bytes, pkg0/gate.go is %d; the collision counter needs them identical",
+				file, len(other), len(first))
+		}
+	}
 }
 
 func TestFixtureHasTheShapeTheBaselineAssumes(t *testing.T) {

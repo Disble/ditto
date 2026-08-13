@@ -17,6 +17,7 @@ import (
 	"github.com/Disble/ditto/internal/gosourcefile"
 	"github.com/Disble/ditto/internal/laboratory"
 	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/internal/scopedrepository"
 	"github.com/Disble/ditto/viruses"
 	"github.com/Disble/ditto/viruses/arithmetic"
 	"github.com/Disble/ditto/viruses/arithmeticassignment"
@@ -183,6 +184,53 @@ func TestCounterSandboxesBuiltPerRelease(t *testing.T) {
 	// One sandbox serves the whole run. This used to equal the mutant count,
 	// which is the walk above paid once per mutant.
 	assertCounter(t, "sandboxesBuiltPerRelease", repository.builds)
+}
+
+// releaseWithScope runs a release restricted to the given ranges and reports
+// how many times the laboratory was asked to run the test command.
+func releaseWithScope(t *testing.T, root string, ranges map[string][]gosourcefile.Range) int {
+	t.Helper()
+
+	laboratory := &countingLaboratory{}
+	repository := scopedrepository.New(ranges, fsrepository.New(root))
+
+	ditto.New(repository, laboratory, fakereporter.New()).Release(defaultViruses()...)
+
+	return laboratory.calls
+}
+
+func TestCounterLaboratoryRunsForOneChangedFunction(t *testing.T) {
+	t.Parallel()
+
+	root := writeFixtureRepository(t)
+	runs := releaseWithScope(t, root, map[string][]gosourcefile.Range{
+		"pkg0/gate.go": {gateRange(t, root, 0)},
+	})
+
+	// Every mutant costs a full run of the test command, so this is the number
+	// a change of one line should be charged: the mutators that fire on that
+	// line, and nothing else in the repository.
+	assertCounter(t, "laboratoryRunsForOneChangedFunction", runs)
+}
+
+func TestCounterLaboratoryRunsDoNotCollideAcrossFiles(t *testing.T) {
+	t.Parallel()
+
+	root := writeFixtureRepository(t)
+
+	// Two files, each changed in a different place. Because every fixture file
+	// has the same byte layout, the two ranges name offsets that exist in both
+	// — which is exactly the shape that makes a scope holding one flat set of
+	// ranges mutate each file at every range.
+	runs := releaseWithScope(t, root, map[string][]gosourcefile.Range{
+		"pkg0/gate.go": {gateRange(t, root, 0)},
+		"pkg1/gate.go": {gateRange(t, root, 2)},
+	})
+
+	// Two changed lines cost twice one changed line. A flat scope would charge
+	// four, because each file would answer to both ranges, and the bill would
+	// grow as the square of the number of files rather than in proportion.
+	assertCounter(t, "laboratoryRunsForOneChangedFunctionInEachOfTwoFiles", runs)
 }
 
 func TestCounterSourceParsesPerRelease(t *testing.T) {

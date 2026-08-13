@@ -11,11 +11,13 @@ import (
 	"github.com/Disble/ditto/internal/ditto"
 	"github.com/Disble/ditto/internal/fsrepository"
 	"github.com/Disble/ditto/internal/fstemporarydir"
+	"github.com/Disble/ditto/internal/gosourcefile"
 	"github.com/Disble/ditto/internal/gotextdiff"
 	"github.com/Disble/ditto/internal/ignoredrepository"
 	"github.com/Disble/ditto/internal/iologger"
 	"github.com/Disble/ditto/internal/laboratory"
 	"github.com/Disble/ditto/internal/prettydiff"
+	"github.com/Disble/ditto/internal/scopedrepository"
 	"github.com/Disble/ditto/internal/scorecalculator"
 	"github.com/Disble/ditto/internal/testingtlaboratory"
 	"github.com/Disble/ditto/internal/verboselaboratory"
@@ -127,6 +129,10 @@ func Release(t *testing.T, options ...Option) {
 		opts.Repository = ignoredrepository.New(opts.IgnoreSourceFilesPatterns, opts.Repository)
 	}
 
+	if opts.ChangedRanges != nil {
+		opts.Repository = scopedrepository.New(scopedRanges(opts.ChangedRanges), opts.Repository)
+	}
+
 	if verbose() {
 		opts.Repository = verboserepository.New(logger, opts.Repository)
 		opts.TemporaryDir = verbosetemporarydir.New(logger, opts.TemporaryDir)
@@ -157,4 +163,22 @@ func Release(t *testing.T, options ...Option) {
 
 func verbose() bool {
 	return *dittoVerbose || testing.Verbose()
+}
+
+// scopedRanges converts the public range type into the one the source files
+// carry. The two are kept apart so an internal package never becomes part of
+// this module's published surface.
+func scopedRanges(ranges map[string][]Range) map[string][]gosourcefile.Range {
+	converted := make(map[string][]gosourcefile.Range, len(ranges))
+
+	for path, spans := range ranges {
+		fileRanges := make([]gosourcefile.Range, 0, len(spans))
+		for _, span := range spans {
+			fileRanges = append(fileRanges, gosourcefile.Range{Start: span.Start, End: span.End})
+		}
+
+		converted[path] = fileRanges
+	}
+
+	return converted
 }
