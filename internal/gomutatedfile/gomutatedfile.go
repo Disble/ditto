@@ -28,6 +28,15 @@ func (f *GoMutatedFile) WriteTo(repository Repository) {
 	repository.Overwrite(f.relativePath, f.rawMutatedContent)
 }
 
+// RestoreIn puts the original bytes back where WriteTo put the mutated ones.
+//
+// It is what lets one temporary repository serve every mutant instead of being
+// rebuilt for each: a sandbox that is handed back carrying the previous
+// mutation would silently test two mutations at once.
+func (f *GoMutatedFile) RestoreIn(repository Repository) {
+	repository.Overwrite(f.relativePath, f.rawSourceContent)
+}
+
 func (f *GoMutatedFile) String() string {
 	return f.relativePath
 }

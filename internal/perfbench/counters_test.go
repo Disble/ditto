@@ -11,8 +11,11 @@ import (
 	"github.com/Disble/ditto/internal/ditto"
 	"github.com/Disble/ditto/internal/dittotesting/fakereporter"
 	"github.com/Disble/ditto/internal/fsrepository"
+	"github.com/Disble/ditto/internal/fstemporarydir"
 	"github.com/Disble/ditto/internal/future"
 	"github.com/Disble/ditto/internal/gomutatedfile"
+	"github.com/Disble/ditto/internal/gosourcefile"
+	"github.com/Disble/ditto/internal/laboratory"
 	"github.com/Disble/ditto/internal/result"
 	"github.com/Disble/ditto/viruses"
 	"github.com/Disble/ditto/viruses/arithmetic"
@@ -127,7 +130,7 @@ func (v treeCountingVirus) Incubate(node ast.Node, _ *types.Info) []*viruses.Inf
 	return nil
 }
 
-func TestCounterFilesLinkedPerMutant(t *testing.T) {
+func TestCounterFilesLinkedPerSandbox(t *testing.T) {
 	t.Parallel()
 
 	root := writeFixtureRepository(t)
@@ -135,9 +138,51 @@ func TestCounterFilesLinkedPerMutant(t *testing.T) {
 
 	fsrepository.New(root).LinkAllToTemporaryRepository(temporary)
 
-	// Laboratory.Test builds one of these per mutant, so this count is paid
-	// once for every mutant in a run, not once per run.
-	assertCounter(t, "filesLinkedPerMutant", countFiles(t, temporary))
+	// What one sandbox costs to build. It was named per-mutant while every
+	// mutant built its own; that stopped being the same number the moment
+	// sandboxes were pooled, so the two are counted separately now.
+	assertCounter(t, "filesLinkedPerSandbox", countFiles(t, temporary))
+}
+
+// countingRepository records how many sandboxes a release actually builds.
+type countingRepository struct {
+	inner  ditto.Repository
+	builds int
+}
+
+func (r *countingRepository) ListGoSourceFiles() []*gosourcefile.GoSourceFile {
+	return r.inner.ListGoSourceFiles()
+}
+
+func (r *countingRepository) LinkAllToTemporaryRepository(path string) ditto.TemporaryRepository {
+	r.builds++
+
+	return r.inner.LinkAllToTemporaryRepository(path)
+}
+
+// silentRunner answers every mutant without running anything, so this measures
+// sandbox construction rather than the test command.
+type silentRunner struct{}
+
+func (silentRunner) Test(ditto.TemporaryRepository) result.Result[string] {
+	return result.Ok("")
+}
+
+func TestCounterSandboxesBuiltPerRelease(t *testing.T) {
+	t.Parallel()
+
+	root := writeFixtureRepository(t)
+	repository := &countingRepository{inner: fsrepository.New(root)}
+
+	temporaryDir := fstemporarydir.New("dittoperf-")
+	t.Cleanup(func() { _ = temporaryDir.RemoveAll() })
+
+	ditto.New(repository, laboratory.New(silentRunner{}, temporaryDir), fakereporter.New()).
+		Release(defaultViruses()...)
+
+	// One sandbox serves the whole run. This used to equal the mutant count,
+	// which is the walk above paid once per mutant.
+	assertCounter(t, "sandboxesBuiltPerRelease", repository.builds)
 }
 
 func TestCounterSourceParsesPerRelease(t *testing.T) {

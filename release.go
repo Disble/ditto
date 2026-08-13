@@ -108,6 +108,21 @@ func Release(t *testing.T, options ...Option) {
 		opts.MinimumThreshold,
 	)
 
+	// Sandboxes outlive each mutant now, so removing them belongs to the run
+	// rather than to the loop that used to rebuild one per mutant. t.Cleanup
+	// covers a normal finish, a failed run and a t.Fatal. It cannot cover the
+	// process being killed — that is what the owning process id in the
+	// directory name is for, so a later run can tell an abandoned parent from
+	// one still in use. Registered before the decorators wrap it, because they
+	// do not forward this.
+	if sandboxes, ok := opts.TemporaryDir.(interface{ RemoveAll() error }); ok {
+		t.Cleanup(func() {
+			if err := sandboxes.RemoveAll(); err != nil {
+				logger.Logf("%s %s", color.Yellow("┃"), err)
+			}
+		})
+	}
+
 	if opts.IgnoreSourceFilesPatterns != nil {
 		opts.Repository = ignoredrepository.New(opts.IgnoreSourceFilesPatterns, opts.Repository)
 	}
