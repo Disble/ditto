@@ -4,6 +4,57 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-08-13
+
+The first release that makes ditto cheaper to run rather than only better
+named. Every number below was measured against the fixture in
+`internal/perfbench` and is enforced by `perf/baseline.json`.
+
+### Added
+
+- **`WithChangedRanges`** restricts a release to named byte ranges of named
+  files. Every mutant costs a full run of the test command, so mutating a line
+  the change never touched is charged at the same rate as one that matters. On
+  the fixture, one changed function costs **4** laboratory runs where the whole
+  repository costs 48.
+
+  The ranges are held beside their file, and callers should keep them that way
+  too. A byte offset only means something against the file it was measured in,
+  because every file is parsed on its own and so every file's positions start
+  from the same base. A scope that has lost track of which file a range came
+  from makes each file answer to every range: mutants appear in code no diff
+  touched, and the count grows as the square of the number of files. Two files
+  scoped to different functions cost **8**, twice the single-file number, where
+  a flat scope costs 16 — measured, because the fixture files are written to
+  the same byte layout precisely so the offsets collide.
+
+### Changed
+
+- **One sandbox per run instead of one per mutant.** A sandbox is a walk of the
+  repository and a symlink per file, roughly 0.45ms per file, and nothing about
+  it depends on which mutant runs in it. Sandboxes are now pooled and the
+  mutated file is restored before one is handed back. `sandboxesBuiltPerRelease`
+  is 1, down from the mutant count.
+- **Each source file is parsed once per release, not once per mutator.** With
+  the default set that is fourteen parses per file reduced to one. Mutants come
+  out in the same order; only the parsing is shared.
+- **`.git` is no longer linked into a sandbox.** Nothing in it is Go source, so
+  it produced no mutants while being copied for every one of them — measured at
+  164 working files against 1324 git objects on one checkout. It is also the
+  safer answer: the sandbox is one symlink per file, so linking Git's own
+  directory handed anything running in there a live handle on the real
+  repository's objects, config and refs.
+
+### Fixed
+
+- **Sandbox lifetime.** Sandboxes now live in one parent directory per process,
+  named after the owning process id, removed through `t.Cleanup` in `Release`
+  with retries — Windows holds a handle for a moment after the process that
+  worked in the directory exits, and the unguarded removal panicked mid-run,
+  which was itself orphaning every other sandbox. Six abandoned sandboxes were
+  found on one machine, the oldest eight days old. A killed process is still
+  not covered; reclaiming what it leaves is recorded in `docs/backlog.md`.
+
 ## [0.1.0] - 2026-08-13
 
 First release under the ditto name. It is a fork of
@@ -70,4 +121,5 @@ here, not yet built.
 - The `retract` block. It named published versions of the upstream module path,
   which do not exist under this one.
 
+[0.2.0]: https://github.com/Disble/ditto/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Disble/ditto/releases/tag/v0.1.0
