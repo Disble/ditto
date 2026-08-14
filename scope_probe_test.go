@@ -1,6 +1,7 @@
 package ditto_test
 
 import (
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -94,9 +95,17 @@ type release struct {
 	output   string
 }
 
+// TestChangedScope is a probe, not a guard, and it is skipped without being
+// asked for by name.
+//
+// Two reasons, and the second matters more. It builds scratch modules and runs
+// whole releases, which does not fit the gate's budget. And its assertions
+// record that a defect is present: the day the baseline is read and the run
+// refuses, this turns red for having been fixed. A measurement frozen as a
+// regression test fails in the wrong direction.
 func TestChangedScope(t *testing.T) {
-	if testing.Short() {
-		t.Skip("builds scratch modules and runs whole releases")
+	if os.Getenv("DITTO_PROBE") != "1" {
+		t.Skip("set DITTO_PROBE=1 to run the probes; see docs/experiments/changed-scope.md")
 	}
 
 	t.Run("control: a green suite reports both outcomes", func(t *testing.T) {
