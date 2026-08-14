@@ -116,3 +116,40 @@ build red.
 `.assets/logo.svg` is ooze's. The licence permits reuse, but the mark is the
 one thing a fork should not inherit — it is upstream's identity, not its code.
 Needs replacing before ditto is presented anywhere as its own project.
+
+## 6. A mutant that cannot compile is scored as killed
+
+Ditto recognises a killed mutant by the test command exiting non-zero, and a
+mutation that does not compile makes it exit non-zero too. The mutant is counted
+as caught by a test that never ran.
+
+Measured over `internal/` of dharness: **94 of 1293 mutants, 7.3%**, from four
+ordinary causes — an integer literal decremented into a negative index, a
+comparison replaced by a constant leaving its variable unread, arithmetic
+subtracting strings, and switch cases colliding after a literal moved. It is a
+lower bound: the probe builds the package, so a mutation that breaks only the
+test build is one it misses.
+
+Every such mutant inflates the score, which is the number people act on and the
+number dharness's gate fails builds on.
+
+`go test`'s exit status cannot tell the two apart — it is 1 for both — and
+reading `[build failed]` out of the output would tie ditto to one tool's
+phrasing. Building before running costs a median of 25%. Asking the same question
+in process with `go/types` is unmeasured and is the next thing to try.
+
+See `docs/experiments/false-kills.md` and `docs/experiments/fixing-false-kills.md`.
+
+## 7. The gated path is opt-in and unproven at scale
+
+`ditto.Gated()` compiles a file's mutants once and selects each at run time. It
+reaches the same verdicts as the ordinary path on every fixture measured except
+one, where it disagreed and was right — the ordinary path was scoring a
+non-compiling mutant as killed.
+
+It is proven on two fixtures and a golden, not on a repository. It is not on by
+default, and the golden's assertion that both paths print the same bytes is only
+sound while no fixture holds a non-compiling mutant.
+
+See `docs/experiments/state-of-the-work.md` for everything measured and everything
+still open.
