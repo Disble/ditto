@@ -200,3 +200,28 @@ the remaining two then fall.
 
 This is a conjecture born from that note's data, so it needs its own question and
 its own note rather than an amendment to that one.
+
+## 11. `go test -v` silently turns the gated path off
+
+`release.go` reads `testing.Verbose()` and wraps the gated laboratory in
+`verboselaboratory`. That decorator implements `Test` and **not** `TestAll`, so
+`ditto.Release`'s type assertion to `BatchLaboratory` fails, the batch is never
+forwarded, and every mutant takes the ordinary path one at a time.
+
+`ditto.Gated()` is therefore a no-op under `-v`, which is what CI usually runs.
+Nothing reports it: `Gated()` and `FellBack()` are counters the report never
+prints, so a run that gated nothing looks exactly like a run that gated
+everything.
+
+Found by putting a `panic` inside `TestAll` and watching a gated run finish
+without it. A second `panic` in `Test` did fire, which separated "the laboratory
+is not in the stack" from "the batch is not forwarded".
+
+It cost three measurements. `changed-scope.md` and `instrumentation-fidelity.md`
+both reported a hypothesis holding on numbers produced by the ordinary path
+compared with itself, and both are corrected in place.
+
+What would close it: `verboselaboratory` forwards `TestAll` the way
+`testingtlaboratory` already does, and the report prints how many mutants were
+gated, so a path that silently did not engage is visible in the output rather
+than only in a panic someone thought to add.

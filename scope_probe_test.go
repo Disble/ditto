@@ -160,8 +160,12 @@ func TestChangedScope(t *testing.T) {
 		t.Logf("gated   : total %d, killed %d, survived %d", gated.total, gated.killed, gated.survived)
 		t.Logf("ordinary: total %d, killed %d, survived %d", ordinary.total, ordinary.killed, ordinary.survived)
 
-		if gated.killed != ordinary.killed {
-			t.Errorf("H2 is falsified: gated killed %d, ordinary killed %d",
+		// H2 predicted the two would report the same number killed. They do not:
+		// the gate selects the decrement through a function call, which the
+		// compiler cannot fold to a constant, so the mutant builds and runs where
+		// the ordinary path could not compile it at all.
+		if gated.killed >= ordinary.killed {
+			t.Errorf("the gated path no longer kills fewer: gated %d, ordinary %d",
 				gated.killed, ordinary.killed)
 		}
 	})
@@ -202,7 +206,7 @@ func runScratch(t *testing.T, source, tests string, gated bool) release {
 	binary := filepath.Join(project, "mutation.test")
 	mustRun(t, project, "building the release", "go", "test", "-c", "-tags=mutation", "-o", binary, ".")
 
-	run := command(t, project, binary, "-test.run", "TestMutation", "-test.count=1", "-test.v")
+	run := command(t, project, binary, "-test.run", "TestMutation", "-test.count=1")
 	if gated {
 		run.Env = append(run.Env, "SCRATCH_GATED=1")
 	}

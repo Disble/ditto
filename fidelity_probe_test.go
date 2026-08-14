@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Disble/ditto/internal/goinfectedfile"
 	"github.com/Disble/ditto/internal/gosourcefile"
 	"github.com/Disble/ditto/internal/schemata"
 	"github.com/Disble/ditto/viruses"
@@ -99,6 +100,59 @@ func TestJoin(t *testing.T) {
 }
 `
 
+// unreadLocalSource carries the one class where the two paths were ever seen to
+// disagree: a local read only in one operand of an `&&`. Comparison Replace
+// swaps that operand for `true`, which leaves the local unread and the file does
+// not compile — while the gate keeps the original expression as its unselected
+// arm, so it does.
+//
+// The `&&` is the point. Comparison Replace fires only on `&&` and `||`, and
+// replaces an operand rather than a whole comparison; a fixture without a
+// logical operator cannot contain this class at all, whatever its comparisons
+// look like. That is what the original case was: `err == nil && ...` becoming
+// `true && ...`.
+//
+// Nothing tests Report, so a mutant that survives has nowhere else to die.
+const unreadLocalSource = `package calc
+
+func Grade(score int) string {
+	if score > 50 {
+		return "pass"
+	}
+
+	return "fail"
+}
+
+func Report(values []string, limit int) string {
+	found := len(values)
+
+	if found > 0 && limit > 0 {
+		return "some"
+	}
+
+	return "none"
+}
+`
+
+const unreadLocalTests = `package calc_test
+
+import (
+	"testing"
+
+	"scratch/calc"
+)
+
+func TestGrade(t *testing.T) {
+	if calc.Grade(80) != "pass" {
+		t.Fatal("80 should pass")
+	}
+
+	if calc.Grade(10) != "fail" {
+		t.Fatal("10 should fail")
+	}
+}
+`
+
 const fidelityExtraTest = `
 func TestBonus(t *testing.T) {
 	if calc.Bonus(95) != 10 {
@@ -159,11 +213,104 @@ func TestInstrumentationFidelity(t *testing.T) {
 			t.Logf("  survived ONLY on the ordinary path: %s", label)
 		}
 
-		if len(onlyGated)+len(onlyOrdinary) != 0 {
-			t.Errorf("H2 is falsified: %d labels differ between the paths",
-				len(onlyGated)+len(onlyOrdinary))
+		// H2 predicted the sets would be identical. They are not, and the
+		// direction is what matters: mutants survive on the gated path that the
+		// ordinary path could not compile, never the other way round.
+		if len(onlyGated) == 0 {
+			t.Errorf("H2 predicted identical sets and the paths now agree; " +
+				"the disagreement this note recorded is gone")
+		}
+
+		if len(onlyOrdinary) != 0 {
+			t.Errorf("%d labels survive only on the ORDINARY path, which is the "+
+				"direction nothing has ever explained", len(onlyOrdinary))
 		}
 	})
+}
+
+// TestDisagreementClass is docs/experiments/disagreement-class.md: the fixture
+// instrumentation-fidelity.md should have had.
+func TestDisagreementClass(t *testing.T) {
+	if os.Getenv("DITTO_PROBE") != "1" {
+		t.Skip("set DITTO_PROBE=1 to run the probes; see docs/experiments/disagreement-class.md")
+	}
+
+	confirmTheFixtureCarriesTheClass(t)
+
+	gated := runScratch(t, unreadLocalSource, unreadLocalTests, true)
+	ordinary := runScratch(t, unreadLocalSource, unreadLocalTests, false)
+
+	t.Logf("gated   : total %d, killed %d, survived %d", gated.total, gated.killed, gated.survived)
+	t.Logf("ordinary: total %d, killed %d, survived %d", ordinary.total, ordinary.killed, ordinary.survived)
+
+	onlyGated := missingFrom(survivorsOf(t, gated), survivorsOf(t, ordinary))
+	onlyOrdinary := missingFrom(survivorsOf(t, ordinary), survivorsOf(t, gated))
+
+	for _, label := range onlyGated {
+		t.Logf("  survived ONLY on the gated path   : %s", label)
+	}
+
+	for _, label := range onlyOrdinary {
+		t.Logf("  survived ONLY on the ordinary path: %s", label)
+	}
+
+	if len(onlyGated) == 0 && len(onlyOrdinary) == 0 {
+		t.Errorf("H1 is falsified: the paths agree even here")
+	}
+
+	if len(onlyOrdinary) != 0 {
+		t.Errorf("H2 is falsified: %d labels survive only on the ordinary path", len(onlyOrdinary))
+	}
+}
+
+// confirmTheFixtureCarriesTheClass is every control this probe's result rests
+// on, ticked before a single verdict is read.
+func confirmTheFixtureCarriesTheClass(t *testing.T) {
+	t.Helper()
+
+	// The fault is confirmed present rather than assumed from a virus's name:
+	// written by hand, and it must fail to build.
+	replaced := strings.Replace(unreadLocalSource, "found > 0 &&", "true &&", 1)
+	if output, err := scratchSuite(t, replaced, unreadLocalTests); err == nil {
+		t.Fatalf("the unread local compiles, so this fixture tests nothing\n%s", output)
+	}
+
+	// Green before anything is mutated.
+	if output, err := scratchSuite(t, unreadLocalSource, unreadLocalTests); err != nil {
+		t.Fatalf("the fixture is not green, so no verdict below means anything\n%s", output)
+	}
+
+	// The one the first version of this note was missing: a mutation that fails
+	// when written by hand proves nothing unless ditto GENERATES it.
+	if broken := brokenMutantsOf(t, unreadLocalSource, unreadLocalTests); broken == 0 {
+		t.Fatalf("ditto generates no mutant of this fixture that fails to build, " +
+			"so the class this probe exists for is not in the population")
+	}
+
+	// A gated mutant only runs from the shared compilation if that compilation
+	// succeeds. A file that does not build returns to the ordinary path, and the
+	// two paths would then agree for a reason that has nothing to do with the
+	// gate.
+	if output, err := scratchSuite(t, plannedSource(t, unreadLocalSource), unreadLocalTests); err != nil {
+		t.Fatalf("the instrumented file does not build, so the file falls back "+
+			"and nothing below is about the gate\n%s", output)
+	}
+
+	t.Logf("the instrumented file builds and its suite is green")
+}
+
+// plannedSource is the bytes the gated path would compile for a file.
+func plannedSource(t *testing.T, source string) string {
+	t.Helper()
+
+	infected := gosourcefile.New("calc/calc.go", []byte(source)).Incubate(fidelityViruses()...)
+
+	mutants := make([][]byte, 0, len(infected))
+	for _, one := range infected {
+		mutants = append(mutants, one.Mutate().Mutated())
+	}
+
+	return string(schemata.Plan([]byte(source), mutants).Instrumented)
 }
 
 // instrumentedSource plans the file the way the gated path does, so that what is
@@ -197,6 +344,52 @@ func instrumentedSource(t *testing.T) string {
 	t.Logf("planner gates %d of %d mutants", gated, len(mutants))
 
 	return string(planned.Instrumented)
+}
+
+// brokenMutantsOf incubates the fixture the way a release does and reports how
+// many of the mutants ditto actually produces fail to build, naming each one.
+//
+// It exists because a hand-written mutation that fails to compile says nothing
+// about the population: the question is whether a virus writes that mutation.
+func brokenMutantsOf(t *testing.T, source, tests string) int {
+	t.Helper()
+
+	infected := gosourcefile.New("calc/calc.go", []byte(source)).Incubate(fidelityViruses()...)
+	broken := 0
+
+	for index, one := range infected {
+		mutant := one.Mutate()
+
+		output, err := scratchSuite(t, string(mutant.Mutated()), tests)
+		if err == nil {
+			continue
+		}
+
+		if !strings.Contains(output, "declared and not used") {
+			continue
+		}
+
+		broken++
+
+		t.Logf("  ditto generates a mutant that leaves a local unread: %s (mutant %d of %d), gated: %v",
+			mutant.Label(), index+1, len(infected), isGated(source, infected, index))
+	}
+
+	t.Logf("mutants generated %d, of which leave a local unread %d", len(infected), broken)
+
+	return broken
+}
+
+// isGated asks the planner whether it admits one particular mutant's site. A
+// mutant the planner refuses takes the ordinary path and carries whatever that
+// path does with it, so this is what tells a fallback apart from a gate.
+func isGated(source string, infected []*goinfectedfile.GoInfectedFile, index int) bool {
+	mutants := make([][]byte, 0, len(infected))
+	for _, one := range infected {
+		mutants = append(mutants, one.Mutate().Mutated())
+	}
+
+	return schemata.Plan([]byte(source), mutants).Selector[index] != 0
 }
 
 func fidelityViruses() []viruses.Virus {
