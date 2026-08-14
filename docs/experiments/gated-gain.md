@@ -85,8 +85,25 @@ reading was 36 for 18 mutants — exactly double, because `go test -o` compiles
 mutant total and the reason was the harness. Compiling with `-c` and running the
 binary once gave 18 for 18.
 
-That is also the evidence that a difference would show: the counter moved 0, 36,
-18, 8 across runs. It is not stuck.
+That is also the evidence that the counter is not stuck: it moved 0, 36, 18, 8
+across runs.
+
+**The verdict comparison was shown to refuse — after the fact, which is the point
+worth recording.** This note declared that control and the first version of these
+results did not run it. Comparing 18/9/9 with 18/9/9 twice felt like checking,
+and a control written down is not a control run.
+
+Run afterwards: with the gated path deliberately made to select nothing, so every
+gated mutant executes unmutated, the two paths separate at once.
+
+| Path | total | killed | survived |
+| --- | --- | --- | --- |
+| ordinary | 18 | 9 | 9 |
+| gated, deliberately broken | 18 | **3** | **15** |
+
+Restored, both report 18/9/9 again. A difference of that kind would have been
+seen. Before this was run, H1 rested on two numbers agreeing and nothing showing
+that they could have disagreed.
 
 ### H1 held
 
