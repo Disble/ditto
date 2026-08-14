@@ -107,12 +107,54 @@ arithmetic `BinaryExpr` sites until those are measured. A tail, not a second
 first-class path — which is a weaker conclusion than `virus-families.md` reached,
 and this measurement is why.
 
+## H2 — a literal gate that compiles also reaches today's verdicts
+
+Asked because H1 answered the compiler and nothing else, and a gate that compiles
+while returning the wrong value would have passed every check above.
+
+`internal/jsconfig/jsconfig.go` is the file where all 26 literal sites compiled,
+so all 26 are gated at once, the package is compiled once, and each mutant is
+selected at runtime — against today's path of editing one literal's text and
+running the suite, 26 times.
+
+*Falsified by a single disagreement between the two verdict vectors, or by the
+gated package with nothing selected behaving differently from the untouched one.*
+
+No claim is made here about which unmeasured gap matters more. Arithmetic
+`BinaryExpr` sites are still untested, and until both are run there is no basis
+for ranking them.
+
+**Result: holds.**
+
+    baseline, untouched                    : suite passed
+    instrumented, nothing selected         : suite passed
+
+    verdicts, one edited literal (today)   : KKKKKKKKKKKKKKKKKKKKKKSKKK
+    verdicts, instrumented and selected    : KKKKKKKKKKKKKKKKKKKKKKSKKK
+
+    compilations : today 26, instrumented 1
+    wall clock   : today 22.18 s, instrumented 3.51 s
+
+Twenty-five killed, one survived, and the same one survived both ways. The
+control was run first on the same file with the comparison family and reproduced
+`KKKSKKKKSKKK` exactly, so the extension did not disturb the proven path.
+
+A call gate for a literal reaches today's verdicts. The gap H1 left open —
+compiling is not behaving — is closed for this family on this file.
+
+*(The tool prints "comparison sites" for both families; the count above is of
+literal sites. A cosmetic defect in the harness, recorded rather than quietly
+fixed, because the number it labels is the one the reader has to trust.)*
+
 ## What this does NOT establish
 
-- **Compiling is not behaving.** This asked the compiler a question and got an
-  answer. For the comparison family the verdicts were also proven to match; for
-  literals they were not. A call gate that compiles and returns the wrong value
-  would pass every check in this note.
+- **Both families were gated separately, never together.** Each run rewrote one
+  family in one file. A file carrying a boolean gate and twenty-six generated
+  functions at once has not been compiled, and that is what a real run would do.
+- **One file for H2.** The verdict equivalence covers `jsconfig`'s 26 literal
+  sites. The three sites that refused to compile live in another file and were
+  not part of it, so nothing here says what happens when a file contains both
+  gateable and ungateable literals.
 - **Arithmetic `BinaryExpr` sites are untested** — `a + b` mutated to `a - b`,
   63 of dharness's 520 B mutants. They need the operand's type, which a per-site
   generated function may or may not infer.
