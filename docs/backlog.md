@@ -127,8 +127,8 @@ Measured over `internal/` of dharness: **94 of 1293 mutants, 7.3%**, from four
 ordinary causes — an integer literal decremented into a negative index, a
 comparison replaced by a constant leaving its variable unread, arithmetic
 subtracting strings, and switch cases colliding after a literal moved. It is a
-lower bound: the probe builds the package, so a mutation that breaks only the
-test build is one it misses.
+tight bound, since measured: compiling the test binary over the same 1293 mutants
+rejects the same 94 and not one more, because no virus rewrites a declaration.
 
 Every such mutant inflates the score, which is the number people act on and the
 number dharness's gate fails builds on.

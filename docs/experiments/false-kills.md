@@ -90,8 +90,13 @@ this repository.
 
 ## What this does NOT establish
 
-- **This is a lower bound.** It builds the package. A mutation that compiles as a
-  package but breaks the *test* build would be a false kill this probe misses.
+- ~~**This is a lower bound.** It builds the package. A mutation that compiles as
+  a package but breaks the *test* build would be a false kill this probe
+  misses.~~ **Measured, and the bound is tight here.** Compiling the test binary
+  over the same 1293 mutants rejects the same 94 and not one more, because no
+  virus rewrites a declaration, so the test files compile against an unchanged
+  API. `refusing-false-kills.md`. It stays a caveat for a virus that changes an
+  identifier, a signature or a type; none exists today.
 - **One repository.** The four causes are shapes of Go rather than of dharness,
   but their frequency is dharness's.
 - **Nothing about how much of it the gated path fixes.** The `declared and not

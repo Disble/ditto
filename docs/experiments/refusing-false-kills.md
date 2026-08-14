@@ -12,7 +12,7 @@ of dharness at `aa605f4`, measured on throwaway copies in August 2026?
 | Element | This question's |
 | --- | --- |
 | Interrogative phrase | to what extent, and at what cost |
-| Variable, the counters that move | false kills eliminated, of 94; subprocesses added per mutant |
+| Variable, the counters that move | false kills reached, of the population; subprocesses added per mutant |
 | Population, unit of analysis | 1293 mutants over 42 files of `internal/` |
 | Space and time | dharness at `aa605f4`, Go 1.25, August 2026 |
 
@@ -48,43 +48,50 @@ against. None of it answers the question; all of it constrains the answer.
 - **Building before running costs a median 25% of a run** (`fixing-false-kills.md`),
   and the exit code cannot tell a dead mutant from one that never ran.
 
+## The ground truth, and why it is not a hypothesis
+
+Compiling the mutant before running its tests detects a mutant that cannot
+compile. That is not a conjecture — it is what compiling *means*, and a
+hypothesis saying so would rebuild its expectation from its own inputs.
+
+So compilation defines the population and is the incumbent mechanism. Its cost is
+already known and is the bar the others have to beat: **one subprocess per
+mutant**, a median 25% of a run.
+
+The population is `go test -c` rather than `go build`, because ditto's verdict
+comes from a test command: a mutation that compiles as a package and breaks the
+*test* build is a false kill that a package build never sees. The 94 measured so
+far come from `go build` and are a lower bound for exactly that reason.
+
 ## The hypotheses
 
-Each is a tentative answer to the question. Each can be false while the others
-are also false.
+Each is a tentative answer to whether the incumbent's cost can be avoided. Both
+can be false.
 
-**H1 — the AST is enough.** Guards that read only the syntax tree, refusing a
-mutation at incubation by the shape of its site, eliminate all 94.
-*Prediction: 94 of 94 eliminated, 0 subprocesses added per mutant.*
-*Falsified by any false kill remaining, or by any subprocess added.*
+**H1 — the AST is enough.** Guards reading only the syntax tree, refusing a
+mutation at incubation by the shape of its site, reach the whole population.
+*Prediction: every member found, 0 subprocesses added per mutant.*
+*Falsified by one member missed, or by any subprocess added.*
 
 **H2 — an in-process type check is enough, and free per mutant.** A `go/types`
-check over the mutated file eliminates all 94 without spawning a process for
-each one; whatever import resolution costs is paid once per package.
-*Prediction: 94 of 94 eliminated, 0 subprocesses added per mutant.*
-*Falsified by any false kill remaining, or by any per-mutant subprocess.*
+check over the mutated file reaches the whole population without spawning a
+process for each one; whatever import resolution costs is paid once per package.
+*Prediction: every member found, 0 subprocesses added per mutant.*
+*Falsified by one member missed, or by any per-mutant subprocess.*
 
-**H3 — building each mutant is enough, at one subprocess each.** Compiling the
-mutant before running its tests, and reporting "did not build" separately,
-eliminates all 94.
-*Prediction: 94 of 94 eliminated, exactly 1 subprocess added per mutant.*
-*Falsified by any false kill remaining, or by more than one subprocess.*
-
-**What would refute all three:** any of them leaving a false kill behind. The
-probe builds the *package*; a mutation that compiles as a package and breaks the
-*test* build is a false kill none of these three mechanisms addresses, and
-`false-kills.md` already records the 94 as a lower bound for that reason. If the
-whole set falls, the answer is that this is not fixable where the mutant is made,
-and the next conjecture is about where the verdict is read — ditto infers a kill
-from a non-zero exit code, and could instead require positive evidence that a
-test ran and failed.
+**What would refute both:** either of them missing a member. That outcome is not
+"there is no fix" — the incumbent still works — it is that the cheap mechanisms
+on this list do not reach it, and the answer is either to pay the subprocess or
+to conjecture a mechanism not on the list. Two that are not: a scope-only walk
+without full type checking, and reusing the single compilation the gated path
+already performs.
 
 ## Decision rule, fixed in advance
 
-- Exactly one mechanism eliminates all 94 → ship it.
-- More than one → ship the one adding fewest subprocesses per mutant; a tie goes
-  to the one that loses fewest viable mutants.
-- None → return to the question with the verdict-reading conjecture above.
+- Both reach the population → ship the one that loses fewest viable mutants.
+- One reaches it → ship that one.
+- Neither → either pay the incumbent's subprocess, or return to the question with
+  a mechanism not yet on the list.
 
 Nothing here belongs inside a hypothesis.
 
@@ -101,6 +108,11 @@ Nothing here belongs inside a hypothesis.
 3. **No mechanism removes a mutant that compiles.** Total mutants must fall by
    exactly the number of false kills eliminated. A larger drop hides real
    survivors, which is worse than the defect being fixed.
+4. **The population is established by the incumbent, and the incumbent is not
+   compared against itself.** The 94 came from `go build`, which is the incumbent
+   minus the test binary; a denominator produced by a candidate cannot compare
+   candidates. It is re-established once with `go test -c`, and every coverage
+   number below is against that.
 
 ## Fixture
 
@@ -115,7 +127,42 @@ checkout's git addressing.
 
 ## Results
 
-Not yet run. Verdicts: 0 of 3.
+### Control 4 — the population, established by the incumbent
+
+Both compilations run over the same 1293 mutants, in the same pass, so the two
+columns are comparable rather than merely similar. 1063 s.
+
+    mutants 1293, of which do not build 94 (7.3%)
+    test binary does not build: 94 (7.3%) — package build sees 94 of them
+    ONLY the test build sees: (none)
+
+**Zero.** Compiling the test binary — which is what ditto actually runs — rejects
+exactly the mutants the package build rejects, and not one more.
+
+`false-kills.md` recorded the 94 as a lower bound and said so twice; `backlog.md`
+entry 6 repeats it. On this repository the bound is tight, and the correction
+belongs in both. The denominator for H1 and H2 is 94, and it now comes from the
+incumbent mechanism rather than from a candidate.
+
+**Why it is zero**, with the observation that would kill the explanation: all
+fourteen viruses rewrite expressions and statements, never a declaration, so the
+test files compile against an unchanged API and see exactly what the package
+sees. *Falsified by a virus that changes an identifier, a signature or a type* —
+none exists today, and one added later would reopen this.
+
+### Controls 0 and 1
+
+Decoy: `HEAD 2f092c1`, one commit, `user.name decoy-untouched`, 0 changed. The
+package-build column reproduced 1293 and 94 for the third time, from a tool
+sandbox rebuilt after the probe changed.
+
+Narrow cross-check before the full pass: `internal/setup/writer.go`, 35 mutants,
+2 rejected by each column and 33 accepted by both — the new column distinguishes
+rather than rejecting everything or nothing.
+
+### Verdicts: 0 of 2
+
+H1 and H2 are unmeasured. Nothing is concluded.
 
 ## What this note corrects
 
