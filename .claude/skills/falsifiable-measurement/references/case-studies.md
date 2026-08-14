@@ -3,7 +3,7 @@
 Measured cases from ditto and dharness. Each one is here because it changed a
 decision, and three of them killed a claim the author had already made out loud.
 
-## A number that was never an alternative
+## 1. A number that was never an alternative
 
 **Claim:** compiling with `go test -c` and running the binary is about a third of
 the cost of `go test`, from first-wave figures — `go test -c` at 334 ms against
@@ -22,7 +22,7 @@ separate process load follows. The 334 ms was never the whole job.
 **Lesson:** a ratio between two numbers is only an argument when both numbers
 measure the same job.
 
-## The residue that belonged to someone else
+## 2. The residue that belonged to someone else
 
 **Claim:** roughly 4.5 s of a run is ditto's own startup.
 
@@ -37,7 +37,7 @@ remained was `go test` compiling and starting the binary ditto lives in. The
 **Lesson:** a residue is not a measurement. Name what you subtracted from what,
 or measure the thing directly.
 
-## The control that saved a sound design
+## 3. The control that saved a sound design
 
 **Symptom:** the instrumented package's suite failed with no mutant selected —
 precisely the result that would have killed the whole design, since instrumenting
@@ -53,7 +53,7 @@ the binary from the module root, so anything read by relative path broke.
 design is broken" from "the harness is broken", and here it was the difference
 between shipping and abandoning a design that worked.
 
-## The infinite loop was mine
+## 4. The infinite loop was mine
 
 **Symptom:** a measurement ran for over an hour.
 
@@ -69,7 +69,7 @@ the condition true forever.
 **Lesson:** when something is slow, time every step before explaining any of them.
 The plausible story about the code under test cost an hour.
 
-## A green suite proves the suite agrees with itself
+## 5. A green suite proves the suite agrees with itself
 
 `structured-reports` shipped four slices at 0.98–1.00 mutation score with the gate
 green throughout, and eleven pieces of the approved report were missing —
@@ -79,7 +79,7 @@ for. All eleven appeared the moment the binary was built and run.
 **Lesson:** when the deliverable is output a human reads, running the binary is
 part of the work, not a courtesy. Put it in the task list.
 
-## A sentence is not a guard
+## 6. A sentence is not a guard
 
 `AGENTS.md` stated that ditto stripped `GIT_DIR`, `GIT_INDEX_FILE`,
 `GIT_WORK_TREE`, `GIT_OBJECT_DIRECTORY` and `GIT_COMMON_DIR` from what it spawns.
@@ -89,10 +89,17 @@ A decoy repository, aimed at with those variables and left untouched by anything
 under test, took the incident from one commit to two and rewrote its `user.name`
 to the intruder's, on the first run against unchanged code.
 
-**Lesson:** a documented safety property with no test that refuses without it is a
-claim, not a guarantee. Look for the test.
+The same decoy answers a second question no inspection of the tree can. Isolation
+has two sides: the fixture being measured, and the tool doing the measuring. A
+run launched from a checkout with work in it inherits that checkout's addressing,
+whatever it points at afterwards. Finding the tree clean says nothing happened
+that time; it never says nothing could.
 
-## The green that could not go red
+**Lesson:** a documented safety property with no test that refuses without it is a
+claim, not a guarantee. Look for the test — and give it somewhere to reach, so
+that not reaching it is a measurement rather than a story.
+
+## 7. The green that could not go red
 
 A golden test was extended to run the same fixture a second way, through a new
 code path, against the same expected output. It passed on the first run.
@@ -112,7 +119,7 @@ it watches, watch it refuse, put it back. And grep for the edit you believe you
 made — a substitution that matched nothing looks exactly like a change with no
 effect.
 
-## The guard that could not fail
+## 8. The guard that could not fail
 
 A helper was written to refuse a mutation that changed two places at once. It
 rebuilt the file from the range it had computed and compared the result with the
@@ -126,7 +133,7 @@ worked is what exposed it.
 expectation was built. If the answer is no, it reads like a guarantee and is not
 one.
 
-## What the prototype could not see
+## 9. What the prototype could not see
 
 Three separate prototypes measured a rewrite that gates one mutation per site,
 and all three agreed. Wired to the real tool, the first thing that surfaced was
@@ -137,7 +144,7 @@ expression: one site carries three mutants, which no prototype had ever produced
 matters, and the difference is not visible from inside the prototype. Re-measure
 through the real thing before carrying a result across.
 
-## The control that was written and not run
+## 10. The control that was written and not run
 
 An experiment note declared two controls: that the counter must be shown to
 count, and that the verdict comparison must be shown to refuse. The first was
@@ -152,3 +159,30 @@ and survived rose from 9 to 15.
 **Lesson:** writing a control down reads like performing it, and the note is
 exactly where that substitution hides. Tick each declared control off against its
 evidence before reporting the result it was supposed to protect.
+
+## 11. The set that could not come out empty
+
+A note framed a choice between two fixes as two hypotheses:
+
+    H1: the intervention removes at least N.   Falsified below N.
+    H2: it removes fewer than N.               Falsified at N or more.
+
+Exactly one survives, for every measurement that could be taken. The pair was
+titled *mutually exclusive, and the measurement kills one* — which is true, and
+hides that one is also **saved unconditionally**. H2 is H1's kill line promoted
+to a hypothesis, and a threshold that selects an action is a decision rule rather
+than a conjecture; it has its own section for that reason.
+
+The same set carried a second entry that answered a different question — a number
+needed to *design* the intervention, not a tentative answer to the question the
+note existed to settle. It was measured, committed and reported as though
+something had been settled.
+
+Both defects have one origin: the note never stated a research question. With
+nothing to answer, any statement qualifies as a hypothesis and a partition passes
+for a set.
+
+**Lesson:** write the question, then the answers actually considered possible,
+then the outcome that would refute all of them. Hypotheses that differ only by a
+threshold on one number are one measurement and a decision rule wearing two
+hypotheses' clothes.
