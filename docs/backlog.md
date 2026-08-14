@@ -154,6 +154,18 @@ reaches the same verdicts as the ordinary path on every fixture measured except
 one, where it disagreed and was right — the ordinary path was scoring a
 non-compiling mutant as killed.
 
+Measured since: on a fixture built to contain that class, exactly one label
+differs between the paths and it is the mutant that leaves a local unread —
+survived gated, killed ordinary. `docs/experiments/disagreement-class.md`. The
+credit is real and its width is that class.
+
+Also measured since: the branch changed no verdict the ordinary path used to
+give, on 31 mutants of a fixture and 35 of a real file
+(`docs/experiments/backward-compatibility.md`), and the gain is unchanged at 135
+invocations against 38 (`docs/experiments/gain-after-the-fixes.md`).
+
+What still blocks a default is entry 11, not the verdicts.
+
 It is proven on two fixtures and a golden, not on a repository. It is not on by
 default, and the golden's assertion that both paths print the same bytes is only
 sound while no fixture holds a non-compiling mutant.

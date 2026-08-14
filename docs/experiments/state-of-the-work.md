@@ -7,93 +7,115 @@ measured unless it says otherwise, and where it says otherwise that is the point
 
 Ditto pays a fixed 750–950 ms to start `go test` for **every** mutant, which is
 most of a run; the gated path instruments a file once, compiles once, and selects
-each mutant at run time; it is wired, opt-in, proven equivalent on two fixtures
-and **not** equivalent on a third — where it turned out to be right and ditto
-wrong.
+each mutant at run time, cutting 135 invocations to 38 on a real file; it is
+wired, opt-in, **measured backward-compatible**, and it does not engage at all
+under `go test -v`.
 
 ## Where everything is
 
 | | |
 | --- | --- |
-| Branch | `exp/test-invocation`, 27 commits on top of `dfd8ed4`, **not pushed** |
+| Branch | `exp/test-invocation`, 42 commits on top of `dfd8ed4`, **not pushed** |
 | Worktree | `D:/dev/disble/ditto-worktrees/test-invocation` |
-| dharness integration worktree | `D:/dev/disble/dharness-worktrees/ditto-integration`, branch `exp/ditto-integration`, carries only a `replace` in `go.mod` — the harness, never committed |
-| dharness skill branch | `docs/measurement-skill`, three commits, **not pushed**, holds the same skill as this repo |
+| dharness skill branch | `docs/measurement-skill`, four commits, **not pushed** |
+| Experiment notes | 19, in `docs/experiments/` |
 
-Scratch tools live outside every repository and are disposable. They are listed
-in each experiment note that used them.
+The probes live in the repository and are skipped unless asked for by name. See
+*How to run any of it again*.
 
 ## What is proven
 
 - **The invocation toll is the cost.** 750–950 ms per mutant regardless of what
   the suite does. `test-invocation.md`.
-- **Compiling once and selecting at run time reaches the same verdicts**, on
-  comparisons and on integer literals, on two files.
-  `schemata-feasibility.md`, `gating-non-bool.md`.
-- **Both families gate together** once sites contained in other sites are
-  dropped. `gating-both-families.md`.
+- **Compiling once and selecting at run time reaches the same verdicts** for the
+  families it admits. `schemata-feasibility.md`, `gating-non-bool.md`,
+  `instrumentation-fidelity.md`.
 - **97 of 135 mutants gate on a real file** — 71.9%. `gated-gain-real.md`.
-- **The saving is real and its size is not portable**: 2.7× on a package whose
-  suite runs in 243 ms, 1.5× on one that runs in 1155 ms. The *counter* travels —
-  invocations fell 135→38 and 35→12 — the clock does not.
+- **The gain is real and unchanged by the fixes**: 135 invocations of the test
+  command against **38**, reproduced a day apart by two instruments built
+  independently. `gain-after-the-fixes.md`.
+- **The branch changed no verdict the ordinary path used to give.** 31 mutants of
+  a scratch fixture and 35 of `dharness/internal/setup/writer.go`, compared
+  mutant by mutant against `dfd8ed4`: nothing moved column.
+  `backward-compatibility.md`.
 - **7.3% of the mutants ditto calls killed never ran**, because they do not
-  compile and a failing command is how ditto recognises a kill. `false-kills.md`.
+  compile and a failing command is how ditto recognises a kill. The bound is
+  tight: `go test -c` finds the same 94 and not one more. `false-kills.md`,
+  `refusing-false-kills.md`.
+- **The gated path fixes that for the class it gates.** On a fixture built to
+  contain it, one label differs between the paths and it is the mutant that
+  leaves a local unread — survived gated, killed ordinary.
+  `disagreement-class.md`.
+- **A red baseline used to report a perfect score**, and no longer does.
+  `changed-scope.md`.
 
-## What is open, with the hypothesis already written
+## What is open
 
-1. **H4, in-process type checking** — `fixing-false-kills.md`. Under 50 ms per
-   mutant, falsified above 200 ms. If it holds, ditto can classify a non-viable
-   mutant without a subprocess; if it dies, the 25% subprocess measured there is
-   the cheapest honest fix.
-2. **H3, does the gate remove the `declared and not used` class** — same note.
-   It rests on one observed mutant and has never been counted.
-3. **Nested sites gated together.** `gated-gain.md` measured the nesting rule
-   costing 44% of mutants on a threshold-heavy fixture and 7.9% on dharness. The
-   two sites are the same expression tree and the multi-arm machinery already
-   exists.
-4. **Arithmetic and the statement families** are refused by design and keep the
-   ordinary path. Nothing has measured what gating them would need.
+1. **`go test -v` turns the gated path off.** `verboselaboratory` does not
+   forward `TestAll`. `backlog.md` entry 11, and the largest of these: `-v` is
+   what CI runs.
+2. **Nothing reports how much gated.** `Gated()` and `FellBack()` are counters
+   the report never prints, so a run that gated nothing looks like one that gated
+   everything. Same entry.
+3. **The baseline run is counted as a mutant's run** in `GoBuildRunner.Runs`.
+   Measured: 3 runs for 2 gated mutants. `changed-scope.md` H3.
+4. **The false kill on the ordinary path.** Two mechanisms measured and both
+   refuted — the AST reaches 61 of 94 and wrongly refuses 2 that compile; an
+   in-process `go/types` check reaches 92 and refuses nothing, missing only a
+   package it cannot read. `refusing-false-kills.md`, `backlog.md` entries 6
+   and 10.
+5. **`Gated()` is opt-in.** Backward compatibility is measured; the default is a
+   decision nobody has taken.
+6. **A survivor has no address.** `backlog.md` entry 1, and a third of what this
+   tool exists for.
 
 ## What must be decided, not measured
 
-**The golden asserts both paths print the same bytes.** That is only sound while
-no fixture holds a non-compiling mutant. On one that does — `internal/setup/writer.go`
-is such a case — it would demand the gated path reproduce a bug. Fixing the false
-kill at its source resolves this; until then the assertion is narrower than it
-looks.
-
-**`Gated()` is opt-in and was never turned on by default.** That was deliberate:
-it is proven on two fixtures and a golden, not on a repository.
+**The report's vocabulary.** `Diagnostic.IsOk()` is binary and
+`total = len(diagnostics)`. A mutant that cannot compile has to leave the
+denominator rather than become a kill, and that changes ditto's public report,
+which dharness gates on at 0.80.
 
 ## The traps that cost the most time
 
-- **`cd` before `tar`.** Three times a copy was made of the wrong repository
-  because a command changed directory before archiving `.`. The identity of the
-  fixture is now checked — `module github.com/Disble/dharness` — before anything
-  is measured.
-- **A control that fires and gets explained.** The wrong-repository run was
-  caught by a control answering 0 where 35 were expected, and the first
-  explanation reached for was a plausible story about environment variables. It
-  spent the signal and left the feeling of having answered it.
-- **A green that was never reached.** A golden extended to exercise a new path
-  passed without touching it, twice over, for two different reasons. A `panic`
-  dropped into the path is what found it.
-- **Scripted substitutions that match nothing** look exactly like a change with
-  no effect. `rg -c` on what was just written catches it, and did.
-- **Two heredocs chained in one shell invocation** run their `git add` before the
-  first commit. One commit per invocation.
-- **`go test -o` compiles *and runs*.** A counter read double until `-c` was used.
+- **A path that was never reached.** Every gated-versus-ordinary comparison
+  agreed, which read as agreement and was the gate being off. A `panic` in
+  `TestAll` that did not fire found it; a second in `Test` that did fire said
+  which of the two possible causes it was.
+- **An instrument aimed at the wrong quantity.** A counter inside the mutated
+  package counts test-*binary* executions; the gain is quoted in test-*command*
+  invocations. Both correct, different questions.
+- **A fixture that cannot contain the case.** `comparisonreplace` fires only on
+  `&&` and `||`, so a fixture without a logical operator reported the paths
+  agreeing because the class was absent, not because they agreed.
+- **`cd` before `tar`**, and `tar` reading a leading `C:` as a remote host.
+- **A control that fires and gets explained** is worse than no control.
+- **Two heredocs in one shell invocation** run their `git add` before the first
+  commit.
 
 ## How to run any of it again
 
-Every experiment note carries its own fixture and command. The two probes that
-live in this repository are skipped unless pointed at a **throwaway copy**:
+The probes are skipped unless asked for:
+
+    DITTO_PROBE=1 go test . -run TestChangedScope -v
+    DITTO_PROBE=1 go test . -run TestInstrumentationFidelity -v
+    DITTO_PROBE=1 go test . -run TestDisagreementClass -v
+    DITTO_PROBE=1 go test . -run TestBackwardCompatibility -v
+
+    DITTO_PROBE=1 DITTO_COMPAT_REPO=<repo> \
+      go test . -run TestBackwardCompatibilityOnTheRepository -v
+    DITTO_PROBE=1 DITTO_COMPAT_REPO=<repo> \
+      go test . -run TestGainAfterTheFixes -v -timeout 120m
 
     DITTO_ADMIT_ROOT=<copy>      go test ./internal/schemata/ -run TestAdmits...
     DITTO_FALSEKILL_ROOT=<copy>  go test ./internal/schemata/ -run TestCounts...
 
-`DITTO_FALSEKILL_ONLY` narrows the second to one file, and takes a value without
-slashes because the shell rewrites anything that looks like a path.
+`DITTO_COMPAT_REPO` is copied, never mutated in place. `DITTO_FALSEKILL_ONLY`
+narrows the last one and takes a value with no slashes, because the shell
+rewrites anything that looks like a path.
+
+**`TestChangedScope` asserts that a defect is present.** The day one of them is
+fixed it turns red for having been fixed, which is why it is not in the gate.
 
 The repository's own gate is `CPUS=1 mingw32-make lint test.failfast` on this
 machine — `make` is not on PATH, only the native `mingw32-make`, and the MSYS2
