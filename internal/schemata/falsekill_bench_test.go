@@ -52,6 +52,7 @@ func TestCountsMutantsThatCannotBuild(t *testing.T) {
 		examples: map[failure]string{},
 		produced: map[string]int{},
 		broke:    map[string]int{},
+		onlyTest: map[string]int{},
 	}
 	perFile := map[string]string{}
 
@@ -97,12 +98,21 @@ type failure struct {
 // tallies are exact integer counters and nothing else. produced counts every
 // mutant a virus wrote; broke counts the ones that then failed to build, so a
 // refusal can be weighed against what it would also throw away.
+//
+// testBroke and onlyTest exist because ditto's verdict comes from a test
+// command, not from a package build. A mutation that compiles as a package and
+// breaks the test build is a false kill a package build never sees, which is why
+// the count it produces is a lower bound rather than the population.
 type tallies struct {
 	reasons  map[string]int
 	pairs    map[failure]int
 	examples map[failure]string
 	produced map[string]int
 	broke    map[string]int
+
+	testBroke int
+	onlyTest  map[string]int
+	onlyOne   string
 }
 
 // separator is what GoMutatedFile.Label puts between the path and the infection.
@@ -147,6 +157,17 @@ func report(t *testing.T, mutants, broken int, counted *tallies, perFile map[str
 
 	for _, message := range messages {
 		t.Logf("  %4d  %s", counted.reasons[message], message)
+	}
+
+	t.Logf("test binary does not build: %d (%.1f%%) — package build sees %d of them",
+		counted.testBroke, 100*float64(counted.testBroke)/float64(mutants), broken)
+
+	for message, count := range counted.onlyTest {
+		t.Logf("  %4d  ONLY the test build sees: %s", count, message)
+	}
+
+	if counted.onlyOne != "" {
+		t.Logf("  e.g. %s", counted.onlyOne)
 	}
 
 	reportViruses(t, counted)
@@ -211,7 +232,23 @@ func countOne(t *testing.T, root, path string, counted *tallies) (int, int) {
 
 		require.NoError(t, os.WriteFile(path, mutant.Mutated(), 0o600)) //nolint:gosec
 
-		if ok, message := buildsWithMessage(root, filepath.Dir(path)); !ok {
+		packageOK, message := buildsWithMessage(root, filepath.Dir(path))
+		testOK, testMessage := testBuildsWithMessage(root, filepath.Dir(path))
+
+		if !testOK {
+			counted.testBroke++
+		}
+
+		// The interesting column: what the package build cannot see.
+		if packageOK && !testOK {
+			counted.onlyTest[testMessage]++
+
+			if counted.onlyOne == "" {
+				counted.onlyOne = mutant.Label()
+			}
+		}
+
+		if !packageOK {
 			broken++
 			counted.reasons[message]++
 			counted.broke[virus]++
@@ -234,6 +271,24 @@ func countOne(t *testing.T, root, path string, counted *tallies) (int, int) {
 // identifier, so a hundred instances of one cause count as one cause.
 var compilerMessage = regexp.MustCompile(`^.*?\.go:\d+:\d+: `)
 
+// testBuildsWithMessage compiles the package's TEST binary, which is what ditto
+// actually runs. It subsumes the package build: everything `go build` rejects,
+// this rejects too, plus whatever only the test files reach.
+func testBuildsWithMessage(root, packageDir string) (bool, string) {
+	relative, err := filepath.Rel(root, packageDir)
+	if err != nil {
+		return false, err.Error()
+	}
+
+	// -c compiles without running. Without it the tests execute, which is a
+	// different measurement and a much slower one.
+	//nolint:gosec,noctx // the argument is a path inside the tree the caller named
+	command := exec.Command("go", "test", "-c", "-o", os.DevNull, "./"+filepath.ToSlash(relative))
+	command.Dir = root
+
+	return classify(command)
+}
+
 func buildsWithMessage(root, packageDir string) (bool, string) {
 	relative, err := filepath.Rel(root, packageDir)
 	if err != nil {
@@ -244,6 +299,10 @@ func buildsWithMessage(root, packageDir string) (bool, string) {
 	command := exec.Command("go", "build", "./"+filepath.ToSlash(relative))
 	command.Dir = root
 
+	return classify(command)
+}
+
+func classify(command *exec.Cmd) (bool, string) {
 	output, err := command.CombinedOutput()
 	if err == nil {
 		return true, ""
