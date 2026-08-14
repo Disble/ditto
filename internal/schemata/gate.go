@@ -55,35 +55,8 @@ var comparisons = map[token.Token]bool{ //nolint:gochecknoglobals // one fixed s
 // and the generated function it would need has not been measured against real
 // verdicts. Statements are absent because no expression can replace one.
 func Expand(source []byte, replacement Replacement) (Gate, bool) {
-	fileSet := token.NewFileSet()
-
-	file, err := parser.ParseFile(fileSet, "", source, parser.ParseComments|parser.AllErrors)
-	if err != nil {
-		return Gate{}, false
-	}
-
-	base := fileSet.File(file.Pos()).Base()
-
-	var found ast.Expr
-
-	ast.Inspect(file, func(node ast.Node) bool {
-		expression, isExpression := node.(ast.Expr)
-		if !isExpression {
-			return true
-		}
-
-		start, end := int(expression.Pos())-base, int(expression.End())-base
-		if start > replacement.Start || end < replacement.End {
-			return true
-		}
-
-		// Inspect walks outermost first, so every later match is smaller.
-		found = expression
-
-		return true
-	})
-
-	if found == nil {
+	found, base, admitted := locate(source, replacement)
+	if !admitted {
 		return Gate{}, false
 	}
 
@@ -125,6 +98,73 @@ func Expand(source []byte, replacement Replacement) (Gate, bool) {
 		Original: original,
 		Mutated:  mutated,
 	}, true
+}
+
+// locate finds the smallest expression containing the replacement, and refuses
+// one that sits where Go requires a constant.
+//
+// Every gate reads a variable, so no gate is a constant, and in a constant
+// context the instrumented file does not compile. Under a single shared build
+// that failure takes every other mutant in the run down with it, so refusing
+// here is a compilation not wasted.
+//
+// This sees what the syntax tree shows. A literal that has to adopt another type
+// — `float64(ms)/1000`, where the untyped 1000 becomes a float64 — is not
+// visible without type information, and is left to the compilation that admits
+// the file.
+func locate(source []byte, replacement Replacement) (ast.Expr, int, bool) {
+	fileSet := token.NewFileSet()
+
+	file, err := parser.ParseFile(fileSet, "", source, parser.ParseComments|parser.AllErrors)
+	if err != nil {
+		return nil, 0, false
+	}
+
+	base := fileSet.File(file.Pos()).Base()
+
+	var (
+		found      ast.Expr
+		isConstant bool
+	)
+
+	ast.Inspect(file, func(node ast.Node) bool {
+		// Inspect calls back with nil on the way out of every subtree.
+		if node == nil || !contains(node, base, replacement) {
+			return true
+		}
+
+		if constantContext(node) {
+			isConstant = true
+		}
+
+		// Inspect walks outermost first, so every later match is smaller.
+		if expression, isExpression := node.(ast.Expr); isExpression {
+			found = expression
+		}
+
+		return true
+	})
+
+	return found, base, found != nil && !isConstant
+}
+
+// constantContext reports whether Go requires everything below this node to be
+// a constant expression.
+func constantContext(node ast.Node) bool {
+	switch typed := node.(type) {
+	case *ast.GenDecl:
+		return typed.Tok == token.CONST
+	case *ast.ArrayType:
+		return typed.Len != nil
+	default:
+		return false
+	}
+}
+
+func contains(node ast.Node, base int, replacement Replacement) bool {
+	start, end := int(node.Pos())-base, int(node.End())-base
+
+	return start <= replacement.Start && replacement.End <= end
 }
 
 // fields collapses every run of whitespace to one space, so two renderings of

@@ -37,6 +37,15 @@ func (f *GoMutatedFile) RestoreIn(repository Repository) {
 	repository.Overwrite(f.relativePath, f.rawSourceContent)
 }
 
+// Mutated is the file as this mutant leaves it.
+//
+// The gated path needs the bytes rather than the effect of writing them: it
+// reads what a virus replaced off the difference between these and the original,
+// instead of asking each of the fourteen viruses what it does.
+func (f *GoMutatedFile) Mutated() []byte {
+	return f.rawMutatedContent
+}
+
 func (f *GoMutatedFile) String() string {
 	return f.relativePath
 }
