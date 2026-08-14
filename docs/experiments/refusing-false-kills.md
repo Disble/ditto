@@ -114,12 +114,33 @@ it is a consequence to be read off.
 
 ## Fixture
 
-A throwaway copy of dharness, identity confirmed by `head -1 go.mod` reading
-`module github.com/Disble/dharness` before anything is measured — the first run
-of `false-kills.md` was made against a copy of ditto and reported 87.3%.
+**Both sides are sandboxes.** The fixture being mutated and the tool doing the
+mutating are each a throwaway copy, and neither is a checkout with work in it:
 
-`DITTO_FALSEKILL_ROOT` points at that copy. The probe rewrites files in place and
-is skipped without it.
+- `$SCRATCH/dharness-fixture` — what gets mutated. Identity confirmed by
+  `head -1 go.mod` reading `module github.com/Disble/dharness` before anything is
+  measured; the first run of `false-kills.md` was made against a copy of ditto
+  and reported 87.3%.
+- `$SCRATCH/ditto-sandbox` — the probe itself, copied out of the worktree.
+
+The first runs of this note were made with the probe executing **inside the
+linked worktree**, which is precisely the case `AGENTS.md` names: git exports
+`GIT_DIR` and `GIT_INDEX_FILE` as absolute paths from a linked worktree, and
+everything spawned inherits them. Finding the development trees clean afterwards
+shows that nothing happened that time. It does not show that nothing could.
+
+`DITTO_FALSEKILL_ROOT` points at the fixture. The probe rewrites files in place
+and is skipped without it. `DITTO_FALSEKILL_ONLY` narrows it and takes a value
+with no slashes, because the shell rewrites anything that looks like a path.
+
+### Control 0 — the decoy
+
+`AGENTS.md` prescribes the measured version of "it stayed inside its sandbox":
+a throwaway repository with `GIT_DIR` and `GIT_INDEX_FILE` aimed at it, whose
+`HEAD`, commit count and local config must be unchanged after the run. A probe
+that can reach outside its fixture reaches the decoy, and nothing real is lost.
+
+It is control **0** because it protects every number the note contains.
 
 ## Metrics
 
@@ -134,6 +155,32 @@ Exact counters, per virus and per compiler message:
 Wall clock is reported where a run is timed and gates nothing.
 
 ## Results
+
+### Control 0 — the decoy was untouched, and the numbers survived the correction
+
+The first runs below were made with the probe executing inside the linked
+worktree. Every number was then re-measured with the probe in its own sandbox and
+a decoy repository aimed at by `GIT_DIR` and `GIT_INDEX_FILE`.
+
+Cross-check first, on one file whose count is known from a real ditto release:
+
+    mutants 35, of which do not build 2 (5.7%)     internal/setup/writer.go
+
+Then the whole population, 272 s:
+
+    mutants 1293, of which do not build 94 (7.3%)
+    viruses that produced a mutant that does not build: 5 of 14
+    45 of 228  Integer Decrement      25 of 142  Comparison Replace
+    17 of  63  Arithmetic              4 of   8  Arithmetic Assignment Invert
+     3 of 228  Integer Increment
+
+Identical to the first harness, to the mutant. And the decoy:
+
+    HEAD 2f092c10 (unchanged)   commits 1   user.name decoy-untouched   0 changed
+
+The three development trees were unchanged as well — but that is the weaker
+evidence, and it is recorded as the weaker evidence. A clean tree says nothing
+happened this time. The decoy says the probe had somewhere to reach and did not.
 
 ### Control 1 — the baseline reproduces
 
