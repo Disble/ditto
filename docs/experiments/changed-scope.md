@@ -133,22 +133,32 @@ answer at line 119.
 
 The information is already paid for. `_ = unselected` is where it is thrown away.
 
-### H2 holds
+### H2 is refuted, and its first result was an artefact
 
-Same fixture, both paths, with a literal index a decrement turns negative:
+**Corrected.** This note first reported H2 holding, on these numbers:
 
-    gated   : total 6, killed 2, survived 4
+    gated   : total 6, killed 2, survived 4      <- WRONG, the gate never ran
     ordinary: total 6, killed 2, survived 4
 
-Identical. The gated path hands the false kill straight back, so the credit it
-took in `gated-gain-slow.md` for disagreeing and being right reaches only the
-class where the gate keeps the original expression in the file — not the classes
-whose mutation breaks the shared build.
+The probe launched the release with `-test.v`. `release.go` reads
+`testing.Verbose()` and wraps the gated laboratory in `verboselaboratory`, which
+does not forward `TestAll`, so the batch never reached the gate. Both columns
+were the ordinary path. See `backlog.md` entry 11 and
+`disagreement-class.md` for how it was found.
 
-The arithmetic is consistent with the extra kill being the non-compiling mutant:
-the two mutants `First` adds split one to survived and one to killed, against a
-control where `First` does not exist. *That reading dies if a run attributing
-verdicts per mutant shows otherwise* — this probe counts, it does not attribute.
+Re-measured with the gate actually engaged:
+
+    gated   : total 6, killed 1, survived 5
+    ordinary: total 6, killed 2, survived 4
+
+**H2 is refuted.** The gated path does *not* hand the false kill back here. The
+decrement that turns `values[0]` into `values[-1]` cannot compile as a literal,
+but the gate selects it through a function call, which the compiler cannot fold
+to a constant — so it builds, runs, and survives, because nothing tests the
+function it lives in.
+
+The credit `gated-gain-slow.md` took is wider than this note first said, not
+narrower.
 
 ### H3 holds
 

@@ -119,37 +119,35 @@ The untouched file and the instrumented file with nothing selected reach the sam
 verdict: both green. Every gate takes its original arm and the program behaves as
 it did.
 
-### H2 holds
+### H2 is refuted, and its first result was an artefact
 
-    gated   : total 19, killed 5, survived 14
+**Corrected.** This note first reported H2 holding, on these numbers:
+
+    gated   : total 19, killed 5, survived 14    <- WRONG, the gate never ran
     ordinary: total 19, killed 5, survived 14
 
-And the survivor sets are identical **by label**, not merely in size: the
-symmetric difference is empty. This is the first per-mutant comparison of the two
-paths; every earlier one compared counts.
+The probe launched the release with `-test.v`, `release.go` reads
+`testing.Verbose()` and wraps the gated laboratory in `verboselaboratory`, and
+that decorator does not forward `TestAll`. Both columns were the ordinary path
+compared with itself, which is why they matched. `backlog.md` entry 11.
 
-### H3 is not decidable here
+Re-measured with the gate engaged:
 
-Written in advance: *if H2 holds, H3 has nothing to range over and is recorded as
-not decidable rather than as held.* The symmetric difference is empty, so the
-claim that every disagreement is a mutant that never ran is satisfied vacuously.
-It is not corroborated by this run.
+    gated   : total 19, killed 4, survived 15
+    ordinary: total 19, killed 5, survived 14
 
-### Verdicts: 2 of 3, and the third is undecidable rather than skipped
+    survived ONLY on the gated path: calc/calc.go → Integer Decrement
 
-## The decision rule fires, and it was written too loosely
+**H2 is refuted**, by one label. The paths do not agree mutant by mutant.
 
-Fixed in advance: *H1 and H2 hold → the gated path has the evidence it needs for
-a default.*
+### H3 is decidable after all, and is answered elsewhere
 
-It does not. The fixture produced 19 mutants and **none of the class where the
-two paths were previously seen to disagree** — a comparison replaced by a
-constant that leaves a local unread. `Grade(score int)` takes its integer as a
-parameter, and Go does not refuse an unused parameter, so the class never arose.
+Written in advance: *if H2 holds, H3 has nothing to range over.* H2 does not
+hold, so the symmetric difference is non-empty and H3 has its case. It is
+measured deliberately, with a fixture built for it, in
+`disagreement-class.md` — where both it and its H1 hold.
 
-So H2 held over a population that excludes the only known disagreement. The rule
-should have named the class the fixture must contain, and it did not. Recording
-that here rather than acting on a precondition that was never met.
+### Verdicts: H1 holds, H2 refuted, H3 answered in a note built for it
 
 ## What this does NOT establish
 
