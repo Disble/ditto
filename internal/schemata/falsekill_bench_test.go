@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Disble/ditto/internal/gomutatedfile"
 	"github.com/Disble/ditto/internal/gosourcefile"
 	"github.com/Disble/ditto/viruses"
 	"github.com/Disble/ditto/viruses/arithmetic"
@@ -45,7 +46,13 @@ func TestCountsMutantsThatCannotBuild(t *testing.T) {
 	}
 
 	mutants, broken := 0, 0
-	reasons := map[string]int{}
+	counted := &tallies{
+		reasons:  map[string]int{},
+		pairs:    map[failure]int{},
+		examples: map[failure]string{},
+		produced: map[string]int{},
+		broke:    map[string]int{},
+	}
 	perFile := map[string]string{}
 
 	//nolint:gosec // rewriting the tree the caller named is what this probe is for
@@ -61,7 +68,7 @@ func TestCountsMutantsThatCannotBuild(t *testing.T) {
 			return nil
 		}
 
-		here, brokenHere := countOne(t, root, path, reasons)
+		here, brokenHere := countOne(t, root, path, counted)
 		mutants += here
 		broken += brokenHere
 
@@ -73,28 +80,76 @@ func TestCountsMutantsThatCannotBuild(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	report(t, mutants, broken, reasons, perFile)
+	report(t, mutants, broken, counted, perFile)
+}
+
+// failure is one compiler complaint attributed to the virus that produced it.
+//
+// The message on its own is what this probe recorded first, and a plan was built
+// on reading the virus out of the message by eye — 42 index failures were called
+// integerdecrement's without anything ever counting them. This pairing is what
+// removes the reading.
+type failure struct {
+	virus string
+	cause string
+}
+
+// tallies are exact integer counters and nothing else. produced counts every
+// mutant a virus wrote; broke counts the ones that then failed to build, so a
+// refusal can be weighed against what it would also throw away.
+type tallies struct {
+	reasons  map[string]int
+	pairs    map[failure]int
+	examples map[failure]string
+	produced map[string]int
+	broke    map[string]int
+}
+
+// separator is what GoMutatedFile.Label puts between the path and the infection.
+const separator = " → "
+
+// virusOf reads the infection's name off the label, which is the only place a
+// mutant carries it. Adding an accessor to the product so a probe can measure
+// would let the probe decide the product's API.
+//
+// It refuses rather than trims. A TrimPrefix that does not match returns the
+// whole label, so every count would be attributed to a virus named
+// "internal/x/y.go → comparison" and the table would look populated and be
+// wrong. An attribution that cannot fail is not an attribution.
+func virusOf(t *testing.T, mutant *gomutatedfile.GoMutatedFile) string {
+	t.Helper()
+
+	name, found := strings.CutPrefix(mutant.Label(), mutant.Path()+separator)
+	require.True(t, found,
+		"label %q does not begin with path %q, so the virus cannot be read off it",
+		mutant.Label(), mutant.Path())
+
+	return name
 }
 
 // report prints the totals, the causes ordered by how often they fired, and the
 // files that carry them. One cause repeated a hundred times and a hundred causes
 // are different problems, so the messages are counted rather than listed.
-func report(t *testing.T, mutants, broken int, reasons map[string]int, perFile map[string]string) {
+func report(t *testing.T, mutants, broken int, counted *tallies, perFile map[string]string) {
 	t.Helper()
 
 	t.Logf("mutants %d, of which do not build %d (%.1f%%)",
 		mutants, broken, 100*float64(broken)/float64(mutants))
 
-	messages := make([]string, 0, len(reasons))
-	for message := range reasons {
+	messages := make([]string, 0, len(counted.reasons))
+	for message := range counted.reasons {
 		messages = append(messages, message)
 	}
 
-	sort.Slice(messages, func(i, j int) bool { return reasons[messages[i]] > reasons[messages[j]] })
+	sort.Slice(messages, func(i, j int) bool {
+		return counted.reasons[messages[i]] > counted.reasons[messages[j]]
+	})
 
 	for _, message := range messages {
-		t.Logf("  %4d  %s", reasons[message], message)
+		t.Logf("  %4d  %s", counted.reasons[message], message)
 	}
+
+	reportViruses(t, counted)
 
 	for file, count := range perFile {
 		if !strings.HasPrefix(count, "0 ") {
@@ -103,7 +158,42 @@ func report(t *testing.T, mutants, broken int, reasons map[string]int, perFile m
 	}
 }
 
-func countOne(t *testing.T, root, path string, reasons map[string]int) (int, int) {
+// reportViruses answers the question the message column cannot: which virus
+// wrote the mutant that would not build, and how much of that virus's output
+// refusing it would cost. A virus whose failures are a tenth of what it produces
+// cannot simply be switched off.
+func reportViruses(t *testing.T, counted *tallies) {
+	t.Helper()
+
+	viruses := make([]string, 0, len(counted.broke))
+	for virus := range counted.broke {
+		viruses = append(viruses, virus)
+	}
+
+	sort.Slice(viruses, func(i, j int) bool {
+		return counted.broke[viruses[i]] > counted.broke[viruses[j]]
+	})
+
+	t.Logf("viruses that produced a mutant that does not build: %d of 14", len(viruses))
+
+	for _, virus := range viruses {
+		t.Logf("  %4d of %4d produced  %s", counted.broke[virus], counted.produced[virus], virus)
+	}
+
+	pairs := make([]failure, 0, len(counted.pairs))
+	for pair := range counted.pairs {
+		pairs = append(pairs, pair)
+	}
+
+	sort.Slice(pairs, func(i, j int) bool { return counted.pairs[pairs[i]] > counted.pairs[pairs[j]] })
+
+	for _, pair := range pairs {
+		t.Logf("  %4d  %s  →  %s", counted.pairs[pair], pair.virus, pair.cause)
+		t.Logf("        e.g. %s", counted.examples[pair])
+	}
+}
+
+func countOne(t *testing.T, root, path string, counted *tallies) (int, int) {
 	t.Helper()
 
 	original, err := os.ReadFile(path)
@@ -115,11 +205,23 @@ func countOne(t *testing.T, root, path string, reasons map[string]int) (int, int
 	broken := 0
 
 	for _, one := range infected {
-		require.NoError(t, os.WriteFile(path, one.Mutate().Mutated(), 0o600)) //nolint:gosec
+		mutant := one.Mutate()
+		virus := virusOf(t, mutant)
+		counted.produced[virus]++
+
+		require.NoError(t, os.WriteFile(path, mutant.Mutated(), 0o600)) //nolint:gosec
 
 		if ok, message := buildsWithMessage(root, filepath.Dir(path)); !ok {
 			broken++
-			reasons[message]++
+			counted.reasons[message]++
+			counted.broke[virus]++
+
+			pair := failure{virus: virus, cause: message}
+			counted.pairs[pair]++
+
+			if _, seen := counted.examples[pair]; !seen {
+				counted.examples[pair] = mutant.Label()
+			}
 		}
 	}
 
