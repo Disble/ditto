@@ -12,84 +12,152 @@ import (
 // the file behaves as it did before instrumenting.
 const selector = "dittoMutant"
 
-// Instrument rewrites every gate into one file that chooses a mutant at run
-// time, and reports which gates it applied.
+// site is one expression and every mutant of it.
 //
-// A gate that is not applied is not lost: it keeps the path ditto has always
-// taken, its own file and its own compilation. The count matters to the caller,
-// because the ids the gates are given here are the ids the run has to select by.
-func Instrument(source []byte, gates []Gate) ([]byte, []Gate) {
-	applied := independent(gates)
-	if len(applied) == 0 {
-		return source, nil
-	}
+// Several viruses infect the same node: comparison, comparisoninvert and
+// comparisonreplace all rewrite the same *ast.BinaryExpr, so one expression
+// carries three mutants and one gate has to choose between all of them.
+type site struct {
+	start, end int
+	kind       Kind
+	original   string
+	mutants    []Gate
+	ids        []int
+}
 
-	// Numbered by where they sit, not by the order the viruses produced them.
-	// An id is how a run asks for one mutant, so the same site has to answer to
-	// the same number however the gates arrived.
-	sort.Slice(applied, func(i, j int) bool { return applied[i].Start < applied[j].Start })
+// Instrument rewrites every gate into one file that chooses a mutant at run
+// time, and returns the selector value for each gate it was given — zero for one
+// it could not gate.
+//
+// A gate that gets zero is not lost: it keeps the path ditto has always taken,
+// its own file and its own compilation. Every mutant that worked before still
+// works, which is the constraint this whole change is under.
+func Instrument(source []byte, gates []Gate) ([]byte, []int) {
+	ids := make([]int, len(gates))
+
+	sites := group(gates, ids)
+	if len(sites) == 0 {
+		return source, ids
+	}
 
 	// Back to front, so an edit never shifts the offsets of one still to come.
 	// Applying them in the order the viruses produced them moved every offset
 	// after the first edit and spliced one gate through the middle of another.
-	ordered := make([]Gate, len(applied))
-	copy(ordered, applied)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Start > ordered[j].Start })
+	rewritten := make([]site, len(sites))
+	copy(rewritten, sites)
+	sort.Slice(rewritten, func(i, j int) bool { return rewritten[i].start > rewritten[j].start })
 
 	out := string(source)
 	helpers := strings.Builder{}
 
-	for _, gate := range ordered {
-		id := identify(applied, gate)
-
-		expression, helper := substitution(gate, id)
+	for _, one := range rewritten {
+		expression, helper := substitution(one)
 		helpers.WriteString(helper)
 
-		out = out[:gate.Start] + expression + out[gate.End:]
+		out = out[:one.start] + expression + out[one.end:]
 	}
 
-	return []byte(declare(out) + helpers.String()), applied
+	return []byte(declare(out) + helpers.String()), ids
+}
+
+// group collects the gates into sites, drops any site contained in another, and
+// numbers the survivors. It fills ids in place, so a caller keeps one selector
+// per gate it handed in.
+//
+// Sites are numbered by where they sit and mutants by the order they arrived in,
+// so the same expression answers to the same numbers however the gates reached
+// this function.
+func group(gates []Gate, ids []int) []site {
+	sites := []site{}
+
+	for index, gate := range gates {
+		if containedInAny(gate, gates) {
+			continue
+		}
+
+		at := -1
+
+		for i := range sites {
+			if sites[i].start == gate.Start && sites[i].end == gate.End {
+				at = i
+
+				break
+			}
+		}
+
+		if at < 0 {
+			sites = append(sites, site{
+				start: gate.Start, end: gate.End,
+				kind: gate.Kind, original: gate.Original,
+			})
+			at = len(sites) - 1
+		}
+
+		sites[at].mutants = append(sites[at].mutants, gate)
+		sites[at].ids = append(sites[at].ids, index)
+	}
+
+	sort.SliceStable(sites, func(i, j int) bool { return sites[i].start < sites[j].start })
+
+	next := 1
+
+	for i := range sites {
+		for j, index := range sites[i].ids {
+			ids[index] = next
+			sites[i].ids[j] = next
+			next++
+		}
+	}
+
+	return sites
 }
 
 // substitution is the expression that replaces the site, and the function it
 // needs, if any.
-func substitution(gate Gate, id int) (string, string) {
-	if gate.Kind == Integer {
-		name := "dittoInteger" + strconv.Itoa(id)
-
-		return name + "()", fmt.Sprintf(
-			"\nfunc %s() int {\n\tif %s == %d {\n\t\treturn %s\n\t}\n\n\treturn %s\n}\n",
-			name, selector, id, gate.Mutated, gate.Original,
-		)
+func substitution(one site) (string, string) {
+	if one.kind == Integer {
+		return integerCall(one)
 	}
 
-	// Short-circuiting reaches exactly one side, so each operand is evaluated
-	// once either way. A form that evaluated both would change any expression
-	// whose operands have side effects, and `next() > limit()` would advance
-	// twice.
-	return fmt.Sprintf("((%s == %d && %s) || (%s != %d && %s))",
-		selector, id, gate.Mutated, selector, id, gate.Original), ""
+	// Short-circuiting reaches exactly one arm, so each operand is evaluated
+	// once whichever mutant is selected. A form that evaluated more than one
+	// would change any expression whose operands have side effects, and
+	// `next() > limit()` would advance twice.
+	arms := make([]string, 0, len(one.mutants)+1)
+	unselected := make([]string, 0, len(one.mutants))
+
+	for i, mutant := range one.mutants {
+		arms = append(arms, fmt.Sprintf("(%s == %d && %s)", selector, one.ids[i], mutant.Mutated))
+		unselected = append(unselected, fmt.Sprintf("%s != %d", selector, one.ids[i]))
+	}
+
+	arms = append(arms, "("+strings.Join(unselected, " && ")+" && "+one.original+")")
+
+	return "(" + strings.Join(arms, " || ") + ")", ""
 }
 
-// independent drops any gate contained in another.
+// integerCall is the only runtime selection Go offers for something that is not
+// a bool: a call. A call is never a constant, so this cannot stand where Go
+// requires one — measured at 3 sites in 91.
+func integerCall(one site) (string, string) {
+	name := "dittoInteger" + strconv.Itoa(one.ids[0])
+	body := strings.Builder{}
+
+	for i, mutant := range one.mutants {
+		fmt.Fprintf(&body, "\tif %s == %d {\n\t\treturn %s\n\t}\n\n", selector, one.ids[i], mutant.Mutated)
+	}
+
+	return name + "()", fmt.Sprintf("\nfunc %s() int {\n%s\treturn %s\n}\n", name, body.String(), one.original)
+}
+
+// containedInAny reports whether a gate sits inside a different expression that
+// is also gated.
 //
 // The rewrite splices text using the original offsets, so an outer gate written
 // after an inner one overwrites it. Measured on `hidden > 0`, where the literal
 // sits inside the comparison: the result was a decapitated identifier and a file
-// that did not parse. Which of the two survives is decided by position, so the
-// outer one does, and the inner one keeps the per-mutant path.
-func independent(gates []Gate) []Gate {
-	kept := []Gate{}
-
-	for _, gate := range gates {
-		if !containedInAny(gate, gates) {
-			kept = append(kept, gate)
-		}
-	}
-
-	return kept
-}
-
+// that did not parse. The outer one survives, decided by position, and the inner
+// one keeps the per-mutant path.
 func containedInAny(gate Gate, gates []Gate) bool {
 	for _, other := range gates {
 		if other.Start == gate.Start && other.End == gate.End {
@@ -102,18 +170,6 @@ func containedInAny(gate Gate, gates []Gate) bool {
 	}
 
 	return false
-}
-
-// identify numbers a gate by its position among the applied gates, so the ids do
-// not depend on the order the viruses happened to produce them in.
-func identify(applied []Gate, gate Gate) int {
-	for i, candidate := range applied {
-		if candidate.Start == gate.Start && candidate.End == gate.End {
-			return i + 1
-		}
-	}
-
-	return 0
 }
 
 // declare adds the selector: an import block right after the package clause and

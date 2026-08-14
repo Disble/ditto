@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"strings"
 )
 
 // Kind is how a mutant gets selected at run time, and there is one per shape of
@@ -106,13 +107,30 @@ func Expand(source []byte, replacement Replacement) (Gate, bool) {
 		return Gate{}, false
 	}
 
+	original := string(source[start:end])
+
+	// A difference that is only whitespace is not a mutation. It arises when the
+	// original is not gofmt'd and the mutant came back through format.Node, and
+	// it was predicted to be refused further up — it was not. Gating it produced
+	// a gate whose selected arm behaves exactly like the unselected one: a
+	// mutant that can never be killed, and a survivor nobody wrote.
+	if fields(original) == fields(mutated) {
+		return Gate{}, false
+	}
+
 	return Gate{
 		Start:    start,
 		End:      end,
 		Kind:     kind,
-		Original: string(source[start:end]),
+		Original: original,
 		Mutated:  mutated,
 	}, true
+}
+
+// fields collapses every run of whitespace to one space, so two renderings of
+// the same expression compare equal.
+func fields(expression string) string {
+	return strings.Join(strings.Fields(expression), " ")
 }
 
 func kindOf(expression ast.Expr) (Kind, bool) {
