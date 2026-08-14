@@ -284,3 +284,129 @@ func runAgainst(t *testing.T, dittoRoot, which string) release {
 
 	return parseRelease(t, string(output))
 }
+
+// repositoryMutation scopes a release to one file of a real repository, the way
+// dharness's wrapper does, so the comparison runs over the code the spoiled kill
+// was actually seen in rather than over a fixture built to be convenient.
+const repositoryMutation = `//go:build mutation
+
+package dharness_test
+
+import (
+	"testing"
+
+	"github.com/Disble/ditto"
+)
+
+func TestWriterMutation(t *testing.T) {
+	ditto.Release(t,
+		ditto.WithRepositoryRoot("."),
+		ditto.WithTestCommand("go test -count=1 ./internal/setup"),
+		ditto.WithMinimumThreshold(0.0),
+		ditto.WithChangedRanges(map[string][]ditto.Range{
+			"internal/setup/writer.go": {},
+		}),
+	)
+}
+`
+
+// TestBackwardCompatibilityOnTheRepository runs the same comparison over the
+// file where the verdict was seen to move: internal/setup/writer.go, the case
+// gated-gain-slow.md opened this whole line of work with.
+//
+// Point DITTO_COMPAT_REPO at a repository. It is copied, never mutated in place.
+func TestBackwardCompatibilityOnTheRepository(t *testing.T) {
+	if os.Getenv("DITTO_PROBE") != "1" {
+		t.Skip("set DITTO_PROBE=1 to run the probes; see docs/experiments/backward-compatibility.md")
+	}
+
+	repository := os.Getenv("DITTO_COMPAT_REPO")
+	if repository == "" {
+		t.Skip("set DITTO_COMPAT_REPO to a repository to copy and mutate")
+	}
+
+	base := materialiseBase(t)
+
+	before := runRepositoryAgainst(t, repository, base, "before")
+	after := runRepositoryAgainst(t, repository, moduleRoot(t), "after")
+
+	if !strings.Contains(before.output, baseMarker) {
+		t.Fatalf("the run that claims to be %s does not carry its marker\n%s",
+			baseRevision, before.output)
+	}
+
+	t.Logf("%s : total %d, killed %d, survived %d", baseRevision, before.total, before.killed, before.survived)
+	t.Logf("HEAD    : total %d, killed %d, survived %d", after.total, after.killed, after.survived)
+
+	if before.total != after.total {
+		t.Fatalf("the population moved: %d against %d", before.total, after.total)
+	}
+
+	onlyBefore := missingFrom(survivorsOf(t, before), survivorsOf(t, after))
+	onlyAfter := missingFrom(survivorsOf(t, after), survivorsOf(t, before))
+
+	for _, label := range onlyBefore {
+		t.Logf("  survived at %s and is killed at HEAD: %s", baseRevision, label)
+	}
+
+	for _, label := range onlyAfter {
+		t.Logf("  killed at %s and survives at HEAD  : %s", baseRevision, label)
+	}
+
+	if len(onlyBefore)+len(onlyAfter) != 0 {
+		t.Errorf("%d labels changed column between the revisions",
+			len(onlyBefore)+len(onlyAfter))
+	}
+}
+
+func runRepositoryAgainst(t *testing.T, repository, dittoRoot, which string) release {
+	t.Helper()
+
+	project := t.TempDir()
+
+	copyRepository(t, repository, project)
+
+	manifest, err := os.ReadFile(filepath.Join(project, "go.mod"))
+	if err != nil {
+		t.Fatalf("%s: reading the copy's go.mod: %v", which, err)
+	}
+
+	//nolint:gosec // the same directory
+	err = os.WriteFile(filepath.Join(project, "go.mod"),
+		append(manifest, []byte("\nreplace github.com/Disble/ditto => "+
+			filepath.ToSlash(dittoRoot)+"\n")...), 0o600)
+	if err != nil {
+		t.Fatalf("%s: pointing the copy at ditto: %v", which, err)
+	}
+
+	writeFile(t, filepath.Join(project, "writer_mutation_test.go"), repositoryMutation)
+
+	mustRun(t, project, which+": resolving dependencies", "go", "mod", "tidy")
+
+	binary := filepath.Join(project, "mutation.test")
+	mustRun(t, project, which+": building the release", "go", "test", "-c", "-tags=mutation", "-o", binary, ".")
+
+	output, _ := command(t, project, binary, "-test.run", "TestWriterMutation", "-test.count=1").CombinedOutput()
+
+	return parseRelease(t, string(output))
+}
+
+// copyRepository mirrors a tree through tar rather than through the golden
+// test's walker, which taint analysis then flags for every other caller. Both
+// names are relative because tar reads a leading `C:` as a remote host.
+func copyRepository(t *testing.T, from, to string) {
+	t.Helper()
+
+	archive := filepath.Join(to, "repo.tar")
+
+	mustRun(t, from, "archiving the repository", "git", "archive", "--format=tar",
+		"--output="+archive, "HEAD")
+
+	// Extracted from inside the destination with a relative name: tar reads a
+	// leading `C:` as a remote host, in `-C` as well as in the archive's name.
+	mustRun(t, to, "extracting the repository", "tar", "-xf", "repo.tar")
+
+	if err := os.Remove(archive); err != nil {
+		t.Fatalf("removing the staging archive: %v", err)
+	}
+}

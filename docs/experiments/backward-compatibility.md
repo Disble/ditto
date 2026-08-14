@@ -143,14 +143,46 @@ nothing to test is not corroborated.
 
 ### Verdicts: 2 of 3, the third undecidable
 
+### The same comparison on the repository the defect was found in
+
+A scratch fixture is convenient and therefore suspect. The verdict that started
+this line of work was seen on dharness's `internal/setup/writer.go`, so the
+comparison was run there too: a copy of the repository, the release scoped to
+that one file the way the wrapper scopes it, both revisions.
+
+    dfd8ed4 : total 35, killed 33, survived 2
+    HEAD    : total 35, killed 33, survived 2
+
+Identical, and 35 is the count a real release reported for that file, which is a
+second thing this run had to agree with and did.
+
+**So the kill that was said to be spoiled was never a regression.** It moved
+between the ordinary path and the *gated* path of the same revision, not between
+revisions — and `disagreement-class.md` measured that the gated path is the one
+that is right. The branch changed no verdict the ordinary path used to give.
+
 ## What this does NOT establish
 
 - **The path that was not compared.** `Gated()` does not exist at the base, so
   nothing here says the gated path agrees with anything. That is
   `disagreement-class.md`, where it deliberately does not — and is right.
-- **A scratch fixture, not the repository the defect was found in.** 31 mutants
-  of one package. The verdict that started this was seen on dharness through the
-  wrapper, and that case is measured separately below.
+- **Two fixtures, not a repository swept whole.** 31 mutants of a scratch
+  package and 35 of one real file. `false-kills.md` counted 1293 over dharness's
+  `internal/`; nothing here compared those.
+- **The false kills are on both sides.** Two of `writer.go`'s mutants do not
+  build, and both revisions score them killed. The branch did not introduce that
+  and does not fix it on the ordinary path — which is the point of `backlog.md`
+  entry 6, and is not what this note asks.
 - **Verdicts, not bytes.** Two runs can report the same columns while printing
   them in a different order. Anyone diffing ditto's output rather than reading
   its verdicts is not covered by this.
+
+## How to run it again
+
+    DITTO_PROBE=1 go test . -run TestBackwardCompatibility -v
+
+    DITTO_PROBE=1 DITTO_COMPAT_REPO=<a repository> \
+      go test . -run TestBackwardCompatibilityOnTheRepository -v
+
+The repository is copied, never mutated in place, and the base revision is
+materialised with `git archive` rather than a linked worktree.
