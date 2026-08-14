@@ -96,6 +96,37 @@ func TestGatedLaboratory(t *testing.T) {
 			runner.tests, lab.Gated())
 	})
 
+	// A run with no mutant selected takes every gate's original arm, so it is the
+	// file's own suite. If that fails, every selected run fails too and every
+	// mutant of the file is scored killed — a perfect score produced by a broken
+	// suite, with nothing in the output naming the cause. Measured at 4 of 4
+	// killed against 1 of 4 on the same mutants; docs/experiments/changed-scope.md.
+	t.Run("refuses when the suite fails with no mutant selected", func(t *testing.T) {
+		runner := &fakeRunner{built: true, redBaseline: true}
+		lab := gatedlaboratory.NewWithRunner(&countingLaboratory{}, fakeTemporary{}, runner)
+
+		assert.PanicsWithValue(t,
+			"ditto: calc/calc.go fails its own suite with no mutant selected, so every "+
+				"mutant of it would be scored killed; refusing to score against a red baseline",
+			func() {
+				lab.TestAll(fakeRepository{}, mutantsOf(
+					strings.Replace(source, "a > b", "a >= b", 1),
+				))
+			})
+	})
+
+	t.Run("scores normally when the suite passes with no mutant selected", func(t *testing.T) {
+		runner := &fakeRunner{built: true}
+		lab := gatedlaboratory.NewWithRunner(&countingLaboratory{}, fakeTemporary{}, runner)
+
+		results := lab.TestAll(fakeRepository{}, mutantsOf(
+			strings.Replace(source, "a > b", "a >= b", 1),
+		))
+
+		assert.Len(t, results, 1)
+		assert.Equal(t, 1, lab.Gated())
+	})
+
 	t.Run("answers nothing for no mutants", func(t *testing.T) {
 		lab := gatedlaboratory.NewWithRunner(&countingLaboratory{}, fakeTemporary{}, &fakeRunner{built: true})
 
@@ -116,12 +147,22 @@ type fakeRunner struct {
 	built    bool
 	selected []int
 	tests    int
+
+	// redBaseline makes the first run — the one with no mutant selected —
+	// report the suite failing. Ok is how a failing command arrives here, which
+	// is also how a killed mutant arrives, and telling those two apart is the
+	// whole point of reading it.
+	redBaseline bool
 }
 
 func (r *fakeRunner) Select(mutant int) { r.selected = append(r.selected, mutant) }
 func (r *fakeRunner) Built() bool       { return r.built }
 func (r *fakeRunner) Test(ditto.TemporaryRepository) result.Result[string] {
 	r.tests++
+
+	if r.redBaseline && r.tests == 1 {
+		return result.Ok("FAIL calc [build failed]")
+	}
 
 	return result.Err[string]("")
 }

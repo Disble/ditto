@@ -129,18 +129,18 @@ func TestChangedScope(t *testing.T) {
 			t.Fatalf("the red fixture is not red, so nothing below means anything\n%s", output)
 		}
 
-		got := runScratch(t, source, tests, true)
+		// H1 held, and the fix landed: the baseline is read and the run refuses.
+		// What this subtest records is therefore the refusal, not the perfect
+		// score it recorded before. The score it used to report was 4 killed of
+		// 4, against 1 of 4 for the same mutants over a green suite.
+		output := runScratchOutput(t, source, tests, true)
 
-		t.Logf("gated over a RED suite: total %d, killed %d, survived %d",
-			got.total, got.killed, got.survived)
-
-		if strings.Contains(strings.ToLower(got.output), "baseline") {
-			t.Errorf("H1 is falsified: the output names the baseline\n%s", got.output)
+		if !strings.Contains(output, "refusing to score against a red baseline") {
+			t.Errorf("a red baseline is scored instead of refused:\n%s", output)
 		}
 
-		if got.survived != 0 {
-			t.Errorf("H1 is falsified: %d survived on a suite that fails unmutated",
-				got.survived)
+		if !strings.Contains(output, "calc/calc.go") {
+			t.Errorf("the refusal does not name the file that failed:\n%s", output)
 		}
 	})
 
@@ -190,6 +190,14 @@ func scratchSuite(t *testing.T, source, tests string) (string, error) {
 func runScratch(t *testing.T, source, tests string, gated bool) release {
 	t.Helper()
 
+	return parseRelease(t, runScratchOutput(t, source, tests, gated))
+}
+
+// runScratchOutput is the raw output, for the cases where there is no report to
+// parse because the run refused to produce one.
+func runScratchOutput(t *testing.T, source, tests string, gated bool) string {
+	t.Helper()
+
 	project := t.TempDir()
 	root := moduleRoot(t)
 
@@ -213,7 +221,7 @@ func runScratch(t *testing.T, source, tests string, gated bool) release {
 
 	output, _ := run.CombinedOutput()
 
-	return parseRelease(t, string(output))
+	return string(output)
 }
 
 func mustRun(t *testing.T, project, what string, name string, args ...string) {
