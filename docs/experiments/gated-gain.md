@@ -145,6 +145,12 @@ one site already exists, and this is the same problem one level down.
 - **One fixture, and a small suite.** The invocation toll dominates here by
   design. A suite that does real work keeps that work, and the ratio falls
   towards one; the *counter* is what travels, not the clock.
+
+  **Corrected by `gated-gain-real.md`:** the reading taken from this alongside
+  that sentence — that a real package would therefore show a lower ratio — is
+  wrong. `internal/jsconfig` measured 2.7×, higher than the 1.9× here, because
+  its suite runs in 188 ms and does less work than this fixture's. The variable
+  is suite duration against the invocation toll, not whether the code is real.
 - **Nothing about a large repository.** Eighteen mutants in one package.
 - **Nothing about the nine viruses this path refuses**, which keep the ordinary
   path in full.
