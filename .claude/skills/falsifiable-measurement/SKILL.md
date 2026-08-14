@@ -4,7 +4,7 @@ description: "Trigger: measure, benchmark, hypothesis, performance claim, experi
 license: Apache-2.0
 metadata:
   author: "disble"
-  version: "2.0"
+  version: "2.1"
 ---
 
 ## Activation Contract
@@ -21,6 +21,9 @@ result would change a design decision.
 - **Make the check fail on purpose before trusting it.** A new check that passes
   has proven nothing until it has been seen to refuse: break what it watches,
   watch it fail, put it back. A green that cannot go red is measuring nothing.
+- **A control written in the note is not a control run.** Declaring one reads
+  like doing one, and the note is where that substitution happens. Tick each
+  control off against its evidence before reporting the result it protects.
 - **Confirm the edit landed before measuring its effect.** A scripted
   substitution that silently matched nothing looks exactly like a change that had
   no effect. Grep for what you just wrote.
@@ -70,7 +73,8 @@ Return, and commit inside the note:
 
 - Every hypothesis with its prediction, kill line, and verdict: held or falsified.
 - Raw per-round numbers, with exact counters kept separate from wall clock.
-- Evidence that the check could have failed.
+- For **each** control the note declares, the evidence that it ran and what it
+  showed. A control with no evidence beside it is a hole, not a tick.
 - Any earlier claim this measurement corrects, stated plainly.
 - What the result does not establish.
 
