@@ -30,6 +30,25 @@ type Options struct {
 	IgnoreSourceFilesPatterns []*regexp.Regexp
 	Viruses                   []viruses.Virus
 	ChangedRanges             map[string][]Range
+	Gated                     bool
+}
+
+// Gated runs a file's mutants from one compilation instead of one each.
+//
+// Ditto normally starts the test command once per mutant, and that start costs
+// 750-950 ms whatever the suite does — the dominant cost of a run. With this,
+// the mutants a file can express as one instrumented source are compiled
+// together and selected at run time. Anything that cannot be expressed that way
+// keeps the path it always had, so no mutant is lost by turning it on.
+//
+// It builds with `go test -c`, so it applies to a Go package and it replaces
+// WithTestCommand for the mutants it takes.
+func Gated() func(Options) Options {
+	return func(options Options) Options {
+		options.Gated = true
+
+		return options
+	}
 }
 
 // WithChangedRanges restricts the release to the given byte ranges of the given

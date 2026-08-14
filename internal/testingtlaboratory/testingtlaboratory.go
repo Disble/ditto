@@ -56,3 +56,47 @@ func (l *TestingTLaboratory) Test(
 
 	return fut
 }
+
+// TestAll forwards a whole file's mutants when the laboratory below can take
+// them, and keeps a subtest per mutant either way.
+//
+// Without this the batch stops here: Release asks the outermost laboratory, and
+// a decorator that does not forward makes every laboratory beneath it look like
+// one that cannot batch. That failure is silent — the run still works, one
+// compilation per mutant, exactly as if nothing had been wired at all.
+func (l *TestingTLaboratory) TestAll(
+	repository ditto.Repository,
+	files []*gomutatedfile.GoMutatedFile,
+) []future.Future[result.Result[string]] {
+	l.t.Helper()
+
+	batched, ok := l.delegate.(ditto.BatchLaboratory)
+	if !ok {
+		results := make([]future.Future[result.Result[string]], 0, len(files))
+		for _, file := range files {
+			results = append(results, l.Test(repository, file))
+		}
+
+		return results
+	}
+
+	// The batch runs first, because that is what one compilation for several
+	// mutants means. The subtests then report what it found, in order.
+	inner := batched.TestAll(repository, files)
+	results := make([]future.Future[result.Result[string]], len(files))
+
+	for i, file := range files {
+		fut := future.Deferred[result.Result[string]]()
+		results[i] = fut
+
+		l.t.Run(file.Label(), func(t *testing.T) { //nolint:thelper
+			if l.parallel {
+				l.goParallel(t)
+			}
+
+			fut.Resolve(inner[i].Await())
+		})
+	}
+
+	return results
+}

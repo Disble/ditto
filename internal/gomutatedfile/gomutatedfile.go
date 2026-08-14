@@ -37,6 +37,14 @@ func (f *GoMutatedFile) RestoreIn(repository Repository) {
 	repository.Overwrite(f.relativePath, f.rawSourceContent)
 }
 
+// Source is the file before this mutant touched it, and Path is where it lives.
+//
+// The gated path needs both: it plans one instrumented file from the original
+// and every mutant of it, and writes that file back where the original was.
+func (f *GoMutatedFile) Source() []byte { return f.rawSourceContent }
+
+func (f *GoMutatedFile) Path() string { return f.relativePath }
+
 // Mutated is the file as this mutant leaves it.
 //
 // The gated path needs the bytes rather than the effect of writing them: it
