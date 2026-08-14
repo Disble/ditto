@@ -91,3 +91,48 @@ to the intruder's, on the first run against unchanged code.
 
 **Lesson:** a documented safety property with no test that refuses without it is a
 claim, not a guarantee. Look for the test.
+
+## The green that could not go red
+
+A golden test was extended to run the same fixture a second way, through a new
+code path, against the same expected output. It passed on the first run.
+
+Before believing it, a `panic` was put inside that new path. **The golden stayed
+green** — so the second run was never reaching it. Two causes, found one after
+the other: a decorator in the chain silently did not forward the batch, and the
+edit that added the second run to the test file had never applied. A scripted
+substitution had matched nothing and reported nothing; `rg -c` on the string
+returned zero.
+
+With both fixed, the panic fired, and removing it left the two paths printing the
+same bytes.
+
+**Lesson:** a check that has never been seen to fail is not evidence. Break what
+it watches, watch it refuse, put it back. And grep for the edit you believe you
+made — a substitution that matched nothing looks exactly like a change with no
+effect.
+
+## The guard that could not fail
+
+A helper was written to refuse a mutation that changed two places at once. It
+rebuilt the file from the range it had computed and compared the result with the
+input.
+
+It could never fail. The range is derived from the two files, so rebuilding from
+it reproduces the second one by construction. The test written to prove the guard
+worked is what exposed it.
+
+**Lesson:** ask whether an assertion could come out false given how its
+expectation was built. If the answer is no, it reads like a guarantee and is not
+one.
+
+## What the prototype could not see
+
+Three separate prototypes measured a rewrite that gates one mutation per site,
+and all three agreed. Wired to the real tool, the first thing that surfaced was
+that `comparison`, `comparisoninvert` and `comparisonreplace` all infect the same
+expression: one site carries three mutants, which no prototype had ever produced.
+
+**Lesson:** a prototype differs from the shipped code in at least one way that
+matters, and the difference is not visible from inside the prototype. Re-measure
+through the real thing before carrying a result across.
