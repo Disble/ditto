@@ -21,7 +21,7 @@ func TestInstrument(t *testing.T) {
 
 		instrumented, applied := schemata.Instrument(source, []schemata.Gate{gate})
 
-		assert.Len(t, applied, 1)
+		assert.Equal(t, 1, gatedCount(applied))
 		assert.Contains(t, string(instrumented),
 			"((dittoMutant == 1 && a >= b) || (dittoMutant != 1 && a > b))")
 	})
@@ -34,7 +34,7 @@ func TestInstrument(t *testing.T) {
 
 		instrumented, applied := schemata.Instrument([]byte(source), []schemata.Gate{gate})
 
-		assert.Len(t, applied, 1)
+		assert.Equal(t, 1, gatedCount(applied))
 		assert.Contains(t, string(instrumented), "return dittoInteger1()")
 		assert.Contains(t, string(instrumented), "func dittoInteger1() int {")
 	})
@@ -54,8 +54,8 @@ func TestInstrument(t *testing.T) {
 
 		instrumented, applied := schemata.Instrument([]byte(source), []schemata.Gate{outer, inner})
 
-		assert.Len(t, applied, 1)
-		assert.Equal(t, outer.Start, applied[0].Start)
+		assert.Equal(t, 1, gatedCount(applied))
+		assert.Equal(t, []int{1, 0}, applied)
 		assert.NotContains(t, string(instrumented), "dittoInteger")
 	})
 
@@ -70,7 +70,7 @@ func TestInstrument(t *testing.T) {
 
 		instrumented, applied := schemata.Instrument([]byte(source), []schemata.Gate{first, second})
 
-		assert.Len(t, applied, 2)
+		assert.Equal(t, 2, gatedCount(applied))
 		assert.Contains(t, string(instrumented), "dittoMutant == 1")
 		assert.Contains(t, string(instrumented), "dittoMutant == 2")
 	})
@@ -112,7 +112,21 @@ func TestInstrument(t *testing.T) {
 	t.Run("leaves a file with no gates exactly as it was", func(t *testing.T) {
 		instrumented, applied := schemata.Instrument([]byte(comparisonSource), nil)
 
-		assert.Empty(t, applied)
+		assert.Equal(t, 0, gatedCount(applied))
 		assert.Equal(t, comparisonSource, string(instrumented))
 	})
+}
+
+// gatedCount is how many of the gates handed in were actually instrumented; a
+// zero selector means the mutant keeps its own file and its own compilation.
+func gatedCount(selectors []int) int {
+	count := 0
+
+	for _, id := range selectors {
+		if id != 0 {
+			count++
+		}
+	}
+
+	return count
 }
