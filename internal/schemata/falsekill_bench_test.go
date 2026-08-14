@@ -1,0 +1,166 @@
+package schemata_test
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"testing"
+
+	"github.com/Disble/ditto/internal/gosourcefile"
+	"github.com/Disble/ditto/viruses"
+	"github.com/Disble/ditto/viruses/arithmetic"
+	"github.com/Disble/ditto/viruses/arithmeticassignment"
+	"github.com/Disble/ditto/viruses/arithmeticassignmentinvert"
+	"github.com/Disble/ditto/viruses/bitwise"
+	"github.com/Disble/ditto/viruses/comparison"
+	"github.com/Disble/ditto/viruses/comparisoninvert"
+	"github.com/Disble/ditto/viruses/comparisonreplace"
+	"github.com/Disble/ditto/viruses/floatdecrement"
+	"github.com/Disble/ditto/viruses/floatincrement"
+	"github.com/Disble/ditto/viruses/integerdecrement"
+	"github.com/Disble/ditto/viruses/integerincrement"
+	"github.com/Disble/ditto/viruses/loopbreak"
+	"github.com/Disble/ditto/viruses/loopcondition"
+	"github.com/Disble/ditto/viruses/rangebreak"
+	"github.com/stretchr/testify/require"
+)
+
+// TestCountsMutantsThatCannotBuild measures how many of the mutants ditto scores
+// as killed were never run at all.
+//
+// A mutation that does not compile makes the test command exit non-zero, and a
+// failing command is how ditto recognises a mutant a test caught. Every one of
+// those inflates the score, which is the number people act on. See
+// docs/experiments/false-kills.md.
+//
+// Point DITTO_FALSEKILL_ROOT at a THROWAWAY COPY. This rewrites files in place.
+func TestCountsMutantsThatCannotBuild(t *testing.T) {
+	root := os.Getenv("DITTO_FALSEKILL_ROOT")
+	if root == "" {
+		t.Skip("set DITTO_FALSEKILL_ROOT to a throwaway copy of a repository")
+	}
+
+	mutants, broken := 0, 0
+	reasons := map[string]int{}
+	perFile := map[string]string{}
+
+	//nolint:gosec // rewriting the tree the caller named is what this probe is for
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || !mutable(entry.Name()) {
+			return err
+		}
+
+		// DITTO_FALSEKILL_ONLY narrows the walk, so a control can be run over one
+		// file whose mutant count is already known from a real release.
+		if only := os.Getenv("DITTO_FALSEKILL_ONLY"); only != "" &&
+			!strings.Contains(filepath.ToSlash(path), only) {
+			return nil
+		}
+
+		here, brokenHere := countOne(t, root, path, reasons)
+		mutants += here
+		broken += brokenHere
+
+		if here > 0 {
+			perFile[strings.TrimPrefix(filepath.ToSlash(path), filepath.ToSlash(root)+"/")] = fmt.Sprintf("%d of %d", brokenHere, here)
+		}
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	report(t, mutants, broken, reasons, perFile)
+}
+
+// report prints the totals, the causes ordered by how often they fired, and the
+// files that carry them. One cause repeated a hundred times and a hundred causes
+// are different problems, so the messages are counted rather than listed.
+func report(t *testing.T, mutants, broken int, reasons map[string]int, perFile map[string]string) {
+	t.Helper()
+
+	t.Logf("mutants %d, of which do not build %d (%.1f%%)",
+		mutants, broken, 100*float64(broken)/float64(mutants))
+
+	messages := make([]string, 0, len(reasons))
+	for message := range reasons {
+		messages = append(messages, message)
+	}
+
+	sort.Slice(messages, func(i, j int) bool { return reasons[messages[i]] > reasons[messages[j]] })
+
+	for _, message := range messages {
+		t.Logf("  %4d  %s", reasons[message], message)
+	}
+
+	for file, count := range perFile {
+		if !strings.HasPrefix(count, "0 ") {
+			t.Logf("  %s: %s", count, file)
+		}
+	}
+}
+
+func countOne(t *testing.T, root, path string, reasons map[string]int) (int, int) {
+	t.Helper()
+
+	original, err := os.ReadFile(path)
+	if err != nil {
+		return 0, 0
+	}
+
+	infected := gosourcefile.New(path, original).Incubate(everyVirus()...)
+	broken := 0
+
+	for _, one := range infected {
+		require.NoError(t, os.WriteFile(path, one.Mutate().Mutated(), 0o600)) //nolint:gosec
+
+		if ok, message := buildsWithMessage(root, filepath.Dir(path)); !ok {
+			broken++
+			reasons[message]++
+		}
+	}
+
+	require.NoError(t, os.WriteFile(path, original, 0o600)) //nolint:gosec
+
+	return len(infected), broken
+}
+
+// compilerMessage keeps the kind of complaint and drops the file, line and
+// identifier, so a hundred instances of one cause count as one cause.
+var compilerMessage = regexp.MustCompile(`^.*?\.go:\d+:\d+: `)
+
+func buildsWithMessage(root, packageDir string) (bool, string) {
+	relative, err := filepath.Rel(root, packageDir)
+	if err != nil {
+		return false, err.Error()
+	}
+
+	//nolint:gosec,noctx // the argument is a path inside the tree the caller named
+	command := exec.Command("go", "build", "./"+filepath.ToSlash(relative))
+	command.Dir = root
+
+	output, err := command.CombinedOutput()
+	if err == nil {
+		return true, ""
+	}
+
+	for line := range strings.SplitSeq(string(output), "\n") {
+		if compilerMessage.MatchString(line) {
+			return false, strings.TrimSpace(compilerMessage.ReplaceAllString(line, ""))
+		}
+	}
+
+	return false, "unrecognised build failure"
+}
+
+func everyVirus() []viruses.Virus {
+	return []viruses.Virus{
+		arithmetic.New(), arithmeticassignment.New(), arithmeticassignmentinvert.New(),
+		bitwise.New(), comparison.New(), comparisoninvert.New(), comparisonreplace.New(),
+		floatdecrement.New(), floatincrement.New(), integerdecrement.New(),
+		integerincrement.New(), loopbreak.New(), loopcondition.New(), rangebreak.New(),
+	}
+}
