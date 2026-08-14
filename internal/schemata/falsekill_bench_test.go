@@ -53,6 +53,7 @@ func TestCountsMutantsThatCannotBuild(t *testing.T) {
 		produced: map[string]int{},
 		broke:    map[string]int{},
 		onlyTest: map[string]int{},
+		checkers: map[string]*typeChecker{},
 	}
 	perFile := map[string]string{}
 
@@ -113,6 +114,22 @@ type tallies struct {
 	testBroke int
 	onlyTest  map[string]int
 	onlyOne   string
+
+	ast   reached
+	types reached
+
+	checkers map[string]*typeChecker
+	listRuns int
+	blind    int
+}
+
+// reached is what a candidate mechanism did against the population the incumbent
+// defines. wrong is the number it refused that compiled: a mechanism that
+// removes a mutant which builds hides a real survivor, which is worse than the
+// defect being fixed.
+type reached struct {
+	caught int
+	wrong  int
 }
 
 // separator is what GoMutatedFile.Label puts between the path and the infection.
@@ -170,6 +187,13 @@ func report(t *testing.T, mutants, broken int, counted *tallies, perFile map[str
 		t.Logf("  e.g. %s", counted.onlyOne)
 	}
 
+	t.Logf("H1 AST      : caught %d of %d, wrongly refused %d that compile",
+		counted.ast.caught, broken, counted.ast.wrong)
+	t.Logf("H2 go/types : caught %d of %d, wrongly refused %d that compile",
+		counted.types.caught, broken, counted.types.wrong)
+	t.Logf("            : %d packages listed (one subprocess each, none per mutant), %d of the population in a package the checker could not read",
+		counted.listRuns, counted.blind)
+
 	reportViruses(t, counted)
 
 	for file, count := range perFile {
@@ -214,6 +238,53 @@ func reportViruses(t *testing.T, counted *tallies) {
 	}
 }
 
+// checkerFor builds one type checker per package and never per mutant, which is
+// the whole of H2's claim. listRuns counts the subprocesses that costs.
+func checkerFor(counted *tallies, root, packageDir string) *typeChecker {
+	checker, built := counted.checkers[packageDir]
+	if !built {
+		checker = newTypeChecker(root, packageDir)
+		counted.checkers[packageDir] = checker
+		counted.listRuns++
+	}
+
+	return checker
+}
+
+// countReach asks both candidates about one mutant, against the verdict the
+// incumbent already gave. A checker that is not ready, or not silent on the
+// unmutated file, is blind rather than correct: its misses are counted apart so
+// they cannot be read as coverage.
+func countReach(counted *tallies, checker *typeChecker, path string, mutated []byte, packageOK bool) {
+	usable := checker.silent(path)
+	if !usable && !packageOK {
+		counted.blind++
+	}
+
+	refusedByAST := astRefuses(mutated)
+	refusedByTypes := usable && checker.refuses(path, mutated)
+
+	if packageOK {
+		if refusedByAST {
+			counted.ast.wrong++
+		}
+
+		if refusedByTypes {
+			counted.types.wrong++
+		}
+
+		return
+	}
+
+	if refusedByAST {
+		counted.ast.caught++
+	}
+
+	if refusedByTypes {
+		counted.types.caught++
+	}
+}
+
 func countOne(t *testing.T, root, path string, counted *tallies) (int, int) {
 	t.Helper()
 
@@ -224,6 +295,7 @@ func countOne(t *testing.T, root, path string, counted *tallies) (int, int) {
 
 	infected := gosourcefile.New(path, original).Incubate(everyVirus()...)
 	broken := 0
+	checker := checkerFor(counted, root, filepath.Dir(path))
 
 	for _, one := range infected {
 		mutant := one.Mutate()
@@ -247,6 +319,8 @@ func countOne(t *testing.T, root, path string, counted *tallies) (int, int) {
 				counted.onlyOne = mutant.Label()
 			}
 		}
+
+		countReach(counted, checker, path, mutant.Mutated(), packageOK)
 
 		if !packageOK {
 			broken++

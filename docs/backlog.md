@@ -135,10 +135,17 @@ number dharness's gate fails builds on.
 
 `go test`'s exit status cannot tell the two apart — it is 1 for both — and
 reading `[build failed]` out of the output would tie ditto to one tool's
-phrasing. Building before running costs a median of 25%. Asking the same question
-in process with `go/types` is unmeasured and is the next thing to try.
+phrasing. Building before running costs a median of 25%, which is the incumbent
+and the bar.
 
-See `docs/experiments/false-kills.md` and `docs/experiments/fixing-false-kills.md`.
+Two cheaper mechanisms were measured and both are refuted. Syntax alone reaches
+61 of the 94 and wrongly refuses 2 mutants that compile, which disqualifies it
+whatever its coverage. An in-process `go/types` check reaches 92, refuses nothing
+that compiles, and needs no process per mutant — it misses one package it cannot
+read at all. See entry 10.
+
+See `docs/experiments/false-kills.md`, `docs/experiments/fixing-false-kills.md`
+and `docs/experiments/refusing-false-kills.md`.
 
 ## 7. The gated path is opt-in and unproven at scale
 
@@ -176,3 +183,20 @@ the build for all of them and the file falls back.
 
 If they differ, the counting rule for the report is not a convention to be
 chosen — it is a consequence to be read off. Also its own question.
+
+## 10. A type checker that honours build constraints
+
+`refusing-false-kills.md` measured an in-process `go/types` check reaching 92 of
+the 94 mutants that cannot compile, refusing nothing that compiles, at one
+`go list -export -deps` per package and no process per mutant. It is refuted as
+stated — the population is 94 — and the two it missed are one package,
+`internal/runner`, which pairs `busy_windows.go` with `busy_other.go`.
+
+The checker reads every `.go` file in a directory and ignores build constraints,
+so that package already fails to check before any mutation, and the control
+requiring silence on unmutated code refuses it. `go/build.Context.MatchFile` is
+the obvious answer and nothing has measured what honouring it costs, nor whether
+the remaining two then fall.
+
+This is a conjecture born from that note's data, so it needs its own question and
+its own note rather than an amendment to that one.
