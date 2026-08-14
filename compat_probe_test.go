@@ -450,7 +450,7 @@ import (
 func TestGainMutation(t *testing.T) {
 	options := []ditto.Option{
 		ditto.WithRepositoryRoot("."),
-		ditto.WithTestCommand("go test -count=1 ./internal/jsconfig"),
+		ditto.WithTestCommand(os.Getenv("GAIN_COMMAND")),
 		ditto.WithMinimumThreshold(0.0),
 		ditto.WithChangedRanges(map[string][]ditto.Range{
 			"internal/jsconfig/jsconfig.go": {},
@@ -467,9 +467,43 @@ func TestGainMutation(t *testing.T) {
 
 type gain struct {
 	release
-	invocations int
+
+	invocations int // of the test COMMAND, which is what the gated path removes
+	executions  int // of the package's test BINARY, which it does not
 	wall        time.Duration
 }
+
+// gainCommand is the test command itself, so that counting invocations means
+// counting invocations rather than counting something adjacent.
+//
+// The TestMain counter cannot do this job: on the gated path ditto runs the
+// compiled binary directly, so a counter living inside the package still fires
+// for every gated mutant. Both are kept, because the difference between them is
+// exactly what the gated path removes.
+const gainCommand = `package main
+
+import (
+	"os"
+	"os/exec"
+)
+
+func main() {
+	if log := os.Getenv("DITTO_COMMAND_LOG"); log != "" {
+		file, err := os.OpenFile(log, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		if err == nil {
+			_, _ = file.WriteString("invocation\n")
+			_ = file.Close()
+		}
+	}
+
+	command := exec.Command("go", "test", "-count=1", "./internal/jsconfig")
+	command.Stdout, command.Stderr = os.Stdout, os.Stderr
+
+	if command.Run() != nil {
+		os.Exit(1)
+	}
+}
+`
 
 // TestGainAfterTheFixes is docs/experiments/gain-after-the-fixes.md.
 //
@@ -506,8 +540,9 @@ func report(t *testing.T, round int, got gain, gated bool) {
 		path = "gated"
 	}
 
-	t.Logf("round %d | %-8s | total %3d | killed %3d | survived %2d | invocations %3d | %v",
-		round, path, got.total, got.killed, got.survived, got.invocations, got.wall.Round(time.Millisecond))
+	t.Logf("round %d | %-8s | total %3d | killed %3d | survived %2d | invocations %3d | executions %3d | %v",
+		round, path, got.total, got.killed, got.survived,
+		got.invocations, got.executions, got.wall.Round(time.Millisecond))
 }
 
 func runGain(t *testing.T, repository string, gated bool, which string) gain {
@@ -520,16 +555,24 @@ func runGain(t *testing.T, repository string, gated bool, which string) gain {
 
 	writeFile(t, filepath.Join(project, "internal", "jsconfig", "zz_gain_counter_test.go"), gainCounter)
 	writeFile(t, filepath.Join(project, "gain_mutation_test.go"), gainMutation)
+	writeFile(t, filepath.Join(project, "zzgaincounter", "main.go"), gainCommand)
 
 	mustRun(t, project, which+": resolving dependencies", "go", "mod", "tidy")
+
+	counter := filepath.Join(project, "gaincounter.exe")
+	mustRun(t, project, which+": building the counter", "go", "build", "-o", counter, "./zzgaincounter")
 
 	binary := filepath.Join(project, "mutation.test")
 	mustRun(t, project, which+": building the release", "go", "test", "-c", "-tags=mutation", "-o", binary, ".")
 
-	log := filepath.Join(project, "invocations.log")
+	executions := filepath.Join(project, "executions.log")
+	invocations := filepath.Join(project, "invocations.log")
 
 	run := command(t, project, binary, "-test.run", "TestGainMutation", "-test.count=1")
-	run.Env = append(run.Env, "DITTO_RUN_LOG="+log)
+	run.Env = append(run.Env,
+		"DITTO_RUN_LOG="+executions,
+		"DITTO_COMMAND_LOG="+invocations,
+		"GAIN_COMMAND="+counter)
 
 	if gated {
 		run.Env = append(run.Env, "GAIN_GATED=1")
@@ -541,7 +584,8 @@ func runGain(t *testing.T, repository string, gated bool, which string) gain {
 
 	return gain{
 		release:     parseRelease(t, string(output)),
-		invocations: linesIn(t, log),
+		invocations: linesIn(t, invocations),
+		executions:  linesIn(t, executions),
 		wall:        elapsed,
 	}
 }
@@ -549,7 +593,6 @@ func runGain(t *testing.T, repository string, gated bool, which string) gain {
 func linesIn(t *testing.T, path string) int {
 	t.Helper()
 
-	//nolint:gosec // a file inside a directory this test made
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return 0
@@ -561,7 +604,6 @@ func linesIn(t *testing.T, path string) int {
 func pointAtDitto(t *testing.T, project, dittoRoot, which string) {
 	t.Helper()
 
-	//nolint:gosec // a directory this test just made
 	manifest, err := os.ReadFile(filepath.Join(project, "go.mod"))
 	if err != nil {
 		t.Fatalf("%s: reading the copy's go.mod: %v", which, err)

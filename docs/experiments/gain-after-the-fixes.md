@@ -130,13 +130,86 @@ Against **2.77× / 2.71× / 2.72×** the day before, on the same file and the sa
 machine. Same band, slightly lower, and wall clock on a working machine varies by
 more than that difference — which is exactly why it gates nothing here.
 
-### Verdicts: H2 holds, H1 not decidable
+### Verdicts, first run: H2 holds, H1 not decidable
+
+## Second run, with an instrument that counts the right thing
+
+The fix is not a better `TestMain`, it is a different place to count. The test
+**command** is now a program of its own that appends a line and then runs
+`go test`, so counting invocations means counting invocations. The old counter is
+kept beside it, because the difference between the two is exactly what the gated
+path removes.
+
+One warm-up discarded, three rounds, the two paths rotated.
+
+| Round | Path | total | killed | survived | invocations | executions | wall |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | ordinary | 135 | 127 | 8 | **135** | 132 | 112.5 s |
+| 1 | gated | 135 | 127 | 8 | **38** | 135 | 41.8 s |
+| 2 | gated | 135 | 127 | 8 | **38** | 135 | 42.0 s |
+| 2 | ordinary | 135 | 127 | 8 | **135** | 132 | 113.5 s |
+| 3 | ordinary | 135 | 127 | 8 | **135** | 132 | 113.7 s |
+| 3 | gated | 135 | 127 | 8 | **38** | 135 | 42.3 s |
+
+### Control 1 passes
+
+The ordinary path reports **135 invocations for 135 mutants**, in every round.
+One command per mutant, which is what the control asked for and what the first
+instrument could not produce.
+
+### Control 2 passes — the gate is engaged
+
+38 against 135. A gated run with the gate off reports 135, which is what
+`backlog.md` entry 11 describes; this one does not.
+
+### H1 holds
+
+*Predicted 135 ordinary and 38 gated, the same numbers as 2026-08-13. Falsified
+by any other count on either path.*
+
+    ordinary 135, gated 38, in all three rounds
+
+Identical to the published measurement, from an instrument built independently of
+it a day later. **The gain is intact after the changes.**
+
+### H2 holds
+
+135 mutants, 127 killed, 8 survived — both paths, all six rounds, both runs of
+this experiment, and the same as `gated-gain-real.md`.
+
+### The two counters together, which is what the first run could not see
+
+    invocations of the test command  : ordinary 135, gated  38
+    executions of the test binary    : ordinary 132, gated 135
+
+The gated path invokes the command 38 times — the mutants it could not gate —
+and runs the binary 135 times, once per mutant plus the unselected baseline
+minus the ones it never reaches. The ordinary path invokes the command 135 times
+and reaches the binary 132, because **3 of jsconfig's 135 mutants do not
+compile**, a count `false-kills.md` made independently.
+
+Every number in that pair is accounted for by a number measured somewhere else.
+
+### The clock, reported and gating nothing
+
+    112.5 s → 41.8 s   2.69×
+    113.5 s → 42.0 s   2.70×
+    113.7 s → 42.3 s   2.69×
+
+Against 2.77× / 2.71× / 2.72× the day before.
+
+### Verdicts: 2 of 2, both hold
+
+## What this corrects
+
+The first run of this note reported H1 as not decidable and said the instrument
+had to be fixed "before quoting 38 again". That reads as though the published 38
+were in doubt. **It was not.** `gated-gain-real.md`'s control passed — 135
+invocations for 135 mutants — and this run reproduces its 38 exactly. The
+instrument that failed was the one built here, and its control caught it.
 
 ## What this does NOT establish
 
-- **Nothing about the invocation count after the changes.** The instrument built
-  for it measures a different quantity, and that is the first thing to fix before
-  quoting 38 again.
 - **One file.** `internal/jsconfig`'s suite runs in 188 ms, which
   `gated-gain-real.md` already identified as why its ratio is high: the variable
   is suite duration against the invocation toll, not whether the code is real.
