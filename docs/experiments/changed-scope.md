@@ -117,6 +117,29 @@ nothing survives the run.
 3. **The ordinary path was run over the same fixture**, so H2's gated number is
    compared rather than described.
 
+### The fix, and the two predictions it was allowed to fail
+
+Fixed in advance: *reading the baseline costs 0 runs and 0 compilations per file,
+because the run already makes it. Falsified by any increase in either counter.
+And the green fixture reports exactly the same 1 killed / 3 survived. Falsified
+if that number moves.*
+
+Both held.
+
+    green fixture, before the fix: total 4, killed 1, survived 3
+    green fixture, after  the fix: total 4, killed 1, survived 3
+
+    runs per file, before: gated mutants + 1
+    runs per file, after : gated mutants + 1
+
+And the red fixture no longer reports a score at all:
+
+    ditto: calc/calc.go fails its own suite with no mutant selected, so every
+    mutant of it would be scored killed; refusing to score against a red baseline
+
+The probe that recorded H1 turned red for having been fixed, exactly as this note
+said it would, and now records the refusal instead of the perfect score.
+
 ### H1 holds, and the size of it is the same four mutants
 
 Same source, same four mutants, one assertion made false:

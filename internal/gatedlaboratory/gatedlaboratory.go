@@ -105,7 +105,24 @@ func (l *GatedLaboratory) TestAll(
 		return l.all(repository, files)
 	}
 
-	return l.selectEach(repository, files, planned.Selector, runner, first, sandbox)
+	// That run selected no mutant, so every gate took its original arm: it is
+	// the file's own suite, and this path is the only one that ever measures it.
+	//
+	// Ok here means the command failed. For a selected run that is a killed
+	// mutant; with nothing selected it is a red baseline, and under a red
+	// baseline every selected run fails too — so every mutant of the file is
+	// scored killed and the report says 1.00 without naming a cause. Measured at
+	// 4 of 4 against 1 of 4 on the same mutants, docs/experiments/changed-scope.md.
+	//
+	// The run is already paid for. Reading it is what keeps it from being a lie.
+	if first.IsOk() {
+		files[0].RestoreIn(sandbox)
+
+		panic("ditto: " + files[0].Path() + " fails its own suite with no mutant selected, so every " +
+			"mutant of it would be scored killed; refusing to score against a red baseline")
+	}
+
+	return l.selectEach(repository, files, planned.Selector, runner, sandbox)
 }
 
 func (l *GatedLaboratory) selectEach(
@@ -113,11 +130,8 @@ func (l *GatedLaboratory) selectEach(
 	files []*gomutatedfile.GoMutatedFile,
 	selector []int,
 	runner Runner,
-	unselected result.Result[string],
 	sandbox ditto.TemporaryRepository,
 ) []future.Future[result.Result[string]] {
-	_ = unselected
-
 	results := make([]future.Future[result.Result[string]], len(files))
 
 	for i, file := range files {
