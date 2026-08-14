@@ -160,9 +160,82 @@ Narrow cross-check before the full pass: `internal/setup/writer.go`, 35 mutants,
 2 rejected by each column and 33 accepted by both — the new column distinguishes
 rather than rejecting everything or nothing.
 
-### Verdicts: 0 of 2
+### Both mechanisms, against that population, in one pass
 
-H1 and H2 are unmeasured. Nothing is concluded.
+1030 s over the same 1293 mutants, each asked of both candidates and of the
+incumbent.
+
+    H1 AST      : caught 61 of 94, wrongly refused 2 that compile
+    H2 go/types : caught 92 of 94, wrongly refused 0 that compile
+                : 10 packages listed, one subprocess each and none per mutant
+
+### H1 is refuted, and twice over
+
+Predicted every member, 0 subprocesses. It reached **61 of 94** — and it refused
+**2 mutants that compile**.
+
+The second number disqualifies it on its own, whatever the first had been. A
+mechanism that refuses a mutant which builds deletes a real survivor from the
+score, silently, and that is a worse defect than the one being fixed. The guards
+were written to prefer a miss over a false positive and still produced two.
+
+What it reaches is what a literal makes visible: a negative constant index, a
+subtraction with a string literal in it, two literal cases colliding. What it
+cannot see is a type — `body - x` where `body` is a string variable carries no
+literal anywhere.
+
+### H2 is refuted, at 92 of 94
+
+Predicted every member. It reached **92**, refusing nothing that compiles, at one
+`go list` per package and no process per mutant. The import resolution H2 needed
+works from the standard library alone: `go list -export -deps` once, then
+`importer.ForCompiler` over that export data. No new dependency.
+
+The two it missed are the two the checker could not read, and that was confirmed
+rather than explained. A run narrowed to that package alone:
+
+    mutants 8, of which do not build 2
+    H2 go/types : caught 0 of 2
+                : 2 of the population in a package the checker could not read
+
+`internal/runner` holds `busy_windows.go` **and** `busy_other.go`,
+`exec_windows.go` **and** `exec_other.go`. The checker reads every `.go` file in
+a directory and ignores build constraints, so the unmutated package already has
+duplicate declarations and the control that requires silence on unmutated code
+refuses it — correctly.
+
+So where it could run it reached 92 of 92. That is an observation, not a rescue:
+the hypothesis said every member of the population and the population has 94.
+
+### Verdicts: 2 of 2
+
+Both refuted. The decision rule fixed in advance says neither reaching means the
+incumbent's subprocess stands, or the question takes a mechanism not on the list.
+
+A build-constraint-aware type checker is such a mechanism, and it was conjectured
+from this data, so it belongs to a new question with its own note rather than to
+this one.
+
+## What this does NOT establish
+
+- **H1's verdict is bounded by the guards written.** Four shapes and an unused-
+  local walk. A different set of AST guards would reach a different number; what
+  the two false positives establish is that the risk is real rather than
+  theoretical, and that stands whatever the coverage.
+- **Nothing about whether `go/build` constraints are cheap to honour.** The 2
+  missed are attributed to that and nothing has measured the cost of fixing it.
+- **Nothing about the cost of H2 in time.** The counter measured is subprocesses,
+  which is what may be gated. The clock was not compared against the incumbent's.
+- **One repository, stdlib-only.** dharness imports nothing outside the standard
+  library. Whether `go list -export -deps` resolves as cleanly for a package with
+  third-party dependencies is untested.
+- **The 94 are dharness's.** The five causes are shapes of ordinary Go; their
+  frequency is this repository's.
+- **Nothing about the gated path.** Whether refusing at incubation and dropping
+  after generation give the same counts there is backlog entry 9: one non-viable
+  mutant fails the shared build for its whole file.
+- **Nothing about whether the defect changes a verdict.** Whether a corrected
+  score crosses dharness's 0.80 is backlog entry 8.
 
 ## What this note corrects
 
@@ -179,14 +252,3 @@ that.
    and the threshold that selected an action was a decision rule, which now has
    its own section.
 
-## What this does NOT establish
-
-- **The 94 are a lower bound.** The probe builds the package, not the test
-  binary.
-- **One repository.** The five causes are shapes of ordinary Go; their frequency
-  is dharness's.
-- **Nothing about the gated path.** Whether refusing at incubation and dropping
-  after generation give the same counts there is a separate question: one
-  non-viable mutant fails the shared build for its whole file.
-- **Nothing about whether the defect changes a verdict.** Whether a corrected
-  score crosses dharness's 0.80 is a separate question.
