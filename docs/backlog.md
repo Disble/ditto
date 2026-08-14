@@ -153,3 +153,26 @@ sound while no fixture holds a non-compiling mutant.
 
 See `docs/experiments/state-of-the-work.md` for everything measured and everything
 still open.
+
+## 8. Does the false kill ever change a verdict?
+
+Removing a false kill lowers numerator and denominator by the same amount, so a
+corrected score is always lower whenever anything survived. How much, and whether
+it crosses a line anyone acts on, is not determined by that.
+
+dharness gates at **0.80** over its staged scope (`tools/mutationstaged/main.go`).
+The question is whether any real run crosses it once the 94 are gone — because if
+none does, the inflation is real and has never changed an outcome, and that is
+worth knowing before ditto's public report grows a category.
+
+Split out of `docs/experiments/refusing-false-kills.md`: it answers a different
+question from the one that note asks, so it needs its own.
+
+## 9. Is refusing a mutant the same as dropping it after generation?
+
+On the ordinary path the two probably coincide. On the gated path they may not:
+every mutant of a file shares one compilation, so one that does not build fails
+the build for all of them and the file falls back.
+
+If they differ, the counting rule for the report is not a convention to be
+chosen — it is a consequence to be read off. Also its own question.
