@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // docs/experiments/backward-compatibility.md.
@@ -408,5 +409,169 @@ func copyRepository(t *testing.T, from, to string) {
 
 	if err := os.Remove(archive); err != nil {
 		t.Fatalf("removing the staging archive: %v", err)
+	}
+}
+
+// gainCounter is appended to the fixture package so every run of the test
+// command leaves a line behind. Invocations are counted from outside ditto, not
+// read out of its own bookkeeping, which is what makes the number evidence
+// rather than a restatement.
+const gainCounter = `package jsconfig_test
+
+import (
+	"os"
+	"testing"
+)
+
+func TestMain(m *testing.M) {
+	if log := os.Getenv("DITTO_RUN_LOG"); log != "" {
+		file, err := os.OpenFile(log, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		if err == nil {
+			_, _ = file.WriteString("run\n")
+			_ = file.Close()
+		}
+	}
+
+	os.Exit(m.Run())
+}
+`
+
+const gainMutation = `//go:build mutation
+
+package dharness_test
+
+import (
+	"os"
+	"testing"
+
+	"github.com/Disble/ditto"
+)
+
+func TestGainMutation(t *testing.T) {
+	options := []ditto.Option{
+		ditto.WithRepositoryRoot("."),
+		ditto.WithTestCommand("go test -count=1 ./internal/jsconfig"),
+		ditto.WithMinimumThreshold(0.0),
+		ditto.WithChangedRanges(map[string][]ditto.Range{
+			"internal/jsconfig/jsconfig.go": {},
+		}),
+	}
+
+	if os.Getenv("GAIN_GATED") == "1" {
+		options = append(options, ditto.Gated())
+	}
+
+	ditto.Release(t, options...)
+}
+`
+
+type gain struct {
+	release
+	invocations int
+	wall        time.Duration
+}
+
+// TestGainAfterTheFixes is docs/experiments/gain-after-the-fixes.md.
+//
+// Point DITTO_COMPAT_REPO at a repository holding internal/jsconfig.
+func TestGainAfterTheFixes(t *testing.T) {
+	if os.Getenv("DITTO_PROBE") != "1" {
+		t.Skip("set DITTO_PROBE=1 to run the probes; see docs/experiments/gain-after-the-fixes.md")
+	}
+
+	repository := os.Getenv("DITTO_COMPAT_REPO")
+	if repository == "" {
+		t.Skip("set DITTO_COMPAT_REPO to a repository to copy and mutate")
+	}
+
+	// One warm-up discarded, then three rounds with the two paths rotated.
+	runGain(t, repository, false, "warm-up")
+
+	for round := 1; round <= 3; round++ {
+		gatedFirst := round%2 == 0
+
+		first := runGain(t, repository, gatedFirst, "round")
+		second := runGain(t, repository, !gatedFirst, "round")
+
+		report(t, round, first, gatedFirst)
+		report(t, round, second, !gatedFirst)
+	}
+}
+
+func report(t *testing.T, round int, got gain, gated bool) {
+	t.Helper()
+
+	path := "ordinary"
+	if gated {
+		path = "gated"
+	}
+
+	t.Logf("round %d | %-8s | total %3d | killed %3d | survived %2d | invocations %3d | %v",
+		round, path, got.total, got.killed, got.survived, got.invocations, got.wall.Round(time.Millisecond))
+}
+
+func runGain(t *testing.T, repository string, gated bool, which string) gain {
+	t.Helper()
+
+	project := t.TempDir()
+
+	copyRepository(t, repository, project)
+	pointAtDitto(t, project, moduleRoot(t), which)
+
+	writeFile(t, filepath.Join(project, "internal", "jsconfig", "zz_gain_counter_test.go"), gainCounter)
+	writeFile(t, filepath.Join(project, "gain_mutation_test.go"), gainMutation)
+
+	mustRun(t, project, which+": resolving dependencies", "go", "mod", "tidy")
+
+	binary := filepath.Join(project, "mutation.test")
+	mustRun(t, project, which+": building the release", "go", "test", "-c", "-tags=mutation", "-o", binary, ".")
+
+	log := filepath.Join(project, "invocations.log")
+
+	run := command(t, project, binary, "-test.run", "TestGainMutation", "-test.count=1")
+	run.Env = append(run.Env, "DITTO_RUN_LOG="+log)
+
+	if gated {
+		run.Env = append(run.Env, "GAIN_GATED=1")
+	}
+
+	started := time.Now()
+	output, _ := run.CombinedOutput()
+	elapsed := time.Since(started)
+
+	return gain{
+		release:     parseRelease(t, string(output)),
+		invocations: linesIn(t, log),
+		wall:        elapsed,
+	}
+}
+
+func linesIn(t *testing.T, path string) int {
+	t.Helper()
+
+	//nolint:gosec // a file inside a directory this test made
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+
+	return strings.Count(string(content), "\n")
+}
+
+func pointAtDitto(t *testing.T, project, dittoRoot, which string) {
+	t.Helper()
+
+	//nolint:gosec // a directory this test just made
+	manifest, err := os.ReadFile(filepath.Join(project, "go.mod"))
+	if err != nil {
+		t.Fatalf("%s: reading the copy's go.mod: %v", which, err)
+	}
+
+	//nolint:gosec // the same directory
+	err = os.WriteFile(filepath.Join(project, "go.mod"),
+		append(manifest, []byte("\nreplace github.com/Disble/ditto => "+
+			filepath.ToSlash(dittoRoot)+"\n")...), 0o600)
+	if err != nil {
+		t.Fatalf("%s: pointing the copy at ditto: %v", which, err)
 	}
 }
