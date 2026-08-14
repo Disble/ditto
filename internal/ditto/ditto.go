@@ -28,6 +28,21 @@ type Laboratory interface {
 	Test(repository Repository, file *gomutatedfile.GoMutatedFile) future.Future[result.Result[string]]
 }
 
+// BatchLaboratory is handed every mutant of one file together.
+//
+// One compilation can only serve several mutants if the compiler is given all of
+// them at once, and the gated path needs exactly that. It is a separate
+// interface rather than a change to Laboratory so that every laboratory that
+// exists today goes on being asked one mutant at a time, unchanged.
+//
+// The batch cannot be assembled lower down. Test returns a future, and a
+// laboratory could in principle buffer and resolve later — but testingtlaboratory
+// awaits inside each subtest, immediately, so a laboratory waiting for mutants
+// that have not been submitted yet would wait forever.
+type BatchLaboratory interface {
+	TestAll(repository Repository, files []*gomutatedfile.GoMutatedFile) []future.Future[result.Result[string]]
+}
+
 type ScoreCalculator func(total, killed int) float32
 
 type Diagnostic struct {
@@ -73,19 +88,47 @@ func New(repository Repository, laboratory Laboratory, reporter Reporter) *Ditto
 	}
 }
 
+// Release mutates every source file and reports what each mutant did.
+//
+// Mutants are kept together by the file they came from, because a laboratory
+// that compiles once for a whole file has to receive the file's mutants at once.
+// The order they are reported in is unchanged: sources are walked in order, and
+// each file's mutants in the order its viruses produced them.
 func (o *Ditto) Release(viri ...viruses.Virus) {
-	sources := o.repository.ListGoSourceFiles()
+	for _, source := range o.repository.ListGoSourceFiles() {
+		mutants := mutate(source.Incubate(viri...))
+		if len(mutants) == 0 {
+			continue
+		}
 
-	var incubated []*goinfectedfile.GoInfectedFile
+		for i, res := range o.test(mutants) {
+			o.reporter.AddDiagnostic(NewDiagnostic(res, mutants[i]))
+		}
+	}
+}
 
-	for _, source := range sources {
-		incubated = append(incubated, source.Incubate(viri...)...)
+func mutate(infected []*goinfectedfile.GoInfectedFile) []*gomutatedfile.GoMutatedFile {
+	mutants := make([]*gomutatedfile.GoMutatedFile, 0, len(infected))
+
+	for _, one := range infected {
+		mutants = append(mutants, one.Mutate())
 	}
 
-	for _, infectedFile := range incubated {
-		mutatedFile := infectedFile.Mutate()
-		res := o.laboratory.Test(o.repository, mutatedFile)
-		diagnostic := NewDiagnostic(res, mutatedFile)
-		o.reporter.AddDiagnostic(diagnostic)
+	return mutants
+}
+
+// test asks for the whole batch when the laboratory can take one, and falls back
+// to one mutant at a time otherwise — which is what every laboratory shipped so
+// far does, so nothing that worked stops working.
+func (o *Ditto) test(mutants []*gomutatedfile.GoMutatedFile) []future.Future[result.Result[string]] {
+	if batched, ok := o.laboratory.(BatchLaboratory); ok {
+		return batched.TestAll(o.repository, mutants)
 	}
+
+	results := make([]future.Future[result.Result[string]], 0, len(mutants))
+	for _, mutant := range mutants {
+		results = append(results, o.laboratory.Test(o.repository, mutant))
+	}
+
+	return results
 }

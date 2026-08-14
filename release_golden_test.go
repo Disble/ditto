@@ -72,6 +72,22 @@ func TestReleaseGolden(t *testing.T) {
 	if got != want {
 		t.Fatalf("the release said something different.\n--- want ---\n%s\n--- got ---\n%s", want, got)
 	}
+
+	// The gated path has to say exactly this too. It compiles the package once
+	// and selects each mutant at run time instead of starting the test command
+	// for every one, and a mutation tester that changed its verdicts to go
+	// faster would have broken the only thing it is for.
+	gated := command(t, project, binary, "-test.run", "TestMutation", "-test.count=1")
+	gated.Env = append(gated.Env, "DITTO_GOLDEN_GATED=1")
+
+	output, err = gated.CombinedOutput()
+	if err != nil {
+		t.Fatalf("running the gated release: %v\n%s", err, output)
+	}
+
+	if got := strings.ReplaceAll(string(output), "\r\n", "\n"); got != want {
+		t.Fatalf("the gated release said something different.\n--- want ---\n%s\n--- got ---\n%s", want, got)
+	}
 }
 
 // command builds a command that cannot address the repository this test runs

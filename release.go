@@ -11,6 +11,7 @@ import (
 	"github.com/Disble/ditto/internal/ditto"
 	"github.com/Disble/ditto/internal/fsrepository"
 	"github.com/Disble/ditto/internal/fstemporarydir"
+	"github.com/Disble/ditto/internal/gatedlaboratory"
 	"github.com/Disble/ditto/internal/gosourcefile"
 	"github.com/Disble/ditto/internal/gotextdiff"
 	"github.com/Disble/ditto/internal/ignoredrepository"
@@ -141,10 +142,7 @@ func Release(t *testing.T, options ...Option) {
 		reporter = verbosereporter.New(logger, reporter)
 	}
 
-	var lab ditto.Laboratory = laboratory.New(opts.TestRunner, opts.TemporaryDir)
-	if verbose() {
-		lab = verboselaboratory.New(logger, lab)
-	}
+	lab := assemble(opts, logger)
 
 	t.Cleanup(func() {
 		t.Helper()
@@ -161,6 +159,23 @@ func Release(t *testing.T, options ...Option) {
 	ditto.New(opts.Repository, lab, reporter).Release(
 		opts.Viruses...,
 	)
+}
+
+// assemble stacks the laboratories, innermost first. Gated goes below verbose so
+// that what is logged is what actually ran, and both stay below the one that
+// makes a subtest per mutant.
+func assemble(opts Options, logger ditto.Logger) ditto.Laboratory {
+	var lab ditto.Laboratory = laboratory.New(opts.TestRunner, opts.TemporaryDir)
+
+	if opts.Gated {
+		lab = gatedlaboratory.New(lab, opts.TemporaryDir)
+	}
+
+	if verbose() {
+		lab = verboselaboratory.New(logger, lab)
+	}
+
+	return lab
 }
 
 func verbose() bool {
