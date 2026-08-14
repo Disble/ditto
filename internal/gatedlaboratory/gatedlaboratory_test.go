@@ -78,6 +78,24 @@ func TestGatedLaboratory(t *testing.T) {
 		assert.Equal(t, 0, lab.Gated())
 	})
 
+	// H3 of docs/experiments/changed-scope.md. GoBuildRunner.Runs increments once
+	// per Test, so a run the laboratory makes before selecting anything is
+	// counted as a mutant's. Every ratio published from that counter carries it.
+	t.Run("counts a run before any mutant is selected", func(t *testing.T) {
+		runner := &fakeRunner{built: true}
+		lab := gatedlaboratory.NewWithRunner(&countingLaboratory{}, fakeTemporary{}, runner)
+
+		lab.TestAll(fakeRepository{}, mutantsOf(
+			strings.Replace(source, "a > b", "a >= b", 1),
+			strings.Replace(source, "a > b", "a < b", 1),
+		))
+
+		assert.Equal(t, 2, lab.Gated(), "both mutants gate")
+		assert.Equal(t, 2, runner.tests-1,
+			"runs %d for %d gated mutants: the extra one is the unselected baseline",
+			runner.tests, lab.Gated())
+	})
+
 	t.Run("answers nothing for no mutants", func(t *testing.T) {
 		lab := gatedlaboratory.NewWithRunner(&countingLaboratory{}, fakeTemporary{}, &fakeRunner{built: true})
 
@@ -97,11 +115,14 @@ func mutantsOf(mutants ...string) []*gomutatedfile.GoMutatedFile {
 type fakeRunner struct {
 	built    bool
 	selected []int
+	tests    int
 }
 
 func (r *fakeRunner) Select(mutant int) { r.selected = append(r.selected, mutant) }
 func (r *fakeRunner) Built() bool       { return r.built }
 func (r *fakeRunner) Test(ditto.TemporaryRepository) result.Result[string] {
+	r.tests++
+
 	return result.Err[string]("")
 }
 
