@@ -12,6 +12,7 @@ import (
 	"github.com/Disble/ditto/internal/fsrepository"
 	"github.com/Disble/ditto/internal/fstemporarydir"
 	"github.com/Disble/ditto/internal/gatedlaboratory"
+	"github.com/Disble/ditto/internal/gatedreporter"
 	"github.com/Disble/ditto/internal/gosourcefile"
 	"github.com/Disble/ditto/internal/gotextdiff"
 	"github.com/Disble/ditto/internal/ignoredrepository"
@@ -111,21 +112,7 @@ func Release(t *testing.T, options ...Option) {
 		opts.MinimumThreshold,
 	)
 
-	// Sandboxes outlive each mutant now, so removing them belongs to the run
-	// rather than to the loop that used to rebuild one per mutant. t.Cleanup
-	// covers a normal finish, a failed run and a t.Fatal. It cannot cover the
-	// process being killed — that is what the owning process id in the
-	// directory name is for, so a later run can tell an abandoned parent from
-	// one still in use. Registered before the decorators wrap it, because they
-	// do not forward this.
-	if sandboxes, ok := opts.TemporaryDir.(interface{ RemoveAll() error }); ok {
-		t.Cleanup(func() {
-			err := sandboxes.RemoveAll()
-			if err != nil {
-				logger.Logf("%s %s", color.Yellow("┃"), err)
-			}
-		})
-	}
+	reclaimSandboxes(t, opts.TemporaryDir, logger)
 
 	if opts.IgnoreSourceFilesPatterns != nil {
 		opts.Repository = ignoredrepository.New(opts.IgnoreSourceFilesPatterns, opts.Repository)
@@ -142,7 +129,13 @@ func Release(t *testing.T, options ...Option) {
 		reporter = verbosereporter.New(logger, reporter)
 	}
 
-	lab := assemble(opts, logger)
+	lab, gates := assemble(opts, logger)
+
+	// Wrapped here, after the verbose decorator and before the cleanup that
+	// summarises, so the counts are the last thing a run says.
+	if gates != nil {
+		reporter = gatedreporter.New(logger, gates, reporter)
+	}
 
 	t.Cleanup(func() {
 		t.Helper()
@@ -161,21 +154,53 @@ func Release(t *testing.T, options ...Option) {
 	)
 }
 
+// reclaimSandboxes registers the cleanup that removes what a run left behind.
+//
+// Sandboxes outlive each mutant now, so removing them belongs to the run rather
+// than to the loop that used to rebuild one per mutant. t.Cleanup covers a normal
+// finish, a failed run and a t.Fatal. It cannot cover the process being killed —
+// that is what the owning process id in the directory name is for, so a later run
+// can tell an abandoned parent from one still in use. Registered before the
+// decorators wrap the temporary directory, because they do not forward this.
+func reclaimSandboxes(t *testing.T, temporaryDir laboratory.TemporaryDirectory, logger ditto.Logger) {
+	t.Helper()
+
+	sandboxes, ok := temporaryDir.(interface{ RemoveAll() error })
+	if !ok {
+		return
+	}
+
+	t.Cleanup(func() {
+		err := sandboxes.RemoveAll()
+		if err != nil {
+			logger.Logf("%s %s", color.Yellow("┃"), err)
+		}
+	})
+}
+
 // assemble stacks the laboratories, innermost first. Gated goes below verbose so
 // that what is logged is what actually ran, and both stay below the one that
 // makes a subtest per mutant.
-func assemble(opts Options, logger ditto.Logger) ditto.Laboratory {
+//
+// It returns the gated laboratory as well as the stack, because its two counters
+// are the only thing that can say whether the gated path engaged, and a decorator
+// above it cannot be asked. The pointer is nil, concretely rather than as an
+// interface holding a nil, when the run is not gated.
+func assemble(opts Options, logger ditto.Logger) (ditto.Laboratory, *gatedlaboratory.GatedLaboratory) {
 	var lab ditto.Laboratory = laboratory.New(opts.TestRunner, opts.TemporaryDir)
 
+	var gates *gatedlaboratory.GatedLaboratory
+
 	if opts.Gated {
-		lab = gatedlaboratory.New(lab, opts.TemporaryDir)
+		gates = gatedlaboratory.New(lab, opts.TemporaryDir)
+		lab = gates
 	}
 
 	if verbose() {
 		lab = verboselaboratory.New(logger, lab)
 	}
 
-	return lab
+	return lab, gates
 }
 
 func verbose() bool {
