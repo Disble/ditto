@@ -17,7 +17,10 @@ on:
 jobs:
 
   Mutation:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # A dispatched run carries no workflow_run, so gating only on its conclusion
+    # made the job skip and the run report "completed" — a green that did
+    # nothing, which is the shape of failure this project refuses.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
