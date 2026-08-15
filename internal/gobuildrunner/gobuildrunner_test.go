@@ -28,6 +28,26 @@ func TestGoBuildRunner(t *testing.T) {
 		assert.Equal(t, 5, runner.Runs())
 	})
 
+	// Naming the command and letting the operating system find it means PATH
+	// decides which compiler runs, and PATH is read again at every call. Two
+	// things follow, and they point the same way.
+	//
+	// The security one is SonarQube's go:S4036: a directory an attacker can write
+	// to, or prepend, substitutes the binary. The correctness one matters more
+	// here — ditto compares verdicts, so building a mutant's tests with a
+	// different toolchain from the one running the suite would make a
+	// disagreement that is nobody's mutation look like one that is.
+	t.Run("builds with an absolute toolchain rather than whatever PATH resolves", func(t *testing.T) {
+		toolchain := gobuildrunner.New("./calc").Toolchain()
+
+		require.NotEmpty(t, toolchain, "no go toolchain was resolved")
+		assert.True(t, filepath.IsAbs(toolchain), "toolchain %q is not an absolute path", toolchain)
+
+		info, err := os.Stat(toolchain)
+		require.NoError(t, err, "resolved toolchain does not exist")
+		assert.False(t, info.IsDir(), "resolved toolchain is a directory")
+	})
+
 	t.Run("reads a passing suite as a mutant that survived", func(t *testing.T) {
 		root := fixture(t, "package calc\n\nfunc Ok() bool { return true }\n", passing)
 
