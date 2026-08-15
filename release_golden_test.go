@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -73,21 +75,100 @@ func TestReleaseGolden(t *testing.T) {
 		t.Fatalf("the release said something different.\n--- want ---\n%s\n--- got ---\n%s", want, got)
 	}
 
-	// The gated path has to say exactly this too. It compiles the package once
-	// and selects each mutant at run time instead of starting the test command
-	// for every one, and a mutation tester that changed its verdicts to go
-	// faster would have broken the only thing it is for.
-	gated := command(t, project, binary, "-test.run", "TestMutation", "-test.count=1")
-	gated.Env = append(gated.Env, "DITTO_GOLDEN_GATED=1")
+	// The gated path has to say exactly this too, apart from the one line that
+	// says how it ran. It compiles the package once and selects each mutant at
+	// run time instead of starting the test command for every one, and a
+	// mutation tester that changed its verdicts to go faster would have broken
+	// the only thing it is for.
+	gatedOutput := releaseOutput(t, project, binary, true, false)
 
-	output, err = gated.CombinedOutput()
-	if err != nil {
-		t.Fatalf("running the gated release: %v\n%s", err, output)
-	}
-
-	if got := strings.ReplaceAll(string(output), "\r\n", "\n"); got != want {
+	if got := withoutGateCount(gatedOutput); got != want {
 		t.Fatalf("the gated release said something different.\n--- want ---\n%s\n--- got ---\n%s", want, got)
 	}
+
+	// And it has to say that it gated something. The counts are the only thing
+	// that separates a run which gated every mutant from one that gated none:
+	// until they were printed, the two produced identical output.
+	quiet := gateCount(t, gatedOutput)
+	if quiet == 0 {
+		t.Fatalf("the gated release gated nothing:\n%s", gatedOutput)
+	}
+
+	// The same run under -v, which is the flag CI runs and the one that used to
+	// turn the gated path off without saying so: `Release` wraps the stack in
+	// verboselaboratory, and a decorator that does not forward the batch makes
+	// every laboratory beneath it look like one that cannot take it. Measured on
+	// this fixture at 4 of 7 without -v and none of 7 with it —
+	// docs/experiments/forwarding-the-batch.md. Nothing refused it, which is why
+	// it cost three measurements before a hand-placed panic found it.
+	verbose := gateCount(t, releaseOutput(t, project, binary, true, true))
+	if verbose != quiet {
+		t.Fatalf("the gated release gated %d mutants under -v and %d without it; "+
+			"verbose is meant to change what is logged, not what runs", verbose, quiet)
+	}
+}
+
+func releaseOutput(t *testing.T, project, binary string, gated, verbose bool) string {
+	t.Helper()
+
+	args := []string{"-test.run", "TestMutation", "-test.count=1"}
+	if verbose {
+		args = append(args, "-test.v")
+	}
+
+	run := command(t, project, binary, args...)
+	if gated {
+		run.Env = append(run.Env, "DITTO_GOLDEN_GATED=1")
+	}
+
+	output, err := run.CombinedOutput()
+	if err != nil {
+		t.Fatalf("running the release (gated=%v verbose=%v): %v\n%s", gated, verbose, err, output)
+	}
+
+	return strings.ReplaceAll(string(output), "\r\n", "\n")
+}
+
+var gateCountPattern = regexp.MustCompile(`┃ Gated: (none|\d+) of (\d+) mutants`)
+
+// gateCount reads the line the gated reporter prints. Absent is a failure rather
+// than a zero: a run that never printed it and a run that gated nothing are
+// exactly the two cases this is here to separate.
+func gateCount(t *testing.T, output string) int {
+	t.Helper()
+
+	match := gateCountPattern.FindStringSubmatch(output)
+	if match == nil {
+		t.Fatalf("the gated release printed no gate count at all:\n%s", output)
+	}
+
+	if match[1] == "none" {
+		return 0
+	}
+
+	count, err := strconv.Atoi(match[1])
+	if err != nil {
+		t.Fatalf("gate count %q is not a number: %v", match[1], err)
+	}
+
+	return count
+}
+
+// withoutGateCount removes the one line a gated run adds, so everything else can
+// be compared against the golden byte for byte. That line describes how the run
+// executed; what the golden pins is what it found.
+func withoutGateCount(output string) string {
+	kept := []string{}
+
+	for line := range strings.SplitSeq(output, "\n") {
+		if gateCountPattern.MatchString(line) {
+			continue
+		}
+
+		kept = append(kept, line)
+	}
+
+	return strings.Join(kept, "\n")
 }
 
 // command builds a command that cannot address the repository this test runs
