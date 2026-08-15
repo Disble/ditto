@@ -152,7 +152,31 @@ in `perf/baseline.json`, ratcheting in both directions like every other counter
 there. A cost nobody records is one that grows unnoticed, which is the mirror of
 the unrecorded gain this project already refuses.
 
-### H2 — open, and what is already known about it
+### H2 corroborated
+
+Run 31861407819, same tree, same 431 mutants, one variable — the makefile.
+
+| Test command | Total | Killed | Survived | Score |
+| --- | --- | --- | --- | --- |
+| dies before compiling | 431 | **431** | **0** | 1.00 |
+| runs the suite | 431 | **329** | **102** | **0.76** |
+
+Predicted survivors above zero; measured **102**. The total is identical on both
+sides, so it is the same population being counted differently: **102 of the 431
+kills were mutants no test ever executed**, 23.7% of the reported kills, and the
+score moved from a perfect 1.00 to 0.76.
+
+Every earlier claim that this gate passed is wrong, including the one made out
+loud during this session, and it is corrected here with the number that corrects
+it.
+
+The counter is what settles this. An earlier draft of this note closed on the
+run's *duration* — 5.46 seconds against ten minutes — which is wall clock, one
+observation per side, and exactly what this project refuses to gate on. That
+sentence is withdrawn. It said something true for a reason that could not carry
+it.
+
+### What was known before H2 closed, and did not settle it
 
 H2 predicted survivors above zero once the command runs. The gate was dispatched
 on this branch with the makefile fixed (run 31861407819) and **was still running
@@ -176,11 +200,142 @@ same repository.
 
 That is a strong indication and it is not a verdict. H2 stays open.
 
-## Verdicts: 2 of 3
+## Verdicts: 3 of 3
 
-H1 corroborated. H3 corroborated. **H2 open.** Nothing is concluded below that
-count — in particular, "the 431 were false kills" remains a suspicion with a kill
-line attached, however much the ten minutes and the eleven survivors point at it.
+H1 corroborated. H2 corroborated. H3 corroborated.
+
+---
+
+# Round 2 — does any of it reproduce?
+
+Written before the second measurement.
+
+Three hypotheses were answered from **one observation per condition**. Every
+counter above is meant to be a deterministic function of the tree and the
+mutants, so each of them should reproduce exactly, and "should" is not a result.
+A number that moves between identical runs is not a measurement of anything, and
+this is the round that finds out.
+
+## The research question
+
+**To what extent** do the counters above reproduce across repeated runs of the
+same tree with the same commands, at `fix/mutation-baseline` 119da41,
+2026-08-15?
+
+| Element | This question's |
+| --- | --- |
+| Interrogative phrase | to what extent |
+| Variable, the counter that moves | killed and survived, per round |
+| Population, unit of analysis | one mutant. The 431 of ditto's own tree, and the scoped subset below |
+| Space and time | 119da41 for the guarded code, efd8541 for the code before it, 2026-08-15 |
+
+**PICOT** — P: the same mutants each round. · I: the test command that runs. ·
+**C, the control**: the same mutants with a command that dies before compiling,
+on the revision before the guard, since the guard now refuses that state
+outright. · **O, the exact counters**: killed and survived, integers, per round.
+Wall clock is not a counter and decides nothing here. · T: 2026-08-15.
+
+## Hypotheses, and what kills each one
+
+**H4 — the full gate reports the same three integers on a second run.** Predicted
+431 total, 329 killed, 102 survived, again.
+*Falsified if any of the three differs by one.*
+
+**H5 — a command that dies before compiling reports every mutant killed, in every
+round.** Predicted survivors 0 and killed equal to total, in each of three rounds
+on the scoped subset, on the revision before the guard.
+*Falsified if any round reports a survivor.*
+
+**H6 — a command that runs reports the same survivors in every round.** Predicted
+identical killed and survived across three rounds on the same scoped subset.
+*Falsified if any round differs from another.* This is the one most likely to
+die, and the interesting one: a flaky test in ditto's own suite would show up
+here as a mutant that changes column between rounds, and nothing so far would
+have caught that.
+
+**What would refute all of them:** counters that wander between identical runs,
+which would mean every number in this note is an anecdote and the whole file has
+to be rewritten against a design that controls for whatever is moving.
+
+## Decision rule, fixed in advance
+
+- H4, H5 and H6 all corroborated → the numbers above stand as measurements and
+  the note is complete.
+- H4 refuted → the full-gate figures are reported as a range, never as three
+  integers, and the cause of the spread becomes the next question.
+- H5 refuted → the false-kill mechanism is not what this note says it is, and the
+  makefile fix keeps its own verdict but loses its explanation.
+- H6 refuted → ditto's own suite has a flaky test, which is a defect of its own
+  and outranks everything else here; it gets a backlog entry the same day.
+
+## Results — round 2
+
+### H4 corroborated
+
+Two independent runs of the full gate, dispatched separately, on the same tree.
+
+| Run | Total | Killed | Survived | Score |
+| --- | --- | --- | --- | --- |
+| 31861407819 | 431 | 329 | 102 | 0.76 |
+| 31862250831 | 431 | 329 | 102 | 0.76 |
+
+Three integers, twice, identical.
+
+### H5 and H6 corroborated
+
+Same tree at efd8541 — the revision before the guard, so the guard cannot refuse
+condition A and change what is being measured. Same scope, same mutants. The only
+variable is the test command. A warm-up was discarded and the order was rotated
+between rounds.
+
+| Round | Order | A, command dies | B, command runs |
+| --- | --- | --- | --- |
+| 1 | A then B | 69 / **69** / **0** | 69 / **58** / **11** |
+| 2 | B then A | 69 / **69** / **0** | 69 / **58** / **11** |
+| 3 | A then B | 69 / **69** / **0** | 69 / **58** / **11** |
+
+*(total / killed / survived)*
+
+H5 predicted every mutant killed and no survivor under a command that dies:
+measured 69 of 69 killed, three times. H6 predicted identical counters under a
+command that runs: measured 58 killed and 11 survived, three times. **H6 was the
+one most likely to die** — a flaky test in ditto's own suite would appear here as
+a mutant changing column between rounds, and none did.
+
+### The control nobody planned
+
+Condition B reproduces **69 / 58 / 11** exactly, and that is the same triple
+`gated-by-default.md` measured earlier the same day — a different harness, a
+different scope mechanism, a different revision, and a run made before this
+question existed. Three rounds back to back test the instrument; a match across
+two independent sessions tests something closer to the claim.
+
+## Verdicts: 3 of 3
+
+H4 corroborated. H5 corroborated. H6 corroborated.
+
+## Conclusion
+
+The counters reproduce. Every number in this note is a measurement rather than an
+observation, and the headline stands: **102 of 431 reported kills were mutants no
+test ever executed**, 23.7%, and the score ditto's own gate printed was 1.00
+where it should have been 0.76.
+
+What earned the correction was not the size of the gap. It was that the first
+attempt to close this note leaned on wall clock and a single observation per
+side, which is the same class of evidence the tool itself refuses when it reads a
+failing command as a dead mutant.
+
+## What this does NOT establish
+
+- **Nothing about a flaky test that fires less often than one run in three.** H6
+  saw three rounds. It bounds the flakiness it would have caught, not flakiness
+  in general.
+- **Nothing about the 102 survivors being worth fixing.** They are mutants that
+  survived a suite; how many are meaningful and how many are noise — mutating a
+  `token.Pos` field changes nothing observable — is a different question.
+- **Nothing about other repositories.** The 23.7% is ditto's own tree with ditto's
+  own suite.
 
 ## What this does NOT establish
 
