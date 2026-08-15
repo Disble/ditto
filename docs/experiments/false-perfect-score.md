@@ -152,14 +152,44 @@ in `perf/baseline.json`, ratcheting in both directions like every other counter
 there. A cost nobody records is one that grows unnoticed, which is the mirror of
 the unrecorded gain this project already refuses.
 
-### H2 — pending
+### H2 — open, and what is already known about it
 
-The gate has to run with the command working before this can be answered, and
-that run is the expensive one. Verdict below when it lands; nothing about the
-gate is claimed until then.
+H2 predicted survivors above zero once the command runs. The gate was dispatched
+on this branch with the makefile fixed (run 31861407819) and **was still running
+after ten minutes**, against 5.46 seconds before. It is very likely to reach the
+30-minute timeout `make test.mutation` sets, because 431 mutants at roughly
+twenty seconds of suite each is hours rather than minutes. If it does, H2 is
+undecidable from this run and gets that verdict, not a silent skip.
+
+What that duration does settle is narrower than H2 and worth stating on its own:
+**5.46 seconds was not the cost of testing 431 mutants.** It is the only number
+that has changed, and nothing was touched except the makefile.
+
+Evidence that already exists, and was not collected for this question — which is
+why it is reported here rather than counted as H2's verdict:
+`gated-by-default.md` ran ditto's own tree over three files earlier the same day
+with a working command, `go test` invoked directly, one invocation per mutant
+confirmed by a counter. It reported **69 mutants, 58 killed, 11 survived**.
+Ditto's own code produces survivors under a command that runs. A gate reporting
+0 survivors over 431 mutants and that measurement cannot both be describing the
+same repository.
+
+That is a strong indication and it is not a verdict. H2 stays open.
 
 ## Verdicts: 2 of 3
 
-H1 corroborated. H3 corroborated. **H2 open.** Nothing is concluded here until
-the count is complete — in particular, the claim that the 431 were false kills
-remains a suspicion with a kill line, not a finding.
+H1 corroborated. H3 corroborated. **H2 open.** Nothing is concluded below that
+count — in particular, "the 431 were false kills" remains a suspicion with a kill
+line attached, however much the ten minutes and the eleven survivors point at it.
+
+## What this does NOT establish
+
+- **Nothing about the true score of ditto's own gate.** Whether it is 0.9 or 0.6
+  is exactly what H2 is waiting on.
+- **Nothing about other consumers.** The makefile defect is ditto's own test
+  command. Any project whose command works in a bare directory was never
+  affected, and any project whose command needs a git repository has the same
+  defect and does not know it — which is an argument for the guard, not evidence
+  about anyone else.
+- **Nothing about the gated path.** It already refused this, and none of these
+  runs exercised it.
