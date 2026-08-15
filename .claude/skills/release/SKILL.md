@@ -41,9 +41,23 @@ published believing otherwise.
     gh workflow run ci.yml --repo Disble/ditto --ref <branch>
     gh run watch <id> --repo Disble/ditto --exit-status
 
-**`mutation.yml` has no `workflow_dispatch` trigger**, so it cannot be dispatched
-and cannot fire on an event either. It has never run and cannot run as things
-stand. Do not report the mutation gate as passing.
+**No event trigger works, not only `push` and `pull_request`.** `mutation.yml`
+fires on `workflow_run`, chained after CI on `main` — a sound design, and dead
+here for the same reason: a CI run that completed successfully on `main` produced
+no mutation run.
+
+Tested deliberately rather than inferred, because the API says nothing is wrong:
+`actions/permissions` reports `enabled: true`, every workflow reports
+`state: active`, and no workflow carries a `paths:` filter. The probe was a
+commit pushed straight to `main` touching `.github/workflows/`, with two minutes
+of polling after it. **Zero runs.** The kill line was simple — if events worked,
+that push creates a run — and it held.
+
+`mutation.yml` now carries `workflow_dispatch` so the gate is reachable while
+events are broken. Adding the trigger was not enough on its own: the job gated on
+`github.event.workflow_run.conclusion`, which is null on a dispatch, so the first
+dispatched run **skipped its only job and reported `completed`**. Read the job's
+conclusion, never the run's.
 
 ### 2. `origin/main` lies, and `git fetch` may not be able to correct it
 
