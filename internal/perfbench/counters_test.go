@@ -163,9 +163,21 @@ func (r *countingRepository) LinkAllToTemporaryRepository(path string) ditto.Tem
 
 // silentRunner answers every mutant without running anything, so this measures
 // sandbox construction rather than the test command.
-type silentRunner struct{}
+//
+// The first answer is green, because the first call is the baseline the
+// laboratory runs on unmutated code. Ok means the command failed, so a runner
+// that answered Ok every time would be describing a suite that is red before
+// anything is mutated — which is now refused, and rightly: it is how ditto's own
+// gate came to report 431 killed of 431 in 5.46 seconds.
+type silentRunner struct{ calls int }
 
-func (silentRunner) Test(ditto.TemporaryRepository) result.Result[string] {
+func (r *silentRunner) Test(ditto.TemporaryRepository) result.Result[string] {
+	r.calls++
+
+	if r.calls == 1 {
+		return result.Err[string]("")
+	}
+
 	return result.Ok("")
 }
 
@@ -179,7 +191,7 @@ func TestCounterSandboxesBuiltPerRelease(t *testing.T) {
 
 	t.Cleanup(func() { _ = temporaryDir.RemoveAll() })
 
-	ditto.New(repository, laboratory.New(silentRunner{}, temporaryDir), fakereporter.New()).
+	ditto.New(repository, laboratory.New(&silentRunner{}, temporaryDir), fakereporter.New()).
 		Release(defaultViruses()...)
 
 	// One sandbox serves the whole run. This used to equal the mutant count,
@@ -272,4 +284,44 @@ func TestCounterMutantsAndLaboratoryRunsPerRelease(t *testing.T) {
 	// dominant cost of any run. This is the number a native staged scope has
 	// to bring down.
 	assertCounter(t, "laboratoryRunsPerReleaseWholeFixture", laboratory.calls)
+}
+
+// countingRunner records executions of the test command, answering green on the
+// baseline and killed for every mutant after it.
+type countingRunner struct{ calls int }
+
+func (r *countingRunner) Test(ditto.TemporaryRepository) result.Result[string] {
+	r.calls++
+
+	if r.calls == 1 {
+		return result.Err[string]("")
+	}
+
+	return result.Ok("")
+}
+
+// TestCounterTestCommandInvocationsPerRelease measures what the release costs
+// through the laboratory ditto actually ships, rather than through a stand-in.
+//
+// Every other laboratory counter here replaces Laboratory with
+// countingLaboratory, so each of them measures how many times Release *asks* for
+// a run. None of them can see a run the laboratory makes on its own — and the
+// baseline check is exactly that. It was added, it costs one execution of the
+// test command per release, and no recorded counter moved: a cost nobody records
+// is one that grows without anybody noticing, which is the mirror of the rule
+// this file already enforces for gains.
+func TestCounterTestCommandInvocationsPerRelease(t *testing.T) {
+	t.Parallel()
+
+	root := writeFixtureRepository(t)
+	runner := &countingRunner{}
+
+	temporaryDir := fstemporarydir.New("dittoperf-")
+
+	t.Cleanup(func() { _ = temporaryDir.RemoveAll() })
+
+	ditto.New(fsrepository.New(root), laboratory.New(runner, temporaryDir), fakereporter.New()).
+		Release(defaultViruses()...)
+
+	assertCounter(t, "testCommandInvocationsPerReleaseWholeFixture", runner.calls)
 }
