@@ -6,6 +6,14 @@ on:
     types:
       - completed
 
+  # Lets the mutation gate be started by hand, for the same reason CI carries
+  # this: a workflow that only fires from another event cannot be exercised at
+  # all while events are not firing, and diagnosing that costs a commit each
+  # time. This repository is a fork, and no event trigger has ever produced a
+  # run here — push, pull_request and workflow_run alike. See
+  # .claude/skills/release/SKILL.md.
+  workflow_dispatch:
+
 jobs:
 
   Mutation:
