@@ -53,26 +53,9 @@ func TestSurvivorsAreDistinguishable(t *testing.T) {
 			path := name + ".go"
 			mutants := mutantsOf(t, path, source)
 
-			printed := map[string]int{}
-			addressAndVirus := map[string]int{}
+			printed, addressAndVirus := tally(t, path, mutants)
 
-			for _, mutant := range mutants {
-				line := survivorLine(mutant)
-
-				printed[line]++
-				addressAndVirus[mutant.Label()]++
-
-				if mutant.Address() == path {
-					t.Errorf("mutant %q carries no position, only its path", line)
-				}
-			}
-
-			for line, count := range printed {
-				if count > 1 {
-					t.Errorf("%d mutants print the identical line %q; a reader cannot tell them apart",
-						count, line)
-				}
-			}
+			refuseCollisions(t, printed)
 
 			// The change is not decoration, and this is what says so: on the
 			// nested disjunction two mutants share an address and a virus name,
@@ -85,6 +68,39 @@ func TestSurvivorsAreDistinguishable(t *testing.T) {
 					"that the change text is load-bearing: %v", addressAndVirus)
 			}
 		})
+	}
+}
+
+// tally counts the printed survivor lines and, separately, the labels alone —
+// the second is what the nested disjunction needs to prove the change is
+// load-bearing. It also refuses a mutant whose address never got past its path.
+func tally(t *testing.T, path string, mutants []*gomutatedfile.GoMutatedFile) (map[string]int, map[string]int) {
+	t.Helper()
+
+	printed := map[string]int{}
+	addressAndVirus := map[string]int{}
+
+	for _, mutant := range mutants {
+		line := survivorLine(mutant)
+
+		printed[line]++
+		addressAndVirus[mutant.Label()]++
+
+		if mutant.Address() == path {
+			t.Errorf("mutant %q carries no position, only its path", line)
+		}
+	}
+
+	return printed, addressAndVirus
+}
+
+func refuseCollisions(t *testing.T, printed map[string]int) {
+	t.Helper()
+
+	for line, count := range printed {
+		if count > 1 {
+			t.Errorf("%d mutants print the identical line %q; a reader cannot tell them apart", count, line)
+		}
 	}
 }
 
