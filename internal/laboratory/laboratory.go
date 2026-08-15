@@ -35,6 +35,8 @@ type Laboratory struct {
 
 	mutex sync.Mutex
 	idle  []ditto.TemporaryRepository
+
+	baseline sync.Once
 }
 
 func New(testRunner TestRunner, temporaryDirectory TemporaryDirectory) *Laboratory {
@@ -51,9 +53,41 @@ func (l *Laboratory) Test(
 	sandbox := l.acquire(repository)
 	defer l.hand(sandbox, file)
 
+	l.verifyBaseline(sandbox)
+
 	file.WriteTo(sandbox)
 
 	return future.Resolved(l.testRunner.Test(sandbox))
+}
+
+// verifyBaseline runs the suite once, on unmutated code, before any mutant is
+// scored.
+//
+// Ditto recognises a killed mutant by the test command exiting non-zero, and a
+// command that fails before it compiles anything exits non-zero too. Every
+// mutant is then scored killed and the report says 1.00 without naming a cause —
+// the highest number the tool can print, for a run that tested nothing.
+//
+// Measured on ditto's own gate: **431 of 431 mutants killed in 5.46 seconds**,
+// twelve milliseconds each, because `make` needed a git directory that a
+// sandbox does not have. docs/experiments/false-perfect-score.md.
+//
+// The gated path has refused this since it learned to read its own unselected
+// run, which it pays for anyway. This path has no such run, so it buys one: once
+// per release, not once per mutant, and `perf/baseline.json` ratchets that
+// number in both directions. One run is what the answer costs.
+//
+// The sandbox arrives clean — the mutation is written after this returns — so
+// what runs here is the repository's own suite.
+func (l *Laboratory) verifyBaseline(sandbox ditto.TemporaryRepository) {
+	l.baseline.Do(func() {
+		// Ok means the command failed. For a mutant that is a kill; with nothing
+		// mutated it is a suite that was already red.
+		if l.testRunner.Test(sandbox).IsOk() {
+			panic("ditto: the test command fails on unmutated code, so every mutant would be scored " +
+				"killed; refusing to score against a red baseline")
+		}
+	})
 }
 
 func (l *Laboratory) acquire(repository ditto.Repository) ditto.TemporaryRepository {
