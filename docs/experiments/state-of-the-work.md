@@ -30,7 +30,15 @@ The probes live in the repository and are skipped unless asked for by name. See
 - **Compiling once and selecting at run time reaches the same verdicts** for the
   families it admits. `schemata-feasibility.md`, `gating-non-bool.md`,
   `instrumentation-fidelity.md`.
-- **97 of 135 mutants gate on a real file** — 71.9%. `gated-gain-real.md`.
+- **The gating rate is a property of the file, not of real code**, and ranges
+  from **26% to 72%** across the real files measured: 97 of 135 on
+  `dharness/internal/jsconfig/jsconfig.go` (`gated-gain-real.md`) against 18 of 69
+  over three files of ditto's own tree (`gated-by-default.md`). This line used to
+  read "97 of 135 mutants gate on a real file — 71.9%"; that measurement is sound
+  and its own note names its limit as one file and one package. The qualifier was
+  what went missing on the way into this list. `Expand` admits comparisons and
+  integer literals, so a file of comparisons gates well and a file of string
+  handling and statements does not.
 - **The gain is real and unchanged by the fixes**: 135 invocations of the test
   command against **38**, reproduced a day apart by two instruments built
   independently. `gain-after-the-fixes.md`.
@@ -51,23 +59,35 @@ The probes live in the repository and are skipped unless asked for by name. See
 
 ## What is open
 
-1. **`go test -v` turns the gated path off.** `verboselaboratory` does not
-   forward `TestAll`. `backlog.md` entry 11, and the largest of these: `-v` is
-   what CI runs.
-2. **Nothing reports how much gated.** `Gated()` and `FellBack()` are counters
-   the report never prints, so a run that gated nothing looks like one that gated
-   everything. Same entry.
-3. **The baseline run is counted as a mutant's run** in `GoBuildRunner.Runs`.
+1. **The baseline run is counted as a mutant's run** in `GoBuildRunner.Runs`.
    Measured: 3 runs for 2 gated mutants. `changed-scope.md` H3.
-4. **The false kill on the ordinary path.** Two mechanisms measured and both
+2. **The false kill on the ordinary path.** Two mechanisms measured and both
    refuted — the AST reaches 61 of 94 and wrongly refuses 2 that compile; an
    in-process `go/types` check reaches 92 and refuses nothing, missing only a
    package it cannot read. `refusing-false-kills.md`, `backlog.md` entries 6
    and 10.
-5. **`Gated()` is opt-in.** Backward compatibility is measured; the default is a
-   decision nobody has taken.
-6. **A survivor has no address.** `backlog.md` entry 1, and a third of what this
-   tool exists for.
+3. **A decorator can drop an optional interface and nothing refuses it.**
+   `VerboseTemporaryDir` hides `RemoveAll`, and only the order of two lines in
+   `Release` keeps the sandboxes from leaking. `backlog.md` entry 12 — the same
+   shape as the entry 11 defect, still in the tree.
+4. **What raises the gating rate.** `Expand` admits comparisons and integer
+   literals and refuses everything else, which is what holds the rate to 26% on
+   files that are not mostly comparisons. Widening it is unmeasured and is the
+   question that would change the default.
+
+## Closed since this list was written
+
+- **`go test -v` turned the gated path off** — `verboselaboratory` now forwards
+  `TestAll`, and the report prints how much gated. Measured none of 7 under `-v`
+  before against 4 of 7 after. `forwarding-the-batch.md`, `backlog.md` entry 11.
+- **A survivor had no address** — every mutant now carries `path:line:col` and
+  the text it replaced. 129 of 135 mutants used to be indistinguishable from
+  another by what ditto printed. `mutant-address.md`, `backlog.md` entry 1.
+- **`Gated()` stays opt-in, and that is now measured rather than pending.** On a
+  repository the two paths report the same 69 mutants, 58 killed and 11 survivors
+  at identical addresses, for 51 invocations against 69 — but only 18 of 69
+  gated, against a line of half, so a compilation paid for a quarter of the
+  mutants is an option and not a default. `gated-by-default.md`.
 
 ## What must be decided, not measured
 

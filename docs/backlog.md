@@ -8,7 +8,33 @@ Nothing here is a promise.
 
 ---
 
-## 1. A surviving mutant has no address
+## 1. A surviving mutant has no address — **closed 2026-08-14**
+
+Closed rather than deleted, because entries 6 and 7 point at their neighbours by
+number and renumbering would silently redirect them.
+
+Every mutant now carries `path:line:col` and the text it replaced, read off the
+one `schemata.Difference` the tool already computes — no virus was touched and
+`viruses.NewInfection` kept its signature. Survivors are listed by address before
+any diff is rendered.
+
+The number that justified it, measured over 135 mutants of four gofmt'd files:
+**129 of them could not be told apart from another mutant by what ditto
+printed**. The mechanism was chosen by measurement rather than by preference, and
+the first round's three hypotheses were all refuted before the second round found
+the answer — `docs/experiments/mutant-address.md`.
+
+`TestSurvivorsAreDistinguishable` is the guard, and it was watched refusing
+before it was trusted.
+
+What remains open, and deliberately not done here: the survivor list is printed
+in the order the viruses produced the mutants, not in source order, so that it
+pairs one-to-one with the diffs below it. Whether a reader would rather have it
+sorted by address is a question about the loop, not about the address.
+
+The original observation follows.
+
+---
 
 **Observed 2026-08-13**, while using the wrapper against a real change.
 
@@ -213,7 +239,32 @@ the remaining two then fall.
 This is a conjecture born from that note's data, so it needs its own question and
 its own note rather than an amendment to that one.
 
-## 11. `go test -v` silently turns the gated path off
+## 11. `go test -v` silently turns the gated path off — **closed 2026-08-14**
+
+Closed in place, for the same reason entry 1 is: entries point at their
+neighbours by number.
+
+Both halves are done. `verboselaboratory` forwards `TestAll` when the laboratory
+below can take a batch, and `gatedreporter` prints how much of the run came from
+one compilation — zero spelled `none`, because `Gated: 0 of 7` scans as a
+formatting placeholder and this line exists to be noticed when it says zero.
+
+Measured on the golden fixture, eight runs, one variable
+(`docs/experiments/forwarding-the-batch.md`): **none of 7 gated under `-v` before,
+4 of 7 after, against a control of 4 of 7 without `-v` on both sides.** No verdict
+moved, and the three survivors' addresses are identical character for character
+between the gated `-v` run and the ungated one — a comparison only entry 1 made
+possible.
+
+The golden now runs the fixture under `-v` and refuses if the gate count differs
+from the quiet run. It was watched refusing: with the forward removed it fails
+with `the gated release gated 0 mutants under -v and 4 without it`. That is the
+guard the entry asked for — the defect had cost three measurements and was found
+by a hand-placed `panic`, because nothing in the suite could see it.
+
+The original observation follows.
+
+---
 
 `release.go` reads `testing.Verbose()` and wraps the gated laboratory in
 `verboselaboratory`. That decorator implements `Test` and **not** `TestAll`, so
@@ -237,3 +288,28 @@ What would close it: `verboselaboratory` forwards `TestAll` the way
 `testingtlaboratory` already does, and the report prints how many mutants were
 gated, so a path that silently did not engage is visible in the output rather
 than only in a panic someone thought to add.
+
+## 12. A decorator that drops a capability is refused by nothing
+
+`verboselaboratory` dropping `TestAll` was entry 11. The same shape is still in
+the tree, one interface over: `VerboseTemporaryDir` implements `New` and not
+`RemoveAll`, so wrapping the temporary directory in it hides the method that
+reclaims a run's sandboxes.
+
+Nothing goes wrong today, and only because of where one line sits.
+`reclaimSandboxes` is called in `Release` **before** the verbose block wraps
+`opts.TemporaryDir`, so the type assertion sees the unwrapped `FSTemporaryDir`.
+Move that call twelve lines down and every verbose run leaks its sandboxes with
+no test failing — which is exactly how entry 11 survived, and entry 2 is about
+the sandboxes that get left behind.
+
+The comment above the call says so, and a sentence is not a guard.
+
+What would close it: either every decorator forwards the optional interfaces it
+sits in front of, or something refuses a stack in which a capability present at
+the bottom cannot be reached from the top. The second is the general answer and
+it covers decorators nobody has written yet.
+
+**Not measured**, and named so it is not mistaken for cleared: whether
+`verboserepository` and `verbosetestrunner` have the same gap. Neither was
+examined.

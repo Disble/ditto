@@ -4,6 +4,105 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-14
+
+The release that stops paying to start `go test` once per mutant, and stops
+reporting survivors nobody can find. Every number below was measured, and the
+notes that produced them are in `docs/experiments/`.
+
+### Added
+
+- **`Gated()` runs a file's mutants from one compilation instead of one each.**
+  It instruments a source file so that every mutant of it becomes a gate chosen
+  at run time, compiles the package once with `go test -c`, and selects each
+  mutant by environment variable. Anything it cannot express that way keeps the
+  path ditto has always taken, so no mutant is lost by turning it on.
+
+  The reason it exists: **starting the test command costs 750–950 ms per mutant
+  regardless of what the suite does**, and that fixed toll is the dominant cost
+  of a run (`docs/experiments/test-invocation.md`).
+
+  **It is opt-in, and that is measured rather than assumed.** On a real
+  repository the two paths report the same 69 mutants, the same 58 killed and the
+  same 11 survivors at identical addresses, for 51 invocations of the test
+  command against 69 — but only **18 of 69 mutants gated**. The gating rate is a
+  property of the file: `Expand` admits comparisons and integer literals and
+  refuses everything else, so it ranges from **26% to 72%** across the real files
+  measured. A compilation paid for a quarter of the mutants is an option, not a
+  default. `docs/experiments/gated-by-default.md`.
+
+  It builds with `go test -c`, so it applies to a Go package and it replaces
+  `WithTestCommand` for the mutants it takes.
+
+- **A gated run says how much of it came from one compilation**, as
+  `Gated: 4 of 7 mutants ran from one compilation; 3 kept their own.` The two
+  counters existed and were exact; nothing printed them, which is why a run that
+  gated everything and a run that gated nothing looked identical for three
+  measurements. Zero is spelled `none`, so the line reads as a fact rather than
+  as an unfilled placeholder.
+
+  Ungated runs print nothing, so their output is unchanged.
+
+- **A performance baseline that ratchets in both directions.**
+  `perf/baseline.json` pins exact integer counters — files linked per mutant,
+  source parses per release, AST walks, laboratory runs — and `internal/perfbench`
+  fails when one grows *and* when one shrinks, until the gain is written down. A
+  gain nobody recorded is one that can be handed back later without anybody
+  noticing. Wall clock is measured and reported, never gated on.
+
+- **A golden release test.** `perf/baseline.json` pinned what a run costs and
+  nothing pinned what it *says*, so a change could flip a mutant from killed to
+  survived with every unit test green. The whole console output of a real run
+  against a throwaway fixture is now compared byte for byte, on both paths.
+
+### Fixed
+
+- **`Gated()` was a no-op under `go test -v`.** `Release` wraps the laboratory
+  stack in a verbose decorator whenever `testing.Verbose` is set, and that
+  decorator implemented `Test` and not `TestAll` — so the batch assertion failed
+  one layer above the gated laboratory, every mutant took its own compilation,
+  and nothing said so. `go test -v` is what CI runs.
+
+  Measured on the golden fixture, eight runs with one variable: **none of 7
+  mutants gated under `-v` before, 4 of 7 after**, against a control of 4 of 7
+  without `-v` on both sides. No verdict moved and no survivor's address
+  changed. `docs/experiments/forwarding-the-batch.md`.
+
+- **A red baseline used to report a perfect score.** The gated path already ran
+  the instrumented file with no mutant selected — which is the file's own suite —
+  and threw that verdict away. Under a suite that fails before anything is
+  mutated, every selected run fails too, so every mutant was scored killed and the
+  report said 1.00 without naming a cause. Measured at 4 killed of 4 against 1 of
+  4 for the same mutants. It now refuses to score against a red baseline.
+
+- **The test command inherited git's addressing.** Git exports `GIT_DIR` and
+  `GIT_INDEX_FILE` to hooks, as absolute paths in a linked worktree, and
+  everything spawned below inherited them — so a command meant for a sandbox
+  addressed the real repository instead, succeeded, and said nothing. Measured
+  twice: once leaving a commit named `fixture` on a live branch, once setting
+  `core.bare=true` in a shared config and rewriting the committer identity.
+  `internal/cmdtestrunner` now strips them, and a decoy test reproduces the
+  incident against the unchanged code.
+
+### Changed
+
+- **A survivor is now clickable.** Every mutant carries `path:line:col` and the
+  text it replaced, and survivors are listed by address before any diff is
+  rendered. A report of five survivors used to name the files and nothing more
+  precise: `go test` separates repeated subtest names with `#01` and `#02`, so
+  two mutants of one kind in one file were told apart by a counter that says
+  nothing about where either of them is.
+
+  Measured over 135 mutants of four gofmt'd files: **129 of them could not be
+  told apart from another mutant** by what ditto printed. The address is read off
+  the difference between the file before and after the mutation — the same one
+  the gated path already builds its gates from — so no virus was changed and
+  `viruses.NewInfection` keeps its signature. See
+  `docs/experiments/mutant-address.md`.
+
+  The label a mutant is reported under has changed shape, from
+  `path → Virus` to `path:line:col → Virus`. Subtest names change with it.
+
 ## [0.2.0] - 2026-08-13
 
 The first release that makes ditto cheaper to run rather than only better
