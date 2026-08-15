@@ -62,6 +62,11 @@ func (d *Diagnostic) Label() string {
 	return d.file.Label()
 }
 
+// Address and Change are what a survivor is reported as before any diff is
+// rendered: where it is, and what it wrote there.
+func (d *Diagnostic) Address() string { return d.file.Address() }
+func (d *Diagnostic) Change() string  { return d.file.Change() }
+
 func NewDiagnostic(res future.Future[result.Result[string]], file *gomutatedfile.GoMutatedFile) *Diagnostic {
 	return &Diagnostic{
 		res:  res,

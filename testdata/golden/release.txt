@@ -1,6 +1,13 @@
 ┃ Releasing Ditto…
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
-┃ 🧬 Mutant survived: calc/calc.go → Arithmetic
+┃ 🧬 Survivors
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+┃ calc/calc.go:12:11 → Arithmetic (- → +)
+┃ calc/calc.go:16:41 → Arithmetic (+ → -)
+┃ calc/calc.go:8:8 → Comparison (inserts =)
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┃ 🧬 Mutant survived: calc/calc.go:12:11 → Arithmetic
 ┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 ┃ --- calc/calc.go (original)
 ┃ +++ calc/calc.go (mutated with 'Arithmetic')
@@ -16,7 +23,7 @@
 ┃ 
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
-┃ 🧬 Mutant survived: calc/calc.go → Arithmetic
+┃ 🧬 Mutant survived: calc/calc.go:16:41 → Arithmetic
 ┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 ┃ --- calc/calc.go (original)
 ┃ +++ calc/calc.go (mutated with 'Arithmetic')
@@ -29,7 +36,7 @@
 ┃ 
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
-┃ 🧬 Mutant survived: calc/calc.go → Comparison
+┃ 🧬 Mutant survived: calc/calc.go:8:8 → Comparison
 ┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 ┃ --- calc/calc.go (original)
 ┃ +++ calc/calc.go (mutated with 'Comparison')
