@@ -123,9 +123,78 @@ When Ditto reports that it found a living mutant, it will print a diff of the ch
 
 ### Results
 
-Once all tests on all mutants have run, Ditto will print a report with the results. It will also exit with a non-zero exit code if the mutation score is below the minimum threshold (see [`WithMinimumThreshold`](#Settings) below). This is an example of the report:
+Once all tests on all mutants have run, Ditto will print a report with the results. It will also exit with a non-zero exit code if the mutation score is below the minimum threshold (see [`WithMinimumThreshold`](#Settings) below). This is an example of the report, exactly as ditto prints it — the byte-for-byte
+content of [`testdata/golden/release.txt`](testdata/golden/release.txt), which
+`TestReleaseGolden` compares a whole release against on both the ordinary and the
+gated path. It is text rather than a screenshot for one reason: a screenshot goes
+stale in silence, and this cannot — if the report changes, the golden test fails.
 
-![report sample](.assets/report.png)
+```text
+┃ Releasing Ditto…
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┃ 🧬 Survivors
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+┃ calc/calc.go:12:11 → Arithmetic (- → +)
+┃ calc/calc.go:16:41 → Arithmetic (+ → -)
+┃ calc/calc.go:8:8 → Comparison (inserts =)
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┃ 🧬 Mutant survived: calc/calc.go:12:11 → Arithmetic
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+┃ --- calc/calc.go (original)
+┃ +++ calc/calc.go (mutated with 'Arithmetic')
+┃ @@ -9,7 +9,7 @@
+┃  		return a - b
+┃  	}
+┃  
+┃ -	return b - a
+┃ +	return b + a
+┃  }
+┃  
+┃  // Uncovered is never called, so every mutant of it lives.
+┃ 
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┃ 🧬 Mutant survived: calc/calc.go:16:41 → Arithmetic
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+┃ --- calc/calc.go (original)
+┃ +++ calc/calc.go (mutated with 'Arithmetic')
+┃ @@ -13,4 +13,4 @@
+┃  }
+┃  
+┃  // Uncovered is never called, so every mutant of it lives.
+┃ -func Uncovered(a, b int) int { return a + b }
+┃ +func Uncovered(a, b int) int { return a - b }
+┃ 
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┃ 🧬 Mutant survived: calc/calc.go:8:8 → Comparison
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+┃ --- calc/calc.go (original)
+┃ +++ calc/calc.go (mutated with 'Comparison')
+┃ @@ -5,7 +5,7 @@
+┃  
+┃  // Partly is exercised from one side only, so some of its mutants live.
+┃  func Partly(a, b int) int {
+┃ -	if a > b {
+┃ +	if a >= b {
+┃  		return a - b
+┃  	}
+┃  
+┃ 
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ • Total:        7                    ┃
+┃ • Killed:       4                    ┃
+┃ • Survived:     3                    ┃
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┨
+┃ ✓ Score:     0.57 (minimum: 0.00)    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+Every survivor is listed by address before any diff is rendered, as
+`path:line:col → Virus (what it replaced)`, so it can be jumped to rather than
+hunted for in the log.
 
 More examples of the results can be found in the [`mutation.yml`](https://github.com/Disble/ditto/actions/workflows/mutation.yml) workflow.
 
@@ -155,6 +224,8 @@ The table below presents all available options.
 | `IgnoreSourceFiles`    | `nil`                                 | Regular expression representing source files to be filtered out and not suffer any mutations.                                                                                                                                                                                  |
 | `WithViruses`          | all available ([see below](#Viruses)) | A list of viruses to infect the source files with. You can also implement your own viruses (generic or even application-specific).                                                                                                                                             |
 | `ForceColors`          | `false`                               | Forces colors in logs. This is useful when running the mutation tests in a CI environment, for example.                                                                                                                                                                        |
+| `WithChangedRanges`    | `nil`                                 | Restricts the release to named byte ranges of named files, keyed by repository-relative path with forward slashes. Every mutant costs a full run of the test command, so mutating a line a change never touched is charged at the same rate as one that matters. A file with no entry is not mutated at all; a file with an empty range list is mutated whole. Keep the ranges beside their file — a byte offset only means something against the file it was measured in, and one flat set makes every file answer to every range. |
+| `Gated`                | `false`                               | Runs a file's mutants from one compilation instead of one each: the file is instrumented so every mutant becomes a gate chosen at run time, the package is compiled once with `go test -c`, and each mutant is selected by environment variable. Starting the test command costs 750–950 ms per mutant regardless of what the suite does, and that fixed toll is the dominant cost of a run. Anything it cannot express that way keeps the path ditto has always taken, so no mutant is lost by turning it on. It stays opt-in because the gating rate is a property of the file — measured between 26% and 72% across real files — and a compilation paid for a quarter of the mutants is an option rather than a default. |
 
 ## Viruses
 

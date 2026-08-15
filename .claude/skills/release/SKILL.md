@@ -1,10 +1,10 @@
 ---
 name: release
-description: "Trigger: release, cut a version, tag, publish, changelog, ship it, is this ready to release. Cutting a ditto release, and the four traps that make it not work the obvious way."
+description: "Trigger: release, cut a version, tag, publish, changelog, ship it, is this ready to release, why did no workflow run. Cutting a ditto release, and the traps that make it not work the obvious way."
 license: Apache-2.0
 metadata:
   author: "disble"
-  version: "1.0"
+  version: "2.0"
 ---
 
 ## Activation Contract
@@ -17,47 +17,44 @@ behind is written beside it.
 
 ## The four traps, in the order they bite
 
-### 1. This repository is a fork, so CI does not run on push or pull request
+### 1. A fork starts with every event trigger dead, and the API will not say so
 
-**`Disble/ditto` is a fork of `gtramontina/ooze`.** GitHub disables event-driven
-Actions on a fork. `push` and `pull_request` trigger nothing, whatever
-`on:` says in the workflow, and `actions/permissions` still reports
-`enabled: true`.
+**Resolved on 2026-08-15, and kept here because the symptom is unrecognisable
+without it.** `Disble/ditto` is a fork, and GitHub ships forks with event-driven
+Actions switched off. `push`, `pull_request` and `workflow_run` all did nothing,
+while `actions/permissions` reported `enabled: true`, every workflow reported
+`state: active`, and no workflow carried a `paths:` filter. Nothing in the
+configuration explained the silence.
 
-Measured 2026-08-14: pushing a 43-commit branch and opening a pull request
-against `main` produced **zero** workflow runs. Every run in the repository's
-history — three of them — has `event: workflow_dispatch`.
+It was settled by a probe with a kill line rather than by inference: a commit
+pushed straight to `main` touching `.github/workflows`, then two minutes of
+polling. **Zero runs.** Ten runs of ten in the repository's history carried
+`workflow_dispatch`.
 
-This is the trap that has already produced one wrong claim. "CI went green for
-the first time" on 2026-08-13 meant *a manually dispatched run went green*.
-Event-driven CI has never fired in this repository, and two releases were
-published believing otherwise.
+The fix is a single click in the fork's **Actions** tab — *"I understand my
+workflows, go ahead and enable them"* — and there is **no REST API for it**.
+After it, the same push produced four runs: CI, CodeQL, OSV-Scanner and the
+chained mutation gate.
 
-    # confirm before believing any green
-    gh api "repos/Disble/ditto/actions/runs?per_page=10" \
-      --jq '[.workflow_runs[].event] | unique'
+Two things this cost, and both are the reason it is written down:
 
-    # the only way to get CI evidence for a branch
-    gh workflow run ci.yml --repo Disble/ditto --ref <branch>
-    gh run watch <id> --repo Disble/ditto --exit-status
+- **CodeQL and OSV-Scanner had never run once.** The fork had three security and
+  quality gates that did not exist, and nobody could tell, because a workflow
+  that never runs also never fails.
+- **Two releases were published believing CI was green.** It was — manually
+  dispatched. "CI went green for the first time" meant a `workflow_dispatch`.
 
-**No event trigger works, not only `push` and `pull_request`.** `mutation.yml`
-fires on `workflow_run`, chained after CI on `main` — a sound design, and dead
-here for the same reason: a CI run that completed successfully on `main` produced
-no mutation run.
+Verify, rather than assume, whenever a run is missing:
 
-Tested deliberately rather than inferred, because the API says nothing is wrong:
-`actions/permissions` reports `enabled: true`, every workflow reports
-`state: active`, and no workflow carries a `paths:` filter. The probe was a
-commit pushed straight to `main` touching `.github/workflows/`, with two minutes
-of polling after it. **Zero runs.** The kill line was simple — if events worked,
-that push creates a run — and it held.
+    gh api "repos/Disble/ditto/actions/runs?per_page=50"       --jq '"total=" + (.total_count|tostring) + "  " + ([.workflow_runs[].event]|unique|join(","))'
 
-`mutation.yml` now carries `workflow_dispatch` so the gate is reachable while
-events are broken. Adding the trigger was not enough on its own: the job gated on
-`github.event.workflow_run.conclusion`, which is null on a dispatch, so the first
-dispatched run **skipped its only job and reported `completed`**. Read the job's
-conclusion, never the run's.
+If that list is only `workflow_dispatch`, event triggers are off whatever any
+setting claims.
+
+**A dispatched run can still do nothing.** `mutation.yml` chains off CI with
+`workflow_run`, and its job gated on `github.event.workflow_run.conclusion`,
+which is null on a dispatch — so the first dispatched run **skipped its only job
+and reported `completed`**. Read the conclusion of the **job**, never of the run.
 
 ### 2. `origin/main` lies, and `git fetch` may not be able to correct it
 
@@ -107,13 +104,18 @@ Always pass `--repo Disble/ditto`.
 4. **Commit through the hook.** `.githooks/pre-commit` runs `make lint
    test.failfast`. On Windows the target is `mingw32-make`; the hook looks for
    `make`, `mingw32-make` and `gmake` in that order. Never bypass it.
-5. **Push, open the pull request, then dispatch CI by hand** — see trap 1. The
-   pull request alone proves nothing here.
+5. **Push and open the pull request.** Since the fork opt-in (trap 1) that
+   triggers CI, CodeQL and OSV-Scanner on its own. If it does not, event
+   triggers have been turned off again — check before dispatching by hand,
+   because a dispatched green and an event green are not the same evidence.
 6. **Read the checks that do run.** SonarCloud is inherited from upstream and
    applies its own quality gate; it is not part of this project's own bar, and it
    is still red or green in public. Report which.
-7. **Tag and publish only after a green dispatched run**, and say in the release
-   notes which checks ran and which could not.
+7. **Tag and publish only after a green run on the exact commit being tagged.**
+   A rebase merge rewrites SHAs, so the branch's green belongs to a commit that
+   no longer exists on `main` — v0.3.0 nearly shipped that way. Re-run on the
+   merged head first, and say in the release notes which checks ran and which
+   could not.
 
 ## What must never happen
 
@@ -124,4 +126,11 @@ Always pass `--repo Disble/ditto`.
 - **Do not report a green suite as a green release.** The local gate is
   `make lint test.failfast`; the golden compares both paths byte for byte; and
   CI is a separate question that trap 1 answers.
+- **Do not report a perfect mutation score without reading what it cost.** The
+  gate once printed 431 of 431 killed, a flawless 1.00, in 5.46 seconds, because
+  `make` needed a git directory that a mutant sandbox does not have and ditto
+  reads a failing command as a killed mutant. The real numbers were 329 killed
+  and 102 survived. The laboratory now refuses to score against a red baseline,
+  so this exact failure cannot return silently — but a score is still a number
+  with a duration beside it, and the two have to agree.
 - **Do not add AI attribution to commits.** Conventional commits only.
