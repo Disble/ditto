@@ -9,9 +9,12 @@
 package gobuildrunner
 
 import (
+	"errors"
+	"go/build"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -23,6 +26,9 @@ import (
 // it is being asked for. Zero, or absent, selects none.
 const Selected = "DITTO_MUTANT"
 
+// errNoToolchain is what a build reports when no `go` binary could be resolved.
+var errNoToolchain = errors.New("ditto: no go toolchain found")
+
 // GoBuildRunner builds the tests of one package and then runs that binary.
 //
 // One package, because `go test -c` compiles one package's tests. That is the
@@ -32,13 +38,57 @@ type GoBuildRunner struct {
 	packagePath string
 	mutant      int
 
+	toolchain    string
 	binary       string
 	compilations int
 	runs         int
 }
 
 func New(packagePath string) *GoBuildRunner {
-	return &GoBuildRunner{packagePath: packagePath}
+	return &GoBuildRunner{packagePath: packagePath, toolchain: goToolchain()}
+}
+
+// Toolchain is the absolute path of the `go` binary this runner builds with, or
+// empty when none could be found.
+func (r *GoBuildRunner) Toolchain() string { return r.toolchain }
+
+// goToolchain resolves the compiler once, to an absolute path, instead of naming
+// it and letting the operating system search.
+//
+// Two reasons, pointing the same way. `exec.Command("go", …)` reads PATH at
+// every call, so a directory an attacker can write to — or prepend — decides
+// which compiler runs. That is SonarQube's go:S4036, and it is the same shape as
+// git's inherited addressing that `environment` below strips: something ambient
+// deciding what a subprocess really is.
+//
+// The other reason matters more here. Ditto exists to compare verdicts, and
+// building a mutant's tests with a different toolchain from the one running the
+// suite would make a disagreement that is nobody's mutation look like one that
+// is. GOROOT is the toolchain that built this binary, so it is preferred, and
+// PATH is the fallback for a GOROOT that is not on disk.
+//
+// It resolves to empty rather than panicking. A build that cannot happen is an
+// answer the caller already knows how to take: Built stays false and the file
+// falls back to the path ditto has always taken.
+func goToolchain() string {
+	name := "go"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+
+	if root := build.Default.GOROOT; root != "" {
+		candidate := filepath.Join(root, "bin", name)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+
+	found, err := exec.LookPath("go")
+	if err != nil {
+		return ""
+	}
+
+	return found
 }
 
 // Select is which mutant the next run asks the binary for.
@@ -74,12 +124,16 @@ func (r *GoBuildRunner) Test(repository ditto.TemporaryRepository) result.Result
 func (r *GoBuildRunner) build(root string) (string, error) {
 	r.compilations++
 
+	if r.toolchain == "" {
+		return "ditto: no go toolchain found to build with", errNoToolchain
+	}
+
 	binary := filepath.Join(root, "ditto.test")
 
 	// noctx wants CommandContext. The build has no cancellation contract today,
 	// for the same reason the test command has none: giving it one is an API
 	// decision rather than a lint fix. Recorded in docs/backlog.md.
-	command := exec.Command("go", "test", "-c", "-o", binary, r.packagePath) //nolint:noctx
+	command := exec.Command(r.toolchain, "test", "-c", "-o", binary, r.packagePath) //nolint:noctx,gosec // resolved to an absolute path in goToolchain
 	command.Dir = root
 	command.Env = environment(r.mutant)
 

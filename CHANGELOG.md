@@ -75,6 +75,16 @@ notes that produced them are in `docs/experiments/`.
   report said 1.00 without naming a cause. Measured at 4 killed of 4 against 1 of
   4 for the same mutants. It now refuses to score against a red baseline.
 
+- **The compiler was found through `PATH`.** `gobuildrunner` named `go` and let
+  the operating system search, which re-reads `PATH` at every call — so a
+  directory an attacker can write to, or prepend, decides which compiler runs
+  (SonarQube `go:S4036`, CWE-426). It is resolved once now, to an absolute path,
+  preferring the `GOROOT` toolchain that built the running binary.
+
+  The security reading is the smaller half. Ditto exists to compare verdicts, and
+  building a mutant's tests with a different toolchain from the one running the
+  suite would make a disagreement that is nobody's mutation look like one that is.
+
 - **The test command inherited git's addressing.** Git exports `GIT_DIR` and
   `GIT_INDEX_FILE` to hooks, as absolute paths in a linked worktree, and
   everything spawned below inherited them — so a command meant for a sandbox
