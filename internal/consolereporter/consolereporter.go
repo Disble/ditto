@@ -41,14 +41,26 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 
 	var killed, survived int
 
+	survivors := []*ditto.Diagnostic{}
+
 	for _, diagnostic := range r.diagnostics {
 		if diagnostic.IsOk() {
 			killed++
 		} else {
 			survived++
 
-			r.logDiff(diagnostic)
+			survivors = append(survivors, diagnostic)
 		}
+	}
+
+	// Addresses first, diffs after. Survivors are the only part of this report
+	// anybody acts on, and printing them after the diffs turned the report into
+	// an index into the log: the author scrolled back through every rendered
+	// diff to recover where each survivor landed.
+	r.logAddresses(survivors)
+
+	for _, diagnostic := range survivors {
+		r.logDiff(diagnostic)
 	}
 
 	res := result.Ok[any](nil)
@@ -71,6 +83,30 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 	r.logger.Logf("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛")
 
 	return res
+}
+
+// logAddresses prints one line per survivor: where it is, what hit it, and what
+// it wrote. It is the first thing on screen, and it says nothing at all when
+// nothing survived.
+func (r *ConsoleReporter) logAddresses(survivors []*ditto.Diagnostic) {
+	if len(survivors) == 0 {
+		return
+	}
+
+	r.logger.Logf("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅")
+	r.logger.Logf("┃ 🧬 " + color.BoldRed("Survivors"))
+	r.logger.Logf("┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
+
+	for _, survivor := range survivors {
+		line := survivor.Label()
+		if change := survivor.Change(); change != "" {
+			line += " (" + change + ")"
+		}
+
+		r.logger.Logf("┃ %s", line)
+	}
+
+	r.logger.Logf("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅")
 }
 
 func (r *ConsoleReporter) logDiff(diagnostic *ditto.Diagnostic) {

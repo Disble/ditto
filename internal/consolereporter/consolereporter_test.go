@@ -63,6 +63,11 @@ func TestConsoleReporterSummary(t *testing.T) {
 
 		assert.Equal(t, []string{
 			"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅",
+			"┃ 🧬 Survivors",
+			"┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
+			"┃ dummy.go → dummy",
+			"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅",
+			"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅",
 			"┃ 🧬 Mutant survived: dummy.go → dummy",
 			"┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
 			"┃ +dummy diff",
@@ -75,6 +80,43 @@ func TestConsoleReporterSummary(t *testing.T) {
 			"┃ ✓ Score:     0.00 (minimum: 0.00)    ┃",
 			"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
 		}, logger.LoggedLines())
+	})
+
+	// The survivor list is the answer; the diffs below are the evidence. Printing
+	// the evidence first is what made a reader grep the log for the address of
+	// each survivor, which is backlog entry 1.
+	t.Run("lists every survivor's address before any diff", func(t *testing.T) {
+		logger := fakelogger.New()
+		reporter := consolereporter.New(logger, stubdiffer.New("+dummy diff"), fakescorecalculator.Always(1), 0)
+
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
+			future.Resolved(result.Err[string]("mutant survived")),
+			gomutatedfile.New(
+				"Arithmetic",
+				"calc/calc.go",
+				[]byte("package calc\n\nfunc f() int { return 1 + 2 }\n"),
+				[]byte("package calc\n\nfunc f() int { return 1 - 2 }\n"),
+			)),
+		)
+		reporter.AddDiagnostic(ditto.NewDiagnostic(
+			future.Resolved(result.Err[string]("mutant survived")),
+			gomutatedfile.New(
+				"Comparison",
+				"calc/calc.go",
+				[]byte("package calc\n\nfunc g(a, b int) bool { return a > b }\n"),
+				[]byte("package calc\n\nfunc g(a, b int) bool { return a < b }\n"),
+			)),
+		)
+		reporter.Summarize()
+
+		assert.Equal(t, []string{
+			"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅",
+			"┃ 🧬 Survivors",
+			"┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
+			"┃ calc/calc.go:3:25 → Arithmetic (+ → -)",
+			"┃ calc/calc.go:3:34 → Comparison (> → <)",
+			"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅",
+		}, logger.LoggedLines()[:6])
 	})
 
 	t.Run("reports summary when there are multiple mixed diagnostics", func(t *testing.T) {
@@ -115,6 +157,13 @@ func TestConsoleReporterSummary(t *testing.T) {
 		reporter.Summarize()
 
 		assert.Equal(t, []string{
+			"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅",
+			"┃ 🧬 Survivors",
+			"┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
+			"┃ dummy.go → dummy",
+			"┃ dummy.go → dummy",
+			"┃ dummy.go → dummy",
+			"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅",
 			"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅",
 			"┃ 🧬 Mutant survived: dummy.go → dummy",
 			"┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
