@@ -148,6 +148,7 @@ func stagedCommand(args []string, out *os.File) error {
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
 	dry := flags.Bool("dry", false, "report what the staged change justifies and run nothing")
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
+	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "link" (default), "copy" or "hardlink"`)
 
 	var exclude excludes
 
@@ -171,6 +172,10 @@ func stagedCommand(args []string, out *os.File) error {
 	}
 	if *loud {
 		options = append(options, ditto.Verbose())
+	}
+
+	if *sandbox != "" {
+		options = append(options, ditto.WithSandboxStrategy(*sandbox))
 	}
 
 	return ditto.RunStaged(*directory, exclude, options...) //nolint:wrapcheck // this is the top of the program: the message is already the one a reader needs

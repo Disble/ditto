@@ -15,6 +15,16 @@ import (
 
 type FSRepository struct {
 	root string
+	// strategy is how each file reaches the sandbox: "link", "copy" or "hardlink".
+	strategy string
+}
+
+// NewWithStrategy materialises sandboxes the named way. See materialize.
+func NewWithStrategy(root, strategy string) *FSRepository {
+	repository := New(root)
+	repository.strategy = strategy
+
+	return repository
 }
 
 func New(root string) *FSRepository {
@@ -128,19 +138,76 @@ func (r *FSRepository) LinkAllToTemporaryRepository(temporaryPath string) ditto.
 			return fmt.Errorf("failed creating directory tree for '%s': %w", linkPath, err)
 		}
 
-		// G122 wants a root-scoped API here. Mirroring a repository as symlinks
-		// is what this function is for, and os.Root cannot express a link that
-		// points outside the temporary tree on purpose.
-		err = os.Symlink(absolutePath, linkPath) //nolint:gosec
-		if err != nil {
-			return fmt.Errorf("failed creating link from '%s' to '%s': %w", path, linkPath, err)
-		}
-
-		return nil
+		return r.materialize(absolutePath, linkPath, entry)
 	})
 	if err != nil {
 		panic(fmt.Errorf("failed scanning '%s': %w", r.root, err))
 	}
 
 	return NewTemporary(temporaryPath)
+}
+
+// materialize puts one file into the sandbox, as a copy or as a link.
+//
+// The difference is not an implementation detail. A symlink is a reference to a
+// file, not a copy of one, and the two part company wherever something inspects
+// what a path *is* rather than what it holds. `go:embed` is the instance that
+// found this: it refuses an irregular file, so a package with an embed directive
+// cannot build in a linked sandbox at all.
+func (r *FSRepository) materialize(source, destination string, entry fs.DirEntry) error {
+	switch r.strategy {
+	case "link":
+		// The old strategy, kept reachable because it is what every release before
+		// this one used and a measurement may want it back.
+		//
+		// G122 wants a root-scoped API here. Mirroring a repository as symlinks
+		// is what this branch is for, and os.Root cannot express a link that
+		// points outside the temporary tree on purpose.
+		if err := os.Symlink(source, destination); err != nil {
+			return fmt.Errorf("failed creating link from '%s' to '%s': %w", source, destination, err)
+		}
+
+		return nil
+	case "copy":
+		return copyFile(source, destination, entry)
+	case "hardlink", "":
+		// A hard link is a second name for the same bytes, so it IS a regular
+		// file and costs no copy. It is safe here only because Overwrite removes
+		// a file before writing a mutant: removing a name leaves the original
+		// one alone. A write in place would corrupt the repository instead.
+		if err := os.Link(source, destination); err == nil {
+			return nil
+		}
+
+		// Hard links cannot cross a filesystem, and a temporary directory often
+		// lives on another one. Falling back keeps the sandbox correct where the
+		// cheap path is unavailable.
+		return copyFile(source, destination, entry)
+	}
+
+	return fmt.Errorf("%w: %q", errUnknownStrategy, r.strategy)
+}
+
+// errUnknownStrategy names a sandbox strategy nothing implements.
+var errUnknownStrategy = errors.New("unknown sandbox strategy")
+
+func copyFile(source, destination string, entry fs.DirEntry) error {
+	info, err := entry.Info()
+	if err != nil {
+		return fmt.Errorf("failed reading '%s': %w", source, err)
+	}
+
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return fmt.Errorf("failed reading '%s': %w", source, err)
+	}
+
+	// G703 traces the destination back to the walked repository. Both ends are
+	// named by the caller — the root it asked to mutate and the temporary
+	// directory this run created — and the walk is what the function is for.
+	if err := os.WriteFile(destination, data, info.Mode().Perm()); err != nil { //nolint:gosec
+		return fmt.Errorf("failed writing '%s': %w", destination, err)
+	}
+
+	return nil
 }

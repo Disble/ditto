@@ -150,7 +150,16 @@ func TestFSRepository_LinkAllToTemporaryRepository(t *testing.T) {
 
 			info, err := entry.Info()
 			assert.NoError(t, err)
-			assert.True(t, info.Mode()&fs.ModeSymlink != 0)
+
+			// A regular file, and this is the assertion the sandbox exists for
+			// rather than a note about how it is built. Go refuses to embed an
+			// irregular file, so a sandbox of symlinks cannot build any package
+			// carrying an embed directive — measured on a real repository, where
+			// it reported a perfect score for nine mutants that never compiled.
+			// A hard link is a second name for the same bytes and satisfies this;
+			// a symlink does not.
+			assert.True(t, info.Mode().IsRegular(),
+				"%s is not a regular file, so go:embed would refuse it", path)
 
 			files = append(files, path)
 

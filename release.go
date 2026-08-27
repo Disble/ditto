@@ -54,6 +54,7 @@ func init() { //nolint:gochecknoinits // a flag must be registered before flag.P
 
 var defaultOptions = Options{ //nolint:gochecknoglobals
 	Repository:                fsrepository.New("."),
+	RepositoryRoot:            ".",
 	TestRunner:                cmdtestrunner.New("go", "test", "-count=1", "./..."),
 	TemporaryDir:              fstemporarydir.New("ditto-"),
 	MinimumThreshold:          1.0,
@@ -173,6 +174,10 @@ func newRelease(options []Option, hostVerbose bool) *release {
 	opts := defaultOptions
 	for _, option := range options {
 		opts = option(opts)
+	}
+
+	if opts.SandboxStrategy != "" {
+		opts.Repository = fsrepository.NewWithStrategy(opts.RepositoryRoot, opts.SandboxStrategy)
 	}
 
 	var logger ditto.Logger = iologger.New(os.Stdout)

@@ -4,6 +4,41 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A sandbox is materialised with hard links, not symbolic ones.** A symlink is
+  a reference to a file rather than a copy of one, and Go refuses to embed an
+  irregular file — so **no package carrying a `go:embed` directive could build in
+  a sandbox at all**. Every release before this one silently could not measure
+  them.
+
+  What that cost, measured on a real repository: it reported **9 mutants, 9
+  killed, a perfect 1.00** for a package that never compiled, because a failing
+  command is how ditto recognises a killed mutant. The truth is **8 killed and
+  one survivor** — a real gap in that package's tests that nobody could see.
+
+  A hard link is a second name for the same bytes: a regular file, which is what
+  `go:embed` requires, and no copy, which is what 1960 files per sandbox demands.
+  Three rounds with the order rotated: hard links **19.1-19.7s** against symlinks
+  **19.8-22.6s** and copies **34.2-39.4s**. Copying was the obvious answer and is
+  70% slower, so it is the fallback for a filesystem boundary rather than the
+  rule. `filesLinkedPerSandbox` did not move.
+
+  It is safe only because `Overwrite` removes a path before writing a mutant.
+  Removing a name leaves the original alone; a write in place would have
+  corrupted the repository being measured.
+
+  `WithSandboxStrategy` reaches the old behaviour for a measurement that wants
+  it. `docs/experiments/the-sandbox-is-a-reference.md`.
+
+- **A refusal says why the baseline is red**, carrying the test command's own
+  output. Without it the message named a red baseline and left the reader to
+  guess which of a hundred reasons it was, inside a sandbox they cannot open —
+  measured at four rounds of elimination over an embedded file the output named
+  on the first run.
+
 ## [0.4.0] - 2026-08-27
 
 The release that stops making callers build a test to get in. Ditto runs as a
