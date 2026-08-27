@@ -82,9 +82,16 @@ func TestLaboratoryRefusesARedBaseline(t *testing.T) {
 	subject := laboratory.New(runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
 	repository := fakerepository.New(fakerepository.FS{"source.go": source}, fakerepository.NewTemporary())
 
+	// The command's own output travels with the refusal, so a reader is told why
+	// the suite is red rather than only that it is. Without it the message names
+	// a red baseline and leaves the reader to guess which of a hundred reasons
+	// it is, in a sandbox they cannot look inside — measured at four rounds of
+	// detective work over an embedded file that the output would have named on
+	// the first.
 	assert.PanicsWithError(t,
 		"ditto: the test command fails on unmutated code, so every mutant would be scored "+
-			"killed; refusing to score against a red baseline",
+			"killed; refusing to score against a red baseline\n\n"+
+			"make: *** [makefile:13: /.hooks.log] Error 128",
 		func() {
 			subject.Test(repository, gomutatedfile.New("dummy-infection", "source.go", source, mutated))
 		})
