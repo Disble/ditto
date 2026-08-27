@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/Disble/ditto/internal/fsrepository"
@@ -182,4 +183,38 @@ func TestFSRepository_LinkAllToTemporaryRepository(t *testing.T) {
 	t.Run("results in a new temporary repository", func(t *testing.T) {
 		assert.Equal(t, fsrepository.NewTemporary(dir+"/linked"), temporaryRepository)
 	})
+}
+
+// TestDefaultStrategyHardLinksWhereItCan reports which path a sandbox actually
+// took, on whichever platform is running it.
+//
+// It exists because the fallback is silent and indistinguishable from success: a
+// hard link and a copy are both regular files, so every other assertion in this
+// package passes either way. Without this, "hard links work on Linux" would be a
+// claim CI cannot confirm or deny — it would go green on copies just as happily.
+//
+// The counters are deliberately not in perf/baseline.json. Hard links cannot
+// cross a filesystem, so the split depends on where the temporary directory
+// lives, and that file gates on integers that are the same on every machine.
+func TestDefaultStrategyHardLinksWhereItCan(t *testing.T) {
+	dir := t.TempDir()
+
+	assert.NoError(t, os.MkdirAll(dir+"/source/nested", 0o700))
+	assert.NoError(t, os.WriteFile(dir+"/source/a.go", []byte("package a\n"), 0o600))
+	assert.NoError(t, os.WriteFile(dir+"/source/nested/b.go", []byte("package b\n"), 0o600))
+
+	repository := fsrepository.New(dir + "/source")
+	repository.LinkAllToTemporaryRepository(dir + "/sandbox")
+
+	linked, copied := repository.HardLinked(), repository.Copied()
+	t.Logf("materialised %d file(s) by hard link and %d by copy on %s", linked, copied, runtime.GOOS)
+
+	assert.Equal(t, 2, linked+copied, "every file reaches the sandbox one way or the other")
+
+	// Source and sandbox are both under one t.TempDir, so they are on the same
+	// filesystem and the cheap path is available. A copy here means hard links
+	// are unavailable on this platform, which is worth failing over rather than
+	// discovering later in a timing.
+	assert.Equal(t, 0, copied,
+		"the temporary directory shares a filesystem with the source, so nothing should have needed copying")
 }

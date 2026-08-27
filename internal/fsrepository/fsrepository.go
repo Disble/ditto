@@ -17,6 +17,17 @@ type FSRepository struct {
 	root string
 	// strategy is how each file reaches the sandbox: "link", "copy" or "hardlink".
 	strategy string
+
+	// hardLinked and copied are exact counters, so which strategy actually ran
+	// can be read rather than assumed. A hard link and a copy are both regular
+	// files, so nothing downstream can tell them apart -- and the fallback is
+	// silent by design, which is exactly the kind of thing that goes unnoticed.
+	//
+	// They are NOT in perf/baseline.json: hard links cannot cross a filesystem,
+	// so the split depends on where a temporary directory lives and is not the
+	// machine-independent integer that file gates on.
+	hardLinked int
+	copied     int
 }
 
 // NewWithStrategy materialises sandboxes the named way. See materialize.
@@ -147,6 +158,12 @@ func (r *FSRepository) LinkAllToTemporaryRepository(temporaryPath string) ditto.
 	return NewTemporary(temporaryPath)
 }
 
+// HardLinked and Copied report how each file reached the sandboxes this
+// repository built. The fallback is silent by design, so without these nothing
+// can say which path a run actually took.
+func (r *FSRepository) HardLinked() int { return r.hardLinked }
+func (r *FSRepository) Copied() int     { return r.copied }
+
 // materialize puts one file into the sandbox, as a copy or as a link.
 //
 // The difference is not an implementation detail. A symlink is a reference to a
@@ -176,12 +193,16 @@ func (r *FSRepository) materialize(source, destination string, entry fs.DirEntry
 		// a file before writing a mutant: removing a name leaves the original
 		// one alone. A write in place would corrupt the repository instead.
 		if err := os.Link(source, destination); err == nil {
+			r.hardLinked++
+
 			return nil
 		}
 
 		// Hard links cannot cross a filesystem, and a temporary directory often
 		// lives on another one. Falling back keeps the sandbox correct where the
 		// cheap path is unavailable.
+		r.copied++
+
 		return copyFile(source, destination, entry)
 	}
 
