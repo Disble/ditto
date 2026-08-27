@@ -82,7 +82,7 @@ func TestLaboratoryRefusesARedBaseline(t *testing.T) {
 	subject := laboratory.New(runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
 	repository := fakerepository.New(fakerepository.FS{"source.go": source}, fakerepository.NewTemporary())
 
-	assert.PanicsWithValue(t,
+	assert.PanicsWithError(t,
 		"ditto: the test command fails on unmutated code, so every mutant would be scored "+
 			"killed; refusing to score against a red baseline",
 		func() {

@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/Disble/ditto"
 )
 
 // TestReleaseGolden runs a whole release against a throwaway copy of
@@ -291,5 +293,108 @@ func writeFile(t *testing.T, path, content string) {
 
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("writing %s: %v", path, err)
+	}
+}
+
+// TestRunSaysWhatReleaseSays holds the command line to the same golden the
+// library entry point is held to.
+//
+// The two entry points share everything below the first line of each — one
+// assembly, one order of decorators, one reporter — but sharing code is not the
+// claim worth pinning. The claim is that a caller gets the same verdicts either
+// way, and the only way to know that is to read what each one printed.
+//
+// What differs is the framing, not the report: a test binary ends its output
+// with its own PASS, and a command does not. That single line is removed here
+// and nothing else is normalised, so a report that drifted by one byte still
+// fails.
+func TestRunSaysWhatReleaseSays(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs a full release: one test process per mutant")
+	}
+
+	moduleRoot := moduleRoot(t)
+	project := t.TempDir()
+
+	copyTree(t, filepath.Join(moduleRoot, "testdata", "goldenproject"), project)
+	writeGoMod(t, project, moduleRoot)
+
+	tidy := command(t, project, "go", "mod", "tidy")
+
+	output, err := tidy.CombinedOutput()
+	if err != nil {
+		t.Fatalf("resolving the fixture's dependencies: %v\n%s", err, output)
+	}
+
+	// Built outside the fixture on purpose: a binary is not Go source and would
+	// not be mutated, but a command built into the tree it measures is a habit
+	// that stops being harmless the moment somebody builds a `.go` file there.
+	binary := filepath.Join(t.TempDir(), "ditto"+binarySuffix())
+	build := command(t, moduleRoot, "go", "build", "-o", binary, "./cmd/ditto")
+
+	output, err = build.CombinedOutput()
+	if err != nil {
+		t.Fatalf("building the command: %v\n%s", err, output)
+	}
+
+	run := command(t, project, binary,
+		"run",
+		"--root", project,
+		"--test-command", "go test -count=1 ./calc",
+		"--threshold", "0",
+	)
+
+	output, err = run.CombinedOutput()
+	if err != nil {
+		t.Fatalf("running the command: %v\n%s", err, output)
+	}
+
+	got := strings.ReplaceAll(string(output), "\r\n", "\n")
+	want := strings.TrimSuffix(readFile(t, filepath.Join(moduleRoot, "testdata", "golden", "release.txt")), "PASS\n")
+
+	if got != want {
+		t.Fatalf("the command said something different from the release.\n--- want ---\n%s\n--- got ---\n%s", want, got)
+	}
+}
+
+func binarySuffix() string {
+	if runtime.GOOS == "windows" {
+		return ".exe"
+	}
+
+	return ""
+}
+
+// TestRunReturnsTheRefusalInsteadOfPanicking is the difference between the two
+// entry points that a caller can actually feel.
+//
+// A red baseline stops a release: every mutant would be scored killed and the
+// report would say 1.00 for a run that tested nothing, so the laboratory panics
+// rather than score it. Inside a test binary that panic is the verdict and reads
+// correctly. From a command it does not — a process that panics prints a stack
+// and looks like a defect, and the one thing a gate must never do is make its
+// own refusal indistinguishable from being broken.
+func TestRunReturnsTheRefusalInsteadOfPanicking(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs the test command once")
+	}
+
+	project := t.TempDir()
+	writeFile(t, filepath.Join(project, "go.mod"), "module redbaseline\n\ngo 1.27\n")
+	writeFile(t, filepath.Join(project, "calc.go"), "package redbaseline\n\nfunc Add(a, b int) int { return a + b }\n")
+	writeFile(t, filepath.Join(project, "calc_test.go"),
+		"package redbaseline\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) { t.Fatal(\"red on purpose\") }\n")
+
+	err := ditto.Run(
+		ditto.WithRepositoryRoot(project),
+		ditto.WithTestCommand("go test -count=1 ./..."),
+		ditto.WithMinimumThreshold(0.0),
+	)
+	if err == nil {
+		t.Fatal("a red baseline was scored instead of refused")
+	}
+
+	if !strings.Contains(err.Error(), "refusing to score against a red baseline") {
+		t.Fatalf("the error does not name the red baseline: %v", err)
 	}
 }

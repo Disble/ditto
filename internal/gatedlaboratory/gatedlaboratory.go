@@ -118,8 +118,8 @@ func (l *GatedLaboratory) TestAll(
 	if first.IsOk() {
 		files[0].RestoreIn(sandbox)
 
-		panic("ditto: " + files[0].Path() + " fails its own suite with no mutant selected, so every " +
-			"mutant of it would be scored killed; refusing to score against a red baseline")
+		panic(ditto.NewRefusalError("ditto: " + files[0].Path() + " fails its own suite with no mutant selected, so every " +
+			"mutant of it would be scored killed; refusing to score against a red baseline"))
 	}
 
 	return l.selectEach(repository, files, planned.Selector, runner, sandbox)
