@@ -4,7 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-08-27
+
+The release that makes a sandbox a sandbox. Both entries below are the same
+defect seen from two sides, and both were found by measuring rather than by
+reading.
+
+### Changed
+
+- **A release copies the repository into its sandbox instead of linking it.** A
+  large repository pays a fixed ~15s once per release for it — 16.5s over four
+  mutants and 15.0s over nine on a 1960-file tree, because the sandbox is built
+  once. `WithSandboxStrategy` reaches `"link"` and `"hardlink"` for a caller who
+  has measured that their suite writes nothing.
 
 ### Fixed
 
