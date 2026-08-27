@@ -211,8 +211,14 @@ package's tests that nobody could see.
   the fallback is silent, and a copy is a regular file as well. So the split is
   now an exact counter — `HardLinked` and `Copied` — and a test fails if anything
   had to be copied while source and sandbox share a filesystem. On Windows it
-  reports 2 hard links and 0 copies; what Linux reports is read off CI rather
-  than assumed.
+  reports 2 hard links and 0 copies.
+
+  **Linux says the same, and it was checked rather than assumed.** CI on
+  `ubuntu-latest` is green on both Go legs for the commit that carries the
+  assertion, and reports `DONE 355 tests` — the same count as locally, so the new
+  test ran rather than being skipped past. A green there is `copied == 0` on
+  Linux: the cheap path is taken, not the fallback. The verdict arrives as an
+  exit code, which is the only form this project accepts.
 - **Nothing about the gated path**, which builds its own instrumented file and
   compiles it once. It shares the sandbox and was not separately measured.
 - **One repository's file count.** 1960 files is autoreas-bridge; the synthetic
