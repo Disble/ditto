@@ -205,8 +205,14 @@ package's tests that nobody could see.
 ## What this does NOT establish
 
 - **Whether anything outside `go:embed` differs.** H1 is undecidable, not passed.
-- **Windows only.** Hard links behave differently on other platforms and none was
-  measured. The fallback covers failure, not difference.
+- **~~Windows only~~ — withdrawn.** CI runs on `ubuntu-latest`, so the suite that
+  includes the regular-file assertion and both goldens passes on Linux too. But
+  green there proves the sandbox is *correct*, not that hard links were *used*:
+  the fallback is silent, and a copy is a regular file as well. So the split is
+  now an exact counter — `HardLinked` and `Copied` — and a test fails if anything
+  had to be copied while source and sandbox share a filesystem. On Windows it
+  reports 2 hard links and 0 copies; what Linux reports is read off CI rather
+  than assumed.
 - **Nothing about the gated path**, which builds its own instrumented file and
   compiles it once. It shares the sandbox and was not separately measured.
 - **One repository's file count.** 1960 files is autoreas-bridge; the synthetic
