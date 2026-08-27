@@ -87,6 +87,7 @@ func runCommand(args []string) error {
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
 	gated := flags.Bool("gated", false, "run a file's mutants from one compilation instead of one each")
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
+	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "hardlink" (default), "copy" or "link"`)
 
 	var exclude excludes
 
@@ -103,6 +104,10 @@ func runCommand(args []string) error {
 	options, err := optionsFor(*root, *testCommand, float32(*threshold), *gated, *loud, exclude)
 	if err != nil {
 		return err
+	}
+
+	if *sandbox != "" {
+		options = append(options, ditto.WithSandboxStrategy(*sandbox))
 	}
 
 	return ditto.Run(options...) //nolint:wrapcheck // this is the top of the program: the message is already the one a reader needs

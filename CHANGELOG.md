@@ -8,7 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **A sandbox is materialised with hard links, not symbolic ones.** A symlink is
+- **A sandbox is a copy of the repository, not a reference to it.** A symlink is
   a reference to a file rather than a copy of one, and Go refuses to embed an
   irregular file — so **no package carrying a `go:embed` directive could build in
   a sandbox at all**. Every release before this one silently could not measure
@@ -19,19 +19,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   command is how ditto recognises a killed mutant. The truth is **8 killed and
   one survivor** — a real gap in that package's tests that nobody could see.
 
-  A hard link is a second name for the same bytes: a regular file, which is what
-  `go:embed` requires, and no copy, which is what 1960 files per sandbox demands.
-  Three rounds with the order rotated: hard links **19.1-19.7s** against symlinks
-  **19.8-22.6s** and copies **34.2-39.4s**. Copying was the obvious answer and is
-  70% slower, so it is the fallback for a filesystem boundary rather than the
-  rule. `filesLinkedPerSandbox` did not move.
+  **And the second reason is worse than the first.** A symlink is written
+  *through* to its target, and a hard link shares the inode, so it is written
+  through too. A suite that writes a file -- a golden it updates, a fixture it
+  rewrites -- therefore writes into the repository being measured. Measured on a
+  fixture whose test rewrites one tracked file: under links and hard links the
+  source came back holding `REWRITTEN BY THE SUITE`; under copies, untouched.
 
-  It is safe only because `Overwrite` removes a path before writing a mutant.
-  Removing a name leaves the original alone; a write in place would have
-  corrupted the repository being measured.
+  ditto own mutant write was always safe, because `Overwrite` removes a path
+  before writing. That is why nobody noticed: the only writer anyone checked was
+  ditto.
 
-  `WithSandboxStrategy` reaches the old behaviour for a measurement that wants
-  it. `docs/experiments/the-sandbox-is-a-reference.md`.
+  The price is a **fixed** one, not a percentage: copying adds ~15s to a release
+  on a 1960-file repository however many mutants it runs -- 16.5s over four and
+  15.0s over nine. That is 85% of the smallest run and about 2% of a large one.
+  Against a tool that can silently edit the repository it was asked to measure,
+  it is worth paying.
+
+  `WithSandboxStrategy` reaches `"link"` and `"hardlink"` for a measurement that
+  wants them. `docs/experiments/the-sandbox-is-a-reference.md`.
 
 - **A refusal says why the baseline is red**, carrying the test command's own
   output. Without it the message named a red baseline and left the reader to

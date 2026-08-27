@@ -224,3 +224,78 @@ package's tests that nobody could see.
 - **One repository's file count.** 1960 files is autoreas-bridge; the synthetic
   fixture is 6 and dharness is smaller. The ratio between strategies at other
   sizes is unmeasured.
+
+---
+
+# Second round — H1 answered, and it corrects this note's own conclusion
+
+H1 was left undecidable: two `embed` sites had failed, but nothing outside
+`embed` had been shown to differ, and nothing had been built to try. It was
+buildable, and building it changed the answer.
+
+## The case
+
+A symlink is not only *irregular* — it is also **written through**. A hard link
+is not only *regular* — it also **shares the inode**, so it is written through
+too. Anything that writes an existing file inside the sandbox therefore writes
+into the repository being measured.
+
+That is not exotic. A suite updating a golden, rewriting a fixture, dropping a
+cache beside its source: all ordinary, all writes.
+
+**H1, restated and run.** *Prediction: a fixture whose test rewrites one tracked
+file leaves the source modified under links and unmodified under copies.
+Falsified if the source survives under links, or is modified under copies.*
+
+| Strategy | mutants | the source file afterwards |
+| --- | --- | --- |
+| symlink | 4 | `REWRITTEN BY THE SUITE` |
+| hard link | 4 | `REWRITTEN BY THE SUITE` |
+| copy | 4 | `ORIGINAL` |
+
+**H1 — corroborated.** The instrument was caught first: the initial run reported
+all three unchanged, which was not a result but `--sandbox` not existing on the
+`run` subcommand. Three identical usage errors read exactly like three identical
+measurements.
+
+## What that does to H5, which this note already concluded
+
+**H5 is corroborated for `embed` and refuted for safety.** A hard link fixes the
+build failure and does nothing about the write. The reasoning that admitted it
+checked `Overwrite` — ditto's own write, which removes the path first and is safe
+under every strategy — and never considered that the *suite under test* writes
+too. The only writer anyone checked was ditto.
+
+## And H2's number was right while its reading was wrong
+
+H2 was refuted on "copying costs under 500 ms": it costs far more. But **70%** was
+an artefact of dividing a fixed cost by a small run.
+
+| mutants | hard link | copy | delta |
+| --- | --- | --- | --- |
+| 4 | ~19.4 s | ~35.9 s | 16.5 s |
+| 9 | 70.2 s | 85.3 s | 15.0 s |
+
+The delta is **constant at ~15 s** on this 1960-file repository, because the
+sandbox is built once per release. That is 85% of a four-mutant run, 21% of a
+nine-mutant one, and about 2% of a hundred-mutant one. A fixed cost read as a
+percentage of the smallest possible run is the wrong number to decide on.
+
+## Conclusion, replacing the one above
+
+**Copy, and copy by default.** It is the only strategy under which a sandbox is a
+sandbox. The price is ~15 s once per release on a large repository, against a
+tool that can silently rewrite the repository it was asked to measure — and this
+project's own position is that a misleading verdict is a defect rather than a
+warning. Editing the subject is worse than misreporting it.
+
+`link` and `hardlink` stay reachable through `WithSandboxStrategy`, for a
+measurement that wants them. `TestASandboxWriteDoesNotReachTheSource` is the
+guard, and it was watched refusing under both.
+
+## What the second round still does not establish
+
+- **Whether anything else differs.** Two properties are now measured — identity,
+  through `embed`, and writes. There may be more; nothing else was tried.
+- **The delta on other repositories.** ~15 s is 1960 files; the synthetic fixture
+  is 6.
