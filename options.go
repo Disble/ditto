@@ -32,6 +32,9 @@ type Options struct {
 	ChangedRanges             map[string][]Range
 	Gated                     bool
 	Verbose                   bool
+	SandboxStrategy           string
+	// RepositoryRoot is kept beside Repository so a later option can rebuild it.
+	RepositoryRoot string
 }
 
 // Verbose prints what a run is doing as it does it.
@@ -97,6 +100,7 @@ func WithChangedRanges(ranges map[string][]Range) func(Options) Options {
 // not root itself.
 func WithRepositoryRoot(repositoryRoot string) func(Options) Options {
 	return func(options Options) Options {
+		options.RepositoryRoot = repositoryRoot
 		options.Repository = fsrepository.New(repositoryRoot)
 
 		return options
@@ -166,6 +170,21 @@ func WithViruses(virus viruses.Virus, rest ...viruses.Virus) func(Options) Optio
 func ForceColors() func(Options) Options {
 	return func(options Options) Options {
 		color.Force()
+
+		return options
+	}
+}
+
+// WithSandboxStrategy chooses how each file reaches a sandbox: "link", "copy"
+// or "hardlink".
+//
+// It exists to be measured rather than argued about. A symlink is a reference to
+// a file and not a copy of one, and Go refuses to embed an irregular file, so a
+// package with an embed directive cannot build in a linked sandbox.
+// See docs/experiments/the-sandbox-is-a-reference.md.
+func WithSandboxStrategy(strategy string) func(Options) Options {
+	return func(options Options) Options {
+		options.SandboxStrategy = strategy
 
 		return options
 	}

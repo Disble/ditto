@@ -373,7 +373,39 @@ it covers decorators nobody has written yet.
 `verboserepository` and `verbosetestrunner` have the same gap. Neither was
 examined.
 
-## 13. `go:embed` cannot work in the sandbox
+## 13. `go:embed` cannot work in the sandbox — **closed 2026-08-27**
+
+Closed the same day it was opened, because routing around it per repository was
+the wrong shape and saying so was the whole point.
+
+A sandbox is now materialised with **hard links, falling back to copies**. A hard
+link is a second name for the same bytes: it is a regular file, which is what
+`go:embed` requires and what a symlink is not, and it writes nothing, which is
+what 1960 files per sandbox demands. It is safe only because `Overwrite` removes
+a path before writing a mutant — removing a name leaves the original alone, where
+a write in place would have corrupted the repository being measured.
+
+Measured, three rounds with the order rotated, on a 1960-file repository:
+hard links **19.1-19.7s** against symlinks **19.8-22.6s**, and copies
+**34.2-39.4s**. Copying was the obvious answer and is 70% slower, which is why it
+is the fallback for a filesystem boundary rather than the rule.
+`filesLinkedPerSandbox` did not move, and that is the finding: the strategy that
+makes a sandbox usable costs what the one that did not cost.
+
+The fixture that failed now reports **9 mutants, 8 killed, 1 survived, 0.89** —
+against the 9 of 9 and a perfect 1.00 that a symlinked sandbox and a guardless
+ooze had been reporting for a package that never compiled. There is a real
+survivor in it that nobody could see.
+
+`docs/experiments/the-sandbox-is-a-reference.md`. What is still open there: no
+behaviour outside `embed` was shown to differ, so "it is a class" is recorded as
+undecidable rather than established; and hard links were measured on Windows only.
+
+The original observation follows.
+
+---
+
+## 13 (original). `go:embed` cannot work in the sandbox
 
 **Measured 2026-08-27**, while checking whether `ditto staged` could replace a
 wrapper in a repository that uses `//go:embed`.
