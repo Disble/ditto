@@ -2,6 +2,7 @@ package ditto
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/Disble/ditto/internal/iologger"
 	"github.com/Disble/ditto/internal/laboratory"
 	"github.com/Disble/ditto/internal/prettydiff"
+	"github.com/Disble/ditto/internal/result"
 	"github.com/Disble/ditto/internal/scopedrepository"
 	"github.com/Disble/ditto/internal/scorecalculator"
 	"github.com/Disble/ditto/internal/testingtlaboratory"
@@ -98,6 +100,76 @@ var defaultOptions = Options{ //nolint:gochecknoglobals
 func Release(t *testing.T, options ...Option) {
 	t.Helper()
 
+	rel := newRelease(options, verbose())
+
+	// Registered before the one below, so that LIFO runs the summary first and
+	// the sandboxes are still there while the report is being written.
+	t.Cleanup(rel.reclaim)
+	t.Cleanup(func() {
+		t.Helper()
+
+		if !rel.summarize().IsOk() {
+			t.Fail()
+		}
+	})
+
+	rel.lab = testingtlaboratory.New(t, rel.lab, rel.opts.Parallel)
+
+	rel.start()
+}
+
+// Run is the same release without a test binary around it.
+//
+// Everything a release does — reading the repository, mutating, scoring,
+// reporting — was already free of `testing`: internal/ditto takes a repository,
+// a laboratory and a reporter, and none of them knows what is driving. Only four
+// things in Release ever needed a *testing.T, and this is the same run with
+// other answers for them: cleanup by defer instead of t.Cleanup, an error
+// instead of t.Fail, no subtest per mutant, and verbosity asked for rather than
+// read off `go test`.
+//
+// It returns the refusal a red baseline panics with rather than letting it
+// through, because a command that panics cannot be told apart from one that
+// broke. Any other panic is still a defect and is re-raised untouched.
+func Run(options ...Option) error {
+	rel := newRelease(options, false)
+	defer rel.reclaim()
+
+	if err := rel.startWithoutPanicking(); err != nil {
+		return err
+	}
+
+	if !rel.summarize().IsOk() {
+		return ScoreBelowThresholdError{Minimum: rel.opts.MinimumThreshold}
+	}
+
+	return nil
+}
+
+// ScoreBelowThresholdError reports a run that finished and did not reach its bar.
+//
+// It is not the same answer as a refusal: the mutants ran, the number is real,
+// and it is lower than the caller asked for.
+type ScoreBelowThresholdError struct {
+	Minimum float32
+}
+
+func (e ScoreBelowThresholdError) Error() string {
+	return fmt.Sprintf("ditto: the mutation score is below the configured minimum of %.2f", e.Minimum)
+}
+
+// release is one configured run, assembled once and driven by either entry
+// point. Splitting it out is what keeps the two from drifting: there is one
+// order in which the decorators wrap, and both callers get it.
+type release struct {
+	opts      Options
+	logger    ditto.Logger
+	reporter  ditto.Reporter
+	lab       ditto.Laboratory
+	sandboxes interface{ RemoveAll() error }
+}
+
+func newRelease(options []Option, hostVerbose bool) *release {
 	opts := defaultOptions
 	for _, option := range options {
 		opts = option(opts)
@@ -112,7 +184,11 @@ func Release(t *testing.T, options ...Option) {
 		opts.MinimumThreshold,
 	)
 
-	reclaimSandboxes(t, opts.TemporaryDir, logger)
+	// Read before the decorators wrap it, because they do not forward this and
+	// a stack that hides RemoveAll leaks every sandbox the run built.
+	sandboxes, _ := opts.TemporaryDir.(interface{ RemoveAll() error })
+
+	loud := opts.Verbose || hostVerbose
 
 	if opts.IgnoreSourceFilesPatterns != nil {
 		opts.Repository = ignoredrepository.New(opts.IgnoreSourceFilesPatterns, opts.Repository)
@@ -122,60 +198,84 @@ func Release(t *testing.T, options ...Option) {
 		opts.Repository = scopedrepository.New(scopedRanges(opts.ChangedRanges), opts.Repository)
 	}
 
-	if verbose() {
+	if loud {
 		opts.Repository = verboserepository.New(logger, opts.Repository)
 		opts.TemporaryDir = verbosetemporarydir.New(logger, opts.TemporaryDir)
 		opts.TestRunner = verbosetestrunner.New(logger, opts.TestRunner)
 		reporter = verbosereporter.New(logger, reporter)
 	}
 
-	lab, gates := assemble(opts, logger)
+	lab, gates := assemble(opts, logger, loud)
 
-	// Wrapped here, after the verbose decorator and before the cleanup that
-	// summarises, so the counts are the last thing a run says.
+	// Wrapped here, after the verbose decorator and before anything summarises,
+	// so the counts are the last thing a run says.
 	if gates != nil {
 		reporter = gatedreporter.New(logger, gates, reporter)
 	}
 
-	t.Cleanup(func() {
-		t.Helper()
+	return &release{
+		opts:      opts,
+		logger:    logger,
+		reporter:  reporter,
+		lab:       lab,
+		sandboxes: sandboxes,
+	}
+}
 
-		res := reporter.Summarize()
-		if !res.IsOk() {
-			t.Fail()
-		}
-	})
-
-	lab = testingtlaboratory.New(t, lab, opts.Parallel)
-
-	logger.Logf("%s %s", color.Yellow("┃"), color.Green("Releasing Ditto…"))
-	ditto.New(opts.Repository, lab, reporter).Release(
-		opts.Viruses...,
+// start is the run itself, identical whichever entry point asked for it.
+func (r *release) start() {
+	r.logger.Logf("%s %s", color.Yellow("┃"), color.Green("Releasing Ditto…"))
+	ditto.New(r.opts.Repository, r.lab, r.reporter).Release(
+		r.opts.Viruses...,
 	)
 }
 
-// reclaimSandboxes registers the cleanup that removes what a run left behind.
+// startWithoutPanicking turns a refusal into a value and leaves every other
+// panic alone. Recovering more than the one type this package raises on purpose
+// would turn a defect into an exit code.
+func (r *release) startWithoutPanicking() error {
+	var stopped error
+
+	func() {
+		defer func() {
+			recovered := recover()
+			if recovered == nil {
+				return
+			}
+
+			refused, ok := recovered.(ditto.RefusalError)
+			if !ok {
+				panic(recovered)
+			}
+
+			stopped = refused
+		}()
+
+		r.start()
+	}()
+
+	return stopped
+}
+
+func (r *release) summarize() result.Result[any] {
+	return r.reporter.Summarize()
+}
+
+// reclaim removes what a run left behind.
 //
 // Sandboxes outlive each mutant now, so removing them belongs to the run rather
-// than to the loop that used to rebuild one per mutant. t.Cleanup covers a normal
+// than to the loop that used to rebuild one per mutant. It covers a normal
 // finish, a failed run and a t.Fatal. It cannot cover the process being killed —
-// that is what the owning process id in the directory name is for, so a later run
-// can tell an abandoned parent from one still in use. Registered before the
-// decorators wrap the temporary directory, because they do not forward this.
-func reclaimSandboxes(t *testing.T, temporaryDir laboratory.TemporaryDirectory, logger ditto.Logger) {
-	t.Helper()
-
-	sandboxes, ok := temporaryDir.(interface{ RemoveAll() error })
-	if !ok {
+// that is what the owning process id in the directory name is for, so a later
+// run can tell an abandoned parent from one still in use.
+func (r *release) reclaim() {
+	if r.sandboxes == nil {
 		return
 	}
 
-	t.Cleanup(func() {
-		err := sandboxes.RemoveAll()
-		if err != nil {
-			logger.Logf("%s %s", color.Yellow("┃"), err)
-		}
-	})
+	if err := r.sandboxes.RemoveAll(); err != nil {
+		r.logger.Logf("%s %s", color.Yellow("┃"), err)
+	}
 }
 
 // assemble stacks the laboratories, innermost first. Gated goes below verbose so
@@ -186,7 +286,7 @@ func reclaimSandboxes(t *testing.T, temporaryDir laboratory.TemporaryDirectory, 
 // are the only thing that can say whether the gated path engaged, and a decorator
 // above it cannot be asked. The pointer is nil, concretely rather than as an
 // interface holding a nil, when the run is not gated.
-func assemble(opts Options, logger ditto.Logger) (ditto.Laboratory, *gatedlaboratory.GatedLaboratory) {
+func assemble(opts Options, logger ditto.Logger, loud bool) (ditto.Laboratory, *gatedlaboratory.GatedLaboratory) {
 	var lab ditto.Laboratory = laboratory.New(opts.TestRunner, opts.TemporaryDir)
 
 	var gates *gatedlaboratory.GatedLaboratory
@@ -196,7 +296,7 @@ func assemble(opts Options, logger ditto.Logger) (ditto.Laboratory, *gatedlabora
 		lab = gates
 	}
 
-	if verbose() {
+	if loud {
 		lab = verboselaboratory.New(logger, lab)
 	}
 

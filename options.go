@@ -31,6 +31,21 @@ type Options struct {
 	Viruses                   []viruses.Virus
 	ChangedRanges             map[string][]Range
 	Gated                     bool
+	Verbose                   bool
+}
+
+// Verbose prints what a run is doing as it does it.
+//
+// Release reads `go test`'s own verbosity as well, because inside a test binary
+// that is where a reader has already said what they want. Run cannot: outside a
+// test binary `testing.Verbose` panics rather than answering, so a caller that
+// wants the same output asks for it here.
+func Verbose() func(Options) Options {
+	return func(options Options) Options {
+		options.Verbose = true
+
+		return options
+	}
 }
 
 // Gated runs a file's mutants from one compilation instead of one each.

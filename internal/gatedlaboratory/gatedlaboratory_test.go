@@ -105,7 +105,7 @@ func TestGatedLaboratory(t *testing.T) {
 		runner := &fakeRunner{built: true, redBaseline: true}
 		lab := gatedlaboratory.NewWithRunner(&countingLaboratory{}, fakeTemporary{}, runner)
 
-		assert.PanicsWithValue(t,
+		assert.PanicsWithError(t,
 			"ditto: calc/calc.go fails its own suite with no mutant selected, so every "+
 				"mutant of it would be scored killed; refusing to score against a red baseline",
 			func() {
