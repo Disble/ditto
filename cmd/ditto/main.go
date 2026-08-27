@@ -45,6 +45,8 @@ func command(args []string, help *os.File) error {
 	switch args[0] {
 	case "run":
 		return runCommand(args[1:])
+	case "staged":
+		return stagedCommand(args[1:], os.Stdout)
 	case "-h", "--help", "help":
 		usage(help)
 
@@ -59,7 +61,8 @@ func command(args []string, help *os.File) error {
 func usage(out *os.File) {
 	fmt.Fprint(out, `ditto — mutation testing for Go
 
-  ditto run [flags]    mutate a repository and report what survived
+  ditto run [flags]       mutate a repository and report what survived
+  ditto staged [flags]    mutate only what a staged change justifies
 
 Run `+"`ditto run -h`"+` for its flags.
 `)
@@ -136,4 +139,79 @@ func optionsFor(
 	}
 
 	return options, nil
+}
+
+func stagedCommand(args []string, out *os.File) error {
+	flags := flag.NewFlagSet("ditto staged", flag.ContinueOnError)
+	directory := flags.String("cwd", ".", "a directory inside the repository; its root is resolved from here")
+	testCommand := flags.String("test-command", "go test -count=1 ./...", "command that decides whether a mutant died")
+	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
+	dry := flags.Bool("dry", false, "report what the staged change justifies and run nothing")
+	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
+
+	var exclude excludes
+
+	flags.Var(&exclude, "exclude-prefix", "repository-relative prefix never worth mutating; repeatable")
+
+	if err := flags.Parse(args); err != nil {
+		return fmt.Errorf("reading the flags: %w", err)
+	}
+
+	if *threshold < 0 || *threshold > 1 {
+		return fmt.Errorf("--threshold is %.2f, and a mutation score is between 0 and 1", *threshold) //nolint:err113 // the number is the message
+	}
+
+	if *dry {
+		return reportPlan(*directory, exclude, out)
+	}
+
+	options := []ditto.Option{
+		ditto.WithTestCommand(*testCommand),
+		ditto.WithMinimumThreshold(float32(*threshold)),
+	}
+	if *loud {
+		options = append(options, ditto.Verbose())
+	}
+
+	return ditto.RunStaged(*directory, exclude, options...) //nolint:wrapcheck // this is the top of the program: the message is already the one a reader needs
+}
+
+// reportPlan answers what a staged change would cost without paying for it. A
+// dry run that materialised a sandbox or started a suite would not be one.
+func reportPlan(directory string, exclude excludes, out *os.File) error {
+	plan, err := ditto.PlanStaged(directory, exclude)
+	if err != nil {
+		return fmt.Errorf("reading the staged change: %w", err)
+	}
+
+	if !plan.Mutable() {
+		fmt.Fprintln(out, "ditto: nothing staged is worth mutating.")
+
+		return nil
+	}
+
+	fmt.Fprintf(out, "ditto: %d staged file(s) under %s\n", len(plan.Files), plan.Root)
+
+	for _, file := range plan.Files {
+		fmt.Fprintf(out, "  %s: %s\n", file, describeRanges(plan.Ranges[file]))
+	}
+
+	if !plan.Derived {
+		fmt.Fprintf(out, "  scope: %s\n", plan.Reason)
+	}
+
+	return nil
+}
+
+func describeRanges(ranges []ditto.Range) string {
+	if len(ranges) == 0 {
+		return "whole file"
+	}
+
+	spans := make([]string, 0, len(ranges))
+	for _, span := range ranges {
+		spans = append(spans, fmt.Sprintf("%d-%d", span.Start, span.End))
+	}
+
+	return strings.Join(spans, ",")
 }

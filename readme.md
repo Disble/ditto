@@ -74,11 +74,39 @@ Mutation testing is a great ally in developing a robust code base and a reliable
 
 ### Prerequisites
 
-In order to ensure that you get accurate results, make sure that test suite that Ditto will run is passing. Otherwise, Ditto will report as if all mutants have been killed.
+Make sure the test suite Ditto will run is passing. It no longer has to be taken on trust: Ditto runs the suite once on unmutated code before scoring anything, and refuses the run if it is already red. That guard exists because the alternative was measured — a red baseline used to report **431 of 431 mutants killed in 5.46 seconds**, a perfect score for a run that compiled nothing. It costs one invocation per release, never one per mutant.
 
 When Ditto reports that it found a living mutant, it will print a diff of the changes the virus made to the source file. The mutant source is printed using Go's [`go/format`](https://pkg.go.dev/go/format) package. This means that, if your source code isn't gofmt'd, the diff may contain some formatting changes that are not relevant to the mutation. This isn't a prerequisite per se, but for a better experience, it is recommended that you run `gofmt` on your source files.
 
-### Installation
+### From the command line
+
+Ditto also runs as a command, which is the shorter way in when what you want is
+a gate rather than a test:
+
+```shell
+go install github.com/Disble/ditto/cmd/ditto@latest
+
+ditto run --threshold 0.8                 # mutate the repository
+ditto staged --dry                        # what would a staged change cost?
+ditto staged --threshold 0.8              # mutate only what it justifies
+```
+
+`ditto staged` reads the change you have staged and nothing else: which files it
+touches, which of their bytes, and — the part that is easy to skip — it runs the
+suite against a checkout of the **index**, not of your working tree.
+
+That last one is not caution, it is the difference between two answers. Measured
+on a fixture built for it: with the release pointed at the worktree instead, and
+one tracked file left dirty and unstaged, **seven of eight verdicts moved** — a
+score of 0.13 against 1.00 for the identical eight mutants of an identical file.
+Checking that the staged files themselves are clean does not cover it, because
+the file that moved them was never staged.
+
+Policy stays with you: `--threshold`, `--test-command`, and `--exclude-prefix`
+(repeatable) are yours to set, and Ditto has an opinion about none of them
+beyond its defaults.
+
+### Installation as a library
 
 1. Install ditto:
 
