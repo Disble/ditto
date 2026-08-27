@@ -59,11 +59,16 @@ test.mutation: $(pre-reqs)
 # with `the Go language version (go1.26) used to build golangci-lint is lower
 # than the targeted Go version (1.27)`.
 #
-# The version stays pinned — backlog entry 4 is about what an unpinned linter
-# costs — but it is built here, with the toolchain this repository targets. One
-# pin, in one place, that cannot go stale against the floor. PATH already puts
-# .bin first, so this is the golangci-lint every target sees.
-golangci-lint-version := v2.12.2
+# Building it here, with the toolchain this repository targets, is what keeps
+# that from happening again: one pin, in one place, that cannot go stale against
+# the floor. PATH already puts .bin first, so this is the golangci-lint every
+# target sees, locally and in CI.
+#
+# The pin still had to move for 1.27, and rebuilding was not enough: 2.12.2
+# vendors honnef.co/go/tools v0.7.0, which panics building IR for Go 1.27's
+# internal/poll. That is a Linux-only crash — Windows has different sources for
+# that package — so a green local gate said nothing about it.
+golangci-lint-version := v2.13.1
 
 .bin/.golangci-lint-$(golangci-lint-version):
 	@mkdir -p .bin
