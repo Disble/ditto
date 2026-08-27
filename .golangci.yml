@@ -14,7 +14,14 @@ linters:
     # code that predates it rather than a defect, and turning them on would
     # mean rewriting inherited code to satisfy a rule nobody chose. Recorded in
     # docs/backlog.md rather than silently accepted forever.
-    - exhaustruct # every struct literal must name every field
+    # A renamed linter is a re-enabled linter. golangci-lint 2.13 renamed this
+    # one to `exhaustruct_v5`, the old name stopped matching anything, and 58
+    # findings came back on code nobody had changed — the same shape, and the
+    # same count, as the v1 to v2 migration this list was written for. Both
+    # names stay: the old one until the config drops support for it, the new one
+    # because that is what runs.
+    - exhaustruct    # every struct literal must name every field
+    - exhaustruct_v5 # the same linter, renamed in 2.13
     - funcorder   # declaration order convention
     - goconst     # repeated string literals, all of them in tests
     - lll         # line length

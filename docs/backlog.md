@@ -167,9 +167,29 @@ repository's own toolchain, and `PATH` already puts `.bin` first — so local an
 CI now run a binary built with the Go they are targeting. `devbox.json` no longer
 names it, which is what leaves one pin instead of two.
 
-The version did not move. Backlog entry 4 is about what an unpinned linter
-costs, and none of this is a reason to pay it: **a stale build and a wrong
-version are different problems**, and only the first one was ever here.
+**And then the version had to move anyway, which the sentence above got wrong.**
+It said a stale build and a wrong version were different problems and only the
+first was here. Rebuilt 2.12.2 got past the config check and CI failed again, on
+both legs, somewhere else entirely:
+
+    buildir: package "poll": unexpected expr: *ast.KeyValueExpr
+
+That is `honnef.co/go/tools@v0.7.0`, vendored inside 2.12.2, unable to build IR
+for Go 1.27's `internal/poll`. No build of 2.12.2 can analyse a 1.27 standard
+library, so the version was genuinely wrong and not merely stale.
+
+**Local green did not catch it, and the reason is worth keeping.** The same
+rebuilt 2.12.2 reported 0 issues on Windows. Linux and Windows have different
+`internal/poll` sources, and only the Linux one carries the syntax that panics.
+A local gate that agrees with itself proved nothing about the platform CI runs
+on — the same lesson as the false perfect score, one layer down.
+
+So the pin moved to **2.13.1**, and it cost exactly what this entry predicts a
+linter upgrade costs: `exhaustruct` was renamed to `exhaustruct_v5`, the old
+name in `.golangci.yml` stopped matching anything, and **58 findings came back**
+on code nobody had touched — the same shape and very nearly the same count as
+the v1-to-v2 migration above. Both names are now listed. `gomodguard` is
+deprecated in favour of `gomodguard_v2` and is the next one to do this.
 
 Also unmeasured and worth knowing: `devbox.lock` is stale. It pins `go@1.22.1`
 and `golangci-lint@1.61.0` while `devbox.json` declares 1.27.0 and 2.12.2, so
