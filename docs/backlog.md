@@ -137,6 +137,33 @@ first green run and what the maintainer runs locally. Pinned rather than
 floating because an unpinned linter means somebody else's release can turn this
 build red.
 
+**It recurred on 2026-08-27, and the pin was not the problem.** With Go 1.27.0
+installed and the floor still at 1.25, every commit was refused:
+
+    panic: file requires newer Go version go1.27 (application built with go1.26)
+
+Nothing in the repository asked for 1.27 — what golangci-lint could not
+type-check was the standard library shipped with the installed toolchain.
+Measured as pre-existing: on a clean `main` with zero changes, `make lint`
+panicked the same way, so no change had caused it.
+
+The version was not what needed moving. `go install …/golangci-lint@v2.12.2`
+under the local Go rebuilds **the same pin** with the current toolchain, and
+lint went to `0 issues` without enabling one new check. A bump to 2.13.1 would
+have brought the checks entry 4 is about; the toolchain mismatch would not have
+needed it.
+
+What this leaves open, and it is not measured: `devbox.json` names
+golangci-lint 2.12.2 as a nixpkgs package, whose own build toolchain is
+whatever nixpkgs used. If that is older than the Go the matrix installs, CI hits
+this panic where a local rebuild cannot help. The `latest` leg of the CI matrix
+is the canary — it is `continue-on-error: false`, so it fails loudly.
+
+Also unmeasured and worth knowing: `devbox.lock` is stale. It pins `go@1.22.1`
+and `golangci-lint@1.61.0` while `devbox.json` declares 1.27.0 and 2.12.2, so
+devbox has been re-resolving from the manifest and the lock records a state
+nothing runs.
+
 ## 5. The logo still belongs to upstream
 
 `.assets/logo.svg` is ooze's. The licence permits reuse, but the mark is the
