@@ -185,36 +185,43 @@ func TestFSRepository_LinkAllToTemporaryRepository(t *testing.T) {
 	})
 }
 
-// TestDefaultStrategyHardLinksWhereItCan reports which path a sandbox actually
-// took, on whichever platform is running it.
+// TestASandboxWriteDoesNotReachTheSource is what makes a sandbox a sandbox.
 //
-// It exists because the fallback is silent and indistinguishable from success: a
-// hard link and a copy are both regular files, so every other assertion in this
-// package passes either way. Without this, "hard links work on Linux" would be a
-// claim CI cannot confirm or deny — it would go green on copies just as happily.
+// A suite writes files. A golden it decides to update, a fixture it rewrites, a
+// cache it drops beside the source — all ordinary, and all of them land on the
+// repository being measured if the sandbox is a reference to it rather than a
+// copy of it. A symlink is written THROUGH to its target; a hard link shares the
+// inode, so it is written through too.
 //
-// The counters are deliberately not in perf/baseline.json. Hard links cannot
-// cross a filesystem, so the split depends on where the temporary directory
-// lives, and that file gates on integers that are the same on every machine.
-func TestDefaultStrategyHardLinksWhereItCan(t *testing.T) {
-	dir := t.TempDir()
+// Measured before this existed, on a fixture whose test rewrites one tracked
+// file: under links and hard links the source came back holding
+// `REWRITTEN BY THE SUITE`, and under copies it came back untouched.
+//
+// ditto own mutant write is safe under all three, because Overwrite removes the
+// path first. That is why nobody noticed: the only writer anyone checked was
+// ditto.
+func TestASandboxWriteDoesNotReachTheSource(t *testing.T) {
+	for _, strategy := range []string{"", "copy"} {
+		t.Run("strategy "+strategy, func(t *testing.T) {
+			dir := t.TempDir()
+			source := dir + "/source"
 
-	assert.NoError(t, os.MkdirAll(dir+"/source/nested", 0o700))
-	assert.NoError(t, os.WriteFile(dir+"/source/a.go", []byte("package a\n"), 0o600))
-	assert.NoError(t, os.WriteFile(dir+"/source/nested/b.go", []byte("package b\n"), 0o600))
+			assert.NoError(t, os.MkdirAll(source, 0o700))
+			assert.NoError(t, os.WriteFile(source+"/golden.txt", []byte("ORIGINAL"), 0o600))
 
-	repository := fsrepository.New(dir + "/source")
-	repository.LinkAllToTemporaryRepository(dir + "/sandbox")
+			repository := fsrepository.NewWithStrategy(source, strategy)
+			repository.LinkAllToTemporaryRepository(dir + "/sandbox")
 
-	linked, copied := repository.HardLinked(), repository.Copied()
-	t.Logf("materialised %d file(s) by hard link and %d by copy on %s", linked, copied, runtime.GOOS)
+			// Exactly what a suite does when it updates a golden: an ordinary
+			// write to an ordinary path, with no idea it is inside a sandbox.
+			assert.NoError(t, os.WriteFile(dir+"/sandbox/golden.txt", []byte("REWRITTEN BY THE SUITE"), 0o600))
 
-	assert.Equal(t, 2, linked+copied, "every file reaches the sandbox one way or the other")
+			still, err := os.ReadFile(source + "/golden.txt")
+			assert.NoError(t, err)
+			assert.Equal(t, "ORIGINAL", string(still),
+				"a write inside the sandbox reached the repository being measured")
+		})
+	}
 
-	// Source and sandbox are both under one t.TempDir, so they are on the same
-	// filesystem and the cheap path is available. A copy here means hard links
-	// are unavailable on this platform, which is worth failing over rather than
-	// discovering later in a timing.
-	assert.Equal(t, 0, copied,
-		"the temporary directory shares a filesystem with the source, so nothing should have needed copying")
+	t.Logf("running on %s", runtime.GOOS)
 }

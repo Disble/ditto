@@ -164,13 +164,31 @@ func (r *FSRepository) LinkAllToTemporaryRepository(temporaryPath string) ditto.
 func (r *FSRepository) HardLinked() int { return r.hardLinked }
 func (r *FSRepository) Copied() int     { return r.copied }
 
-// materialize puts one file into the sandbox, as a copy or as a link.
+// materialize puts one file into the sandbox. The default is a copy, and the
+// reason is that the other two are not sandboxes.
 //
-// The difference is not an implementation detail. A symlink is a reference to a
-// file, not a copy of one, and the two part company wherever something inspects
-// what a path *is* rather than what it holds. `go:embed` is the instance that
-// found this: it refuses an irregular file, so a package with an embed directive
-// cannot build in a linked sandbox at all.
+// A symlink is a reference to a file and a hard link is a second name for one.
+// Neither is a copy, and both part company with one wherever something inspects
+// what a path IS or WRITES to it.
+//
+// Reading found the first instance: `go:embed` refuses an irregular file, so no
+// package with an embed directive can build in a symlinked sandbox. That one
+// fails loudly.
+//
+// Writing found the second, and it does not. A suite that writes a file — a
+// golden it decides to update, a fixture it rewrites — writes THROUGH a symlink
+// to the target and THROUGH a hard link to the shared inode. Measured on a
+// fixture whose test rewrites one tracked file: under links and hard links the
+// source repository came back holding `REWRITTEN BY THE SUITE`; under copies it
+// came back untouched. A tool that silently edits the repository it was asked to
+// measure is worse than one that reports the wrong number.
+//
+// ditto own mutant write is safe either way — Overwrite removes the path before
+// writing, and removing a name leaves the original alone — which is exactly why
+// this went unnoticed: the only writer anyone checked was ditto.
+//
+// The cost is a fixed one. On a 1960-file repository, copying adds ~15s to a
+// release however many mutants it runs: 16.5s over four and 15.0s over nine.
 func (r *FSRepository) materialize(source, destination string, entry fs.DirEntry) error {
 	switch r.strategy {
 	case "link":
@@ -185,9 +203,11 @@ func (r *FSRepository) materialize(source, destination string, entry fs.DirEntry
 		}
 
 		return nil
-	case "copy":
+	case "copy", "":
+		r.copied++
+
 		return copyFile(source, destination, entry)
-	case "hardlink", "":
+	case "hardlink":
 		// A hard link is a second name for the same bytes, so it IS a regular
 		// file and costs no copy. It is safe here only because Overwrite removes
 		// a file before writing a mutant: removing a name leaves the original
