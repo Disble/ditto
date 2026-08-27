@@ -4,6 +4,70 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-27
+
+The release that stops making callers build a test to get in. Ditto runs as a
+command now, and it knows what a staged change justifies — which is the job
+every consumer had been writing for itself.
+
+### Breaking
+
+- **The Go floor is 1.27**, up from 1.25. Nothing in the code needs it; the
+  toolchain does, and a floor that never moves is one that eventually blocks the
+  tools. Consumers still on 1.26 have to move with it.
+
+### Added
+
+- **`ditto staged` mutates exactly what a staged change justifies.** It reads
+  which files the index touches, which of their bytes, and — the part that is
+  easy to skip — it runs the suite against a checkout of the **index**, not of
+  the working tree.
+
+  That last one is not caution, it is the difference between two answers.
+  Measured on a fixture built for it: with the release pointed at the worktree
+  instead, and one tracked file left dirty and unstaged, **seven of eight
+  verdicts moved** — a score of 0.13 against 1.00 for the identical eight mutants
+  of an identical file. Checking that the staged files themselves are clean does
+  not cover it, because the file that moved them was never staged.
+
+  Held against the wrapper it replaces, on two staged changes in a real
+  repository: **4 mutants, 1 killed, 3 survived** on one file and **9, 5, 4** on
+  two, identical on both paths, with the same survivors by mutator. The second
+  case is the control — the numbers had to move, and both moved together.
+  `docs/experiments/replacing-the-wrapper.md`.
+
+- **`cmd/ditto`, with `run` and `staged`.** `go install
+  github.com/Disble/ditto/cmd/ditto@latest`. Policy stays with the caller:
+  `--threshold`, `--test-command` and `--exclude-prefix` are flags, and ditto has
+  an opinion about none of them beyond its defaults. `--dry` answers what a
+  staged change would cost without paying for it.
+
+- **`ditto.Run`, a release that needs no `*testing.T`.** Everything below the
+  entry point was already free of `testing` — `Release` used `t` in exactly four
+  places — so this is the same run with other answers for them: cleanup by defer,
+  an error instead of `t.Fail`, no subtest per mutant, and `ditto.Verbose()`
+  instead of `testing.Verbose`, which panics outside a test binary.
+
+  A golden holds the command to the same bytes as the library, minus the `PASS`
+  a test binary adds and nothing else.
+
+- **`ditto.RunStaged` and `ditto.PlanStaged`** for callers that want the staged
+  pipeline without the command.
+
+### Fixed
+
+- **A red baseline reaches a command as an error, not a panic.** A process that
+  panics prints a stack and reads as a defect, and a gate must never make its own
+  refusal indistinguishable from being broken. Only that one type is recovered;
+  every other panic is re-raised untouched.
+
+### Unchanged, and measured to be
+
+The eight exact counters in `perf/baseline.json` did not move, including
+`sandboxesBuiltPerRelease`, whose own note records that it is registered through
+`t.Cleanup` in `Release` — which is precisely what this release restructured. The
+golden release output is byte-identical.
+
 ## [0.3.0] - 2026-08-14
 
 The release that stops paying to start `go test` once per mutant, and stops
