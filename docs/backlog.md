@@ -153,11 +153,23 @@ lint went to `0 issues` without enabling one new check. A bump to 2.13.1 would
 have brought the checks entry 4 is about; the toolchain mismatch would not have
 needed it.
 
-What this leaves open, and it is not measured: `devbox.json` names
-golangci-lint 2.12.2 as a nixpkgs package, whose own build toolchain is
-whatever nixpkgs used. If that is older than the Go the matrix installs, CI hits
-this panic where a local rebuild cannot help. The `latest` leg of the CI matrix
-is the canary — it is `continue-on-error: false`, so it fails loudly.
+**That open question was answered the same day, and the answer was yes.** The
+note above predicted that the nixpkgs golangci-lint would carry its own build
+toolchain and that CI would hit this where a local rebuild could not help. It
+did, on both legs of the matrix:
+
+    can't load config: the Go language version (go1.26) used to build
+    golangci-lint is lower than the targeted Go version (1.27)
+
+So the linter stopped being a package and became a build. `makefile` pins
+`golangci-lint-version` and installs that exact version into `.bin` with the
+repository's own toolchain, and `PATH` already puts `.bin` first — so local and
+CI now run a binary built with the Go they are targeting. `devbox.json` no longer
+names it, which is what leaves one pin instead of two.
+
+The version did not move. Backlog entry 4 is about what an unpinned linter
+costs, and none of this is a reason to pay it: **a stale build and a wrong
+version are different problems**, and only the first one was ever here.
 
 Also unmeasured and worth knowing: `devbox.lock` is stale. It pins `go@1.22.1`
 and `golangci-lint@1.61.0` while `devbox.json` declares 1.27.0 and 2.12.2, so
