@@ -30,18 +30,46 @@ $(git-dir)/.hooks.log:
 pre-reqs += $(git-dir)/.hooks.log
 endif
 
+# The goldens run real releases — one test process per mutant — so the root
+# package is the slow one and the timeout is about it rather than about the unit
+# tests. Measured on 2026-08-27: 22s for the release golden, 24s for the staged
+# one, 10s for the command-equals-library one, 67s for the package.
+#
+# 60s used to be the number and it was already marginal at 53s. A timeout that
+# the suite grows into is one that fails for the wrong reason and gets raised in
+# a hurry by whoever is unlucky; this one has room and a number beside it.
+test-timeout := 300s
+
 test: $(pre-reqs)
-	@gotestsum --format-hide-empty-pkg -- -race -cover -timeout=60s -shuffle=on ./...
+	@gotestsum --format-hide-empty-pkg -- -race -cover -timeout=$(test-timeout) -shuffle=on ./...
 .PHONY: test
 
 test.failfast: $(pre-reqs)
-	@gotestsum --format-hide-empty-pkg --max-fails=1 -- -timeout=60s -failfast ./...
+	@gotestsum --format-hide-empty-pkg --max-fails=1 -- -timeout=$(test-timeout) -failfast ./...
 .PHONY: test.failfast
 
 test.mutation: $(pre-reqs)
 	@go test -timeout=30m -count=1 -v -tags=mutation
 .PHONY: test.mutation
 
-lint: $(pre-reqs)
+# golangci-lint embeds the Go it was built with, and refuses a config targeting a
+# newer language version than that. A prebuilt binary therefore expires the day
+# the floor moves. Measured on 2026-08-27: a 1.27 floor against a linter built
+# with go1.26 refused every commit locally, and failed both legs of the CI matrix
+# with `the Go language version (go1.26) used to build golangci-lint is lower
+# than the targeted Go version (1.27)`.
+#
+# The version stays pinned — backlog entry 4 is about what an unpinned linter
+# costs — but it is built here, with the toolchain this repository targets. One
+# pin, in one place, that cannot go stale against the floor. PATH already puts
+# .bin first, so this is the golangci-lint every target sees.
+golangci-lint-version := v2.12.2
+
+.bin/.golangci-lint-$(golangci-lint-version):
+	@mkdir -p .bin
+	@GOBIN="$(CURDIR)/.bin" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(golangci-lint-version)
+	@touch $@
+
+lint: $(pre-reqs) .bin/.golangci-lint-$(golangci-lint-version)
 	@golangci-lint -v run
 .PHONY: lint
