@@ -83,9 +83,13 @@ func (l *Laboratory) verifyBaseline(sandbox ditto.TemporaryRepository) {
 	l.baseline.Do(func() {
 		// Ok means the command failed. For a mutant that is a kill; with nothing
 		// mutated it is a suite that was already red.
-		if l.testRunner.Test(sandbox).IsOk() {
+		res := l.testRunner.Test(sandbox)
+		if res.IsOk() {
+			// The command's own output travels with the refusal. Without it the
+			// reader is told a suite is red and left to guess which of a hundred
+			// reasons it is, in a sandbox they cannot see.
 			panic(ditto.NewRefusalError("ditto: the test command fails on unmutated code, so every mutant would be scored " +
-				"killed; refusing to score against a red baseline"))
+				"killed; refusing to score against a red baseline\n\n" + result.Output(res)))
 		}
 	})
 }

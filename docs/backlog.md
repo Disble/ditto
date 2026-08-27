@@ -372,3 +372,43 @@ it covers decorators nobody has written yet.
 **Not measured**, and named so it is not mistaken for cleared: whether
 `verboserepository` and `verbosetestrunner` have the same gap. Neither was
 examined.
+
+## 13. `go:embed` cannot work in the sandbox
+
+**Measured 2026-08-27**, while checking whether `ditto staged` could replace a
+wrapper in a repository that uses `//go:embed`.
+
+A release mirrors the repository as one symlink per file
+(`fsrepository.LinkAllToTemporaryRepository`). Go refuses to embed a symlink, so
+any package with an `embed` directive fails to build in the sandbox:
+
+    internal/tray/icon.go:8: pattern tray-icon.ico: cannot embed irregular file
+    main.go:11: pattern all:frontend/dist: contains no embeddable files
+    FAIL [setup failed]
+
+This is not about one repository's frontend. It is every `go:embed` in every
+package a release touches, and there is no way for a caller to work around it:
+the sandbox is built inside the run.
+
+**What it cost before it was found, and this is the part worth keeping.** The
+repository in question had been running mutation testing over that package with
+ooze, which has no baseline guard, and reading a failing command as a killed
+mutant. It reported **9 mutants, 9 killed, a score of 1.00** for a package that
+never compiled. Each mutant "died" in 0.92–2.32 s where one real run of the suite
+takes 4.95 s — the same signature, and the same cause, as the 431 of 431 in
+5.46 s in `docs/experiments/false-perfect-score.md`. Ditto refuses it now, which
+is how it was noticed at all.
+
+Also measured: with the guard refusing, the message named a red baseline and
+nothing else, and finding the embed took four rounds of elimination. The refusal
+now carries the test command's own output, which named it on the first run. That
+half is closed.
+
+What would close the rest: materialise the sandbox as copies rather than links,
+or copy the files an `embed` directive names. The first is simple and its cost is
+unmeasured — `filesLinkedPerSandbox` is 6 on the synthetic fixture and 164 on one
+real checkout, at ~0.45 ms per link, and a copy is not a link. The second is
+cheaper and needs the directives parsed, which is more code than it sounds.
+
+Until then, a repository that embeds anything can mutate only the packages that
+do not. `docs/experiments/the-embedded-frontend.md`.
