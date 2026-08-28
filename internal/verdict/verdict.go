@@ -47,6 +47,7 @@ const (
 // emits; tagliatelle wants camelCase and is overruled because this struct
 // decodes somebody else's format rather than defining one.
 type event struct {
+	Output      string `json:"Output"`      //nolint:tagliatelle // go test -json emits these names
 	Action      string `json:"Action"`      //nolint:tagliatelle // go test -json emits these names
 	FailedBuild string `json:"FailedBuild"` //nolint:tagliatelle // go test -json emits these names
 }
@@ -102,3 +103,42 @@ const (
 	bufferSize = 64 * 1024
 	maxLine    = 4 * 1024 * 1024
 )
+
+// Text rebuilds what a human would have seen, from a stream meant for a machine.
+//
+// The reason is only available when the test command emits `go test -json`, and
+// a refusal that prints raw events instead of the compiler's own words is worse
+// than the one it replaced. Output that was never the stream comes back
+// untouched: there is nothing to rebuild, and mangling it would lose the only
+// thing the reader has.
+func Text(output string) string {
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	scanner.Buffer(make([]byte, 0, bufferSize), maxLine)
+
+	rebuilt := strings.Builder{}
+	sawStream := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "{") {
+			continue
+		}
+
+		var decoded event
+		if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil || decoded.Action == "" {
+			continue
+		}
+
+		sawStream = true
+
+		rebuilt.WriteString(decoded.Output)
+	}
+
+	if !sawStream {
+		return output
+	}
+
+	return rebuilt.String()
+}

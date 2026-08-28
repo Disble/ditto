@@ -54,6 +54,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Reporting `Assertion` there would manufacture the very kills this exists to
   count.
 
+  **The report now says it.** A run whose kills were not all earned prints, under
+  the summary:
+
+      ┃ • Killed:       3
+      ┃ ✓ Score:     0.60 (minimum: 0.00)
+      ┃ 2 of the 3 kills above never compiled — no test earned them.
+
+  Measured on a fixture built for it: the honest score there is 1 of 3, and
+  `0.60` was indistinguishable from an earned 0.60 until this line existed. It
+  stays silent when every kill was earned, because a line printed on every run is
+  a line people stop reading.
+
+  Ditto's default test command gains `-json` -- **in both places it is defined**.
+  Changing only `release.go` left `cmd/ditto` on its own default and the CLI
+  captured plain text, which the suite could not see and running the binary
+  showed in one line.
+
 - **A counter for the repository, not for the fixture.**
   `mutantsPerReleaseOnThisRepository` records what one full run of the gate has
   to pay for: **660** today. Every other recorded counter measures a six-file

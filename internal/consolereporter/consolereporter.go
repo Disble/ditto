@@ -7,6 +7,7 @@ import (
 	"github.com/Disble/ditto/internal/ditto"
 	"github.com/Disble/ditto/internal/gomutatedfile"
 	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/internal/verdict"
 )
 
 type ConsoleReporter struct {
@@ -63,6 +64,14 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 		r.logDiff(diagnostic)
 	}
 
+	unearned := 0
+
+	for _, diagnostic := range r.diagnostics {
+		if diagnostic.IsOk() && diagnostic.Reason() == verdict.BuildFailed {
+			unearned++
+		}
+	}
+
 	res := result.Ok[any](nil)
 	scoreColor := color.BoldGreen
 	scoreIcon := "✓"
@@ -81,6 +90,8 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 	r.logger.Logf("┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┨")
 	r.logger.Logf("┃ " + scoreColor("%s Score: %8.2f (minimum: %.2f)", scoreIcon, score, r.minimumThreshold) + "    ┃")
 	r.logger.Logf("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛")
+
+	r.logUnearned(unearned, killed)
 
 	return res
 }
@@ -121,4 +132,24 @@ func (r *ConsoleReporter) logDiff(diagnostic *ditto.Diagnostic) {
 
 	r.logger.Logf(strings.Join(diff, "\n"))
 	r.logger.Logf("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅")
+}
+
+// logUnearned says how many of the kills above nobody's test earned.
+//
+// A mutant that never compiled makes the test command exit non-zero, which is
+// how ditto recognises a kill, so it is scored as caught by a suite that never
+// ran it. Measured on one file: 10 of 50 kills, plus a hung mutant, 22% in all.
+// The number people act on carried them silently.
+//
+// It says nothing when there are none, because a line printed on every run is a
+// line people stop reading. And it can only see what the test command told it:
+// the reason is read from `go test -json`, and a command that emits something
+// else yields no reason rather than a guess. See docs/metrics.md, metric 2.
+func (r *ConsoleReporter) logUnearned(unearned, killed int) {
+	if unearned == 0 {
+		return
+	}
+
+	r.logger.Logf("┃ %s", color.BoldRed(
+		"%d of the %d kills above never compiled — no test earned them.", unearned, killed))
 }
