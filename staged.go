@@ -2,6 +2,7 @@ package ditto
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Disble/ditto/internal/staged"
 )
@@ -91,6 +92,26 @@ func RunStaged(directory string, excludePrefixes []string, options ...Option) er
 		return fmt.Errorf("materialising the staged content: %w", err)
 	}
 	defer sandbox.Close()
+
+	// What git does not carry, named one path at a time by the repository. See
+	// staged.Config: the index stays what is measured, and this only fills what
+	// it never had.
+	config, err := repository.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("reading the repository configuration: %w", err)
+	}
+
+	copied, err := repository.CopyGenerated(sandbox, config.Generated)
+	if err != nil {
+		return fmt.Errorf("copying generated paths: %w", err)
+	}
+
+	// Said out loud, because these are the only bytes in the sandbox that did
+	// not come from the index, and a reader deciding whether to trust a verdict
+	// deserves to know which ones those are.
+	for _, name := range copied {
+		fmt.Fprintf(os.Stdout, "ditto: %s is generated and untracked; copied from the working tree.\n", name)
+	}
 
 	scoped := append([]Option{
 		WithRepositoryRoot(sandbox.Root),
