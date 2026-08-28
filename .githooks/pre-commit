@@ -22,4 +22,4 @@ if [ -z "${MAKE:-}" ]; then
 	exit 1
 fi
 
-CPUS=1 "$MAKE" lint test.failfast
+CPUS=1 "$MAKE" lint test.failfast test.counters

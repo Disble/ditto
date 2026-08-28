@@ -1,6 +1,6 @@
 {
   "recorded": "2026-08-15",
-  "note": "Exact counters measured against the synthetic fixture in internal/perfbench. These are integers, not timings: identical on every machine, unaffected by ambient load. internal/perfbench/counters_test.go fails when one grows (a regression) and also when one shrinks (an unrecorded gain). Wall clock is never gated here; see the benchmarks for why.",
+  "note": "Exact counters measured against the synthetic fixture in internal/perfbench, plus one measured against this repository itself (mutantsPerReleaseOnThisRepository). These are integers, not timings: identical on every machine, unaffected by ambient load. internal/perfbench/counters_test.go fails when one grows (a regression) and also when one shrinks (an unrecorded gain). Wall clock is never gated here; see the benchmarks for why.",
   "fixture": {
     "sourceFiles": 4,
     "functionsPerFile": 3,
@@ -16,7 +16,8 @@
     "sandboxesBuiltPerRelease": 1,
     "laboratoryRunsForOneChangedFunction": 4,
     "laboratoryRunsForOneChangedFunctionInEachOfTwoFiles": 8,
-    "testCommandInvocationsPerReleaseWholeFixture": 49
+    "testCommandInvocationsPerReleaseWholeFixture": 49,
+    "mutantsPerReleaseOnThisRepository": 660
   },
   "targets": {
     "sourceParsesPerReleaseWithThreeViruses": "Reached: 4, one parse per source file, down from 12. GoSourceFile.Incubate now takes the whole mutator set and parses once for all of them. With the default 14 mutators this is 14 parses per file reduced to 1.",
@@ -26,6 +27,7 @@
     "sandboxesBuiltPerRelease": "Reached 1, down from one per mutant (48 on this fixture). Laboratory pools sandboxes and restores the mutated file before handing one back, so a sequential run builds exactly one and a parallel run builds as many as its peak concurrency. Removal moved to the end of the run, registered through t.Cleanup in Release.",
     "laboratoryRunsForOneChangedFunction": "4, the mutators that fire on one changed line and nothing else in the repository. This is what WithChangedRanges buys: without it the same fixture charges 48.",
     "laboratoryRunsForOneChangedFunctionInEachOfTwoFiles": "8, exactly twice the single-file number. The two ranges name offsets that exist in both files, because every fixture file has the same byte layout, so a scope holding one flat set of ranges would charge 16 and grow as the square of the file count. Keeping the ranges beside their file makes that impossible rather than merely unlikely.",
-    "testCommandInvocationsPerReleaseWholeFixture": "49 for the 48 mutants of the whole fixture, plus one. That one is the baseline: the laboratory runs the suite once on unmutated code before scoring anything, because a test command that fails before it compiles fails for every mutant too, and ditto recognises a killed mutant by exactly that. Measured on ditto's own gate before the guard existed: 431 of 431 killed in 5.46 seconds, a perfect score for a run that compiled nothing. Every other laboratory counter here goes through a stand-in and cannot see a run the laboratory makes on its own, which is why this one exists — a cost nobody records is one that grows unnoticed, the mirror of the unrecorded gain this file already refuses. It must not grow: one baseline per release, never one per mutant."
+    "testCommandInvocationsPerReleaseWholeFixture": "49 for the 48 mutants of the whole fixture, plus one. That one is the baseline: the laboratory runs the suite once on unmutated code before scoring anything, because a test command that fails before it compiles fails for every mutant too, and ditto recognises a killed mutant by exactly that. Measured on ditto's own gate before the guard existed: 431 of 431 killed in 5.46 seconds, a perfect score for a run that compiled nothing. Every other laboratory counter here goes through a stand-in and cannot see a run the laboratory makes on its own, which is why this one exists — a cost nobody records is one that grows unnoticed, the mirror of the unrecorded gain this file already refuses. It must not grow: one baseline per release, never one per mutant.",
+    "mutantsPerReleaseOnThisRepository": "660, what one full run of the gate has to pay for. Every other counter here is measured against the six-file fixture, which does not change when the repository does -- so all eight stayed green while the real cost grew from 431 mutants to 660 between 2026-08-15 and 2026-08-28 and pushed the gate past its 30-minute timeout. Measured on the two CI logs: cost per mutant moved 2.269s to 2.435s, seven percent, while the count moved forty-three; and every new mutant belonged to a file that did not exist in August -- internal/staged (133), cmd/ditto/main.go (59), staged.go (21), internal/filecopy (9). No old file grew. This counter is what perfbench's own doc comment already promised in prose: 'how many mutants a scope produces -- these are integers, identical on every machine, and a change in one is always meaningful.' It was the one number in that sentence nothing measured. It grows when code is added, and that is the point: the growth is real cost and has to be written down rather than discovered by a timeout. Scoped exactly like ditto_mutation_test.go, so it speaks for the run it is named after. Counting costs no test command and no sandbox. docs/experiments/counting-the-real-repository.md."
   }
 }

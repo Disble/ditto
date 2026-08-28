@@ -48,6 +48,13 @@ test.failfast: $(pre-reqs)
 	@gotestsum --format-hide-empty-pkg --max-fails=1 -- -timeout=$(test-timeout) -failfast ./...
 .PHONY: test.failfast
 
+# The counters that read this repository rather than a fixture. They are behind
+# a tag because ditto's sandbox runs `./...` inside every mutant, and a counter
+# that reads the mutated tree answers for the mutant instead of measuring it.
+test.counters: $(pre-reqs)
+	@gotestsum --format-hide-empty-pkg -- -tags=livetree -timeout=$(test-timeout) -count=1 ./internal/perfbench/
+.PHONY: test.counters
+
 test.mutation: $(pre-reqs)
 	@go test -timeout=30m -count=1 -v -tags=mutation
 .PHONY: test.mutation
