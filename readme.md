@@ -252,6 +252,17 @@ More examples of the results can be found in the [`mutation.yml`](https://github
 
 ## Settings
 
+Ditto is configured in two places, and they answer different questions.
+
+**Options** say how to run: threshold, test command, viruses, scope. They are
+passed in code, or as flags by `cmd/ditto`, and they are described below.
+
+**`.ditto.json`** says what the repository *is*: the generated paths git does not
+carry, which a sandbox built from the index would otherwise be missing. It is a
+property of the repository rather than of a run, which is why it lives in a file
+and not in a flag — see [When the index is not the whole
+story](#when-the-index-is-not-the-whole-story).
+
 Ditto's [`Release`](release.go) method takes variadic [`Options`](options.go), like so:
 
 ```go

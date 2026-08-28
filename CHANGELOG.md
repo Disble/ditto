@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`ditto staged -h` was advertising a default that changed two releases ago.**
+  It said `"link" (default)` for `--sandbox`; the default has been `copy` since
+  0.5.0. A help text that misstates a default is worse than one that omits it.
+- **`-h` exits 0.** `flag` reports a help request as an error under
+  `ContinueOnError`, and passing it back made asking for help look like failing.
+
+### Documentation
+
+- `.ditto.json` is now named where people actually look: the `Settings` section
+  of the readme, the doc comments on `RunStaged` and `PlanStaged` — which is what
+  pkg.go.dev shows, and the only documentation a library consumer sees — and
+  `ditto staged -h`, which has no flag to reveal it and therefore says so in
+  `flags.Usage`.
+- The release skill grew a checklist for exactly this. It shipped in 0.6.0
+  documented in two of five surfaces, and the CHANGELOG being the hardest one to
+  forget is why the others get missed.
+
 ## [0.6.0] - 2026-08-28
 
 ### Added
