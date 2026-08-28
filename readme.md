@@ -175,6 +175,14 @@ named because the build needs it.
 
 ### Results
 
+**Read the survivors, not the number.** The score is a summary of your tests, and
+a summary is all it is: Google abandoned the ratio in IEEE TSE 2021 as "neither
+concrete nor actionable", fewer than 5% of mutants carry the signal, and below a
+high score the number is disconnected from fault revelation altogether. The part
+of this report anybody acts on is the survivor list, one line per mutant with its
+address. See [`docs/metrics.md`](docs/metrics.md) for what ditto measures about
+itself instead, and why.
+
 Once all tests on all mutants have run, Ditto will print a report with the results. It will also exit with a non-zero exit code if the mutation score is below the minimum threshold (see [`WithMinimumThreshold`](#Settings) below). This is an example of the report, exactly as ditto prints it — the byte-for-byte
 content of [`testdata/golden/release.txt`](testdata/golden/release.txt), which
 `TestReleaseGolden` compares a whole release against on both the ordinary and the

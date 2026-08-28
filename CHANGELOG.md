@@ -6,7 +6,53 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.6.1] - 2026-08-28
 
+### Changed
+
+- **The mutation score is no longer how ditto's quality is judged.** It measures
+  the user's tests; it is not a statement about whether ditto's answer can be
+  believed, and it is never a gate here. Two systematic reviews -- one over the
+  peer-reviewed literature, one over the source and docs of PIT, Stryker,
+  Infection, mutmut, Cosmic Ray, MutPy, cargo-mutants and the Go tools -- settled
+  a question three rounds of argument here had not.
+
+  "Unjudged" is not one class. A mutant that does not compile leaves the
+  numerator **and** the denominator, because the kill predicate is undefined for
+  a program that does not exist (Zhu, Hall & May, *ACM Computing Surveys* 29(4),
+  1997, Def. 3.1: `S = D / (M − E)`). A timeout is a **kill**, reported as its
+  own reason -- unanimous across PIT, Stryker and Infection. A suspected
+  equivalent counts as survived under a metric renamed to a stated lower bound.
+
+  And the field already says not to report one number: Google abandoned the ratio
+  in IEEE TSE 2021 as *"neither concrete nor actionable"*; fewer than 5% of
+  mutants are subsuming and the all-mutants ratio does not track the subsuming
+  one (ISSTA 2016); the correlation with real faults is weak once suite size is
+  controlled (ICSE 2018); and below a high threshold the number is disconnected
+  from fault revelation entirely (ICSE 2017) -- ditto's own gate runs at 0.5,
+  which is below.
+
+  The score now ships with its composition beside it or not at all. Four metrics
+  take its place, each naming the decision it drives and where its threshold
+  comes from: `docs/metrics.md`, with the reviews in
+  `docs/experiments/what-the-field-already-decided.md`.
+
 ### Added
+
+- **`internal/verdict` -- a verdict now carries why.** Ditto read any non-zero
+  exit as a killed mutant: a failed assertion, a mutant that never compiled, a
+  timeout, a missing binary. Measured on `internal/schemata/instrument.go`, 78
+  mutants: 50 reported killed, of which **10 did not compile and 1 hung until its
+  timeout**. 22% of the kills were not assertions.
+
+  The reason is read from `go test -json`, which emits `"Action":"build-fail"`
+  and a `fail` event carrying `"FailedBuild"` -- neither of which appears when a
+  test fails for real. It costs **no extra subprocess**, and it is JSON rather
+  than prose. Exit codes cannot carry it: measured on go1.27, `go test`,
+  `go build`, `go vet` and `go test -json` all exit 1 either way, and a test
+  pins that so a Go release which changes it is caught here.
+
+  A command that is not `go test -json` yields `Unknown` rather than a guess.
+  Reporting `Assertion` there would manufacture the very kills this exists to
+  count.
 
 - **A counter for the repository, not for the fixture.**
   `mutantsPerReleaseOnThisRepository` records what one full run of the gate has

@@ -444,3 +444,60 @@ cheaper and needs the directives parsed, which is more code than it sounds.
 
 Until then, a repository that embeds anything can mutate only the packages that
 do not. `docs/experiments/the-embedded-frontend.md`.
+
+## 14. A verdict does not carry its reason
+
+`internal/cmdtestrunner/cmdtestrunner.go` reads any non-zero exit as a killed
+mutant: a failed assertion, a mutant that does not compile, a timeout, a missing
+binary. `internal/gobuildrunner/gobuildrunner.go` does the same on the gated
+path. Two categories where PIT has ten and Stryker eight.
+
+Measured on `internal/schemata/instrument.go`: 78 mutants, 50 reported killed, of
+which **10 did not compile and 1 hung until its timeout** — 22% of the kills were
+not assertions.
+
+Both missing reasons are available cheaply:
+
+- **build failure**: `go test -json` emits `"Action":"build-fail"` and a `fail`
+  event carrying `"FailedBuild"`, and neither appears when a test fails for real.
+  No extra subprocess. Only works when the test command *is* `go test`; a user
+  who configures `make` or `gotestsum` gets no such signal, and the metric has to
+  say so rather than report zero.
+- **deadline**: ditto's own clock — see entry 15.
+
+`docs/metrics.md` metric 2. `docs/experiments/what-the-field-already-decided.md`.
+
+## 15. Ditto imposes no deadline anywhere
+
+`grep -rn "timeout" --include=*.go .` finds one hit in the whole product, and it
+is a doc comment in `options.go`.
+
+`gobuildrunner.go` runs the compiled binary directly, and a test binary invoked
+that way takes `-test.timeout` **0 — disabled**; only the `go test` driver
+injects the 10-minute default. So on the gated path **a mutant that loops never
+returns**, and `loopcondition`, `loopbreak` and `rangebreak` are all in the
+default virus set.
+
+On the ordinary path the bound is whatever the user's command carries: ditto's
+default `go test` gives 10 minutes, and ditto's own gate gives 5 through
+`make test.failfast`. Measured: one mutant of `internal/schemata/instrument.go`
+deadlocked at 0% CPU for the full 300s, a sixth of a thirty-minute budget.
+
+`cmdtestrunner.go` already records the omission: *"noctx wants CommandContext.
+The configured test command has no cancellation contract today."*
+
+A deadline is a prerequisite for metric 2, not a metric itself: once it exists, a
+mutant that hits it is a **kill with its own reason**, which is what PIT, Stryker
+and Infection all do.
+
+## 16. The two paths disagree and nothing counts by how much
+
+`fidelity_probe_test.go` asserts the gated and ordinary paths still disagree
+about the same mutant, and `docs/experiments/disagreement-class.md` has the class
+measured. Two implementations, two answers, at most one right.
+
+It is named in `docs/metrics.md` as the fifth metric and deliberately not gated:
+**its population is unmeasured**, because the probe sits behind `DITTO_PROBE=1`
+and nobody has run it against a real repository. A threshold set before that
+number exists would be invented.
+

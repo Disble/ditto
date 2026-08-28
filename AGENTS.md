@@ -62,6 +62,27 @@ its fixture, the decoy shows it and nothing real is lost.
 
 A test that can reach outside its fixture is not isolated, whatever it asserts.
 
+## What the score is, and is not
+
+The mutation score measures the user's tests. **It is not how ditto's own quality
+is judged**, and it is never a gate here. Four peer-reviewed results say a bare
+ratio is uninterpretable — Google abandoned it in IEEE TSE 2021 as "neither
+concrete nor actionable", fewer than 5% of mutants carry the signal (ISSTA 2016),
+the correlation with real faults is weak once suite size is controlled (ICSE
+2018), and below a high threshold the number is disconnected from fault
+revelation altogether (ICSE 2017). Ditto's own gate runs at 0.5, which is below.
+
+So the score ships **with its composition beside it** — generated, non-viable,
+killed by reason, live — or it does not ship.
+
+What replaces it is four metrics that measure whether ditto's ANSWER can be
+believed, each naming the decision it drives and where its threshold comes from.
+They live in `docs/metrics.md`, and the reviews that produced them are in
+`docs/experiments/what-the-field-already-decided.md`.
+
+This section changed direction on 2026-08-28, under the rule below: a measurement
+contradicted what was written here, so the claim went with its evidence.
+
 ## Performance is the metric
 
 For a library whose reason to exist is being cheap enough to run, "it got
