@@ -87,13 +87,19 @@ func runCommand(args []string) error {
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
 	gated := flags.Bool("gated", false, "run a file's mutants from one compilation instead of one each")
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
-	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "hardlink" (default), "copy" or "link"`)
+	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
 
 	var exclude excludes
 
 	flags.Var(&exclude, "exclude", "regexp of source paths not to mutate; repeatable")
 
 	if err := flags.Parse(args); err != nil {
+		// Asking for help is not a failure. flag reports it as one under
+		// ContinueOnError, and reporting it back made `-h` exit non-zero.
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+
 		return fmt.Errorf("reading the flags: %w", err)
 	}
 
@@ -153,13 +159,27 @@ func stagedCommand(args []string, out *os.File) error {
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
 	dry := flags.Bool("dry", false, "report what the staged change justifies and run nothing")
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
-	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "link" (default), "copy" or "hardlink"`)
+	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
 
 	var exclude excludes
 
 	flags.Var(&exclude, "exclude-prefix", "repository-relative prefix never worth mutating; repeatable")
 
+	// There is no flag for .ditto.json, so `-h` is the one place a reader would
+	// look and not find it. Named here rather than left to the readme.
+	flags.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage of ditto staged:")
+		flags.PrintDefaults()
+		fmt.Fprint(os.Stderr, stagedConfigHelp)
+	}
+
 	if err := flags.Parse(args); err != nil {
+		// Asking for help is not a failure. flag reports it as one under
+		// ContinueOnError, and reporting it back made `-h` exit non-zero.
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+
 		return fmt.Errorf("reading the flags: %w", err)
 	}
 
@@ -225,3 +245,20 @@ func describeRanges(ranges []ditto.Range) string {
 
 	return strings.Join(spans, ",")
 }
+
+// stagedConfigHelp names the one thing about `staged` that is not a flag.
+//
+// The sandbox is built from the index, so a repository that does not build from
+// its index alone needs to say what git is missing. There is nowhere in
+// PrintDefaults for that, and a reader checking `-h` would otherwise conclude
+// the flags are the whole contract.
+const stagedConfigHelp = `
+A repository that does not build from its index alone can name the generated
+paths git does not carry, in a .ditto.json at its root:
+
+    {"generated": ["frontend/dist", "frontend/wailsjs"]}
+
+They are copied from the working tree after the index is materialised, and each
+copy is announced. Naming a path git tracks is refused: the index version is the
+one a staged run measures.
+`

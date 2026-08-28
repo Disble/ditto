@@ -4,7 +4,7 @@ description: "Trigger: release, cut a version, tag, publish, changelog, ship it,
 license: Apache-2.0
 metadata:
   author: "disble"
-  version: "2.0"
+  version: "2.1"
 ---
 
 ## Activation Contract
@@ -101,17 +101,44 @@ Always pass `--repo Disble/ditto`.
 3. **Write the CHANGELOG against the real range.** Every user-facing commit gets
    an entry with the number that justified it. An entry with no measurement
    behind it is a feature description, and this project does not ship those.
-4. **Commit through the hook.** `.githooks/pre-commit` runs `make lint
+4. **Walk every surface that documents behaviour, not just the CHANGELOG.**
+   A release is where documentation drift becomes public, and the CHANGELOG is
+   the surface hardest to forget — which is exactly why the others get missed.
+   Tick each one against the change being released:
+
+   - [ ] **`readme.md`, where the feature is used.** The section a reader lands
+         on from the top.
+   - [ ] **`readme.md`, the `## Settings` section.** It is *the* place someone
+         looks for "how do I configure this". A second way to configure ditto
+         that is documented only elsewhere is invisible from here.
+   - [ ] **The doc comment on the exported function.** This is what
+         **pkg.go.dev** shows, and it is the only documentation a library
+         consumer sees. Anything explained solely in an `internal` package or in
+         the readme does not exist for them.
+   - [ ] **`cmd/ditto` help text.** Two failure modes, both real:
+         a default named in a flag's description that is no longer the default,
+         and behaviour with **no flag at all** — `.ditto.json` — which a reader
+         checking `-h` would otherwise conclude does not exist. `PrintDefaults`
+         cannot mention what is not a flag, so `flags.Usage` has to.
+   - [ ] **`docs/experiments/`.** A number quoted in the release notes should be
+         traceable to the note that produced it.
+
+   Measured, on 0.6.0: `.ditto.json` shipped documented in the readme and the
+   CHANGELOG and in **none** of the other three, and `ditto staged -h` was still
+   advertising `"link" (default)` two releases after the default became `copy`.
+   A help text that misstates a default is worse than one that omits it.
+
+5. **Commit through the hook.** `.githooks/pre-commit` runs `make lint
    test.failfast`. On Windows the target is `mingw32-make`; the hook looks for
    `make`, `mingw32-make` and `gmake` in that order. Never bypass it.
-5. **Push and open the pull request.** Since the fork opt-in (trap 1) that
+6. **Push and open the pull request.** Since the fork opt-in (trap 1) that
    triggers CI, CodeQL and OSV-Scanner on its own. If it does not, event
    triggers have been turned off again — check before dispatching by hand,
    because a dispatched green and an event green are not the same evidence.
-6. **Read the checks that do run.** SonarCloud is inherited from upstream and
+7. **Read the checks that do run.** SonarCloud is inherited from upstream and
    applies its own quality gate; it is not part of this project's own bar, and it
    is still red or green in public. Report which.
-7. **Tag and publish only after a green run on the exact commit being tagged.**
+8. **Tag and publish only after a green run on the exact commit being tagged.**
    A rebase merge rewrites SHAs, so the branch's green belongs to a commit that
    no longer exists on `main` — v0.3.0 nearly shipped that way. Re-run on the
    merged head first, and say in the release notes which checks ran and which

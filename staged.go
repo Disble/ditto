@@ -30,6 +30,8 @@ func (p StagedPlan) Mutable() bool { return len(p.Files) > 0 }
 //
 // It is the whole of `--dry`: the question "what would this cost" is worth
 // asking on its own, and answering it must not write a sandbox or start a suite.
+// It therefore does not read `.ditto.json` either -- that names what a sandbox
+// needs, and this builds none. See RunStaged.
 func PlanStaged(directory string, excludePrefixes []string) (StagedPlan, error) {
 	repository, err := staged.New(staged.OSRunner{}, directory)
 	if err != nil {
@@ -69,6 +71,15 @@ func PlanStaged(directory string, excludePrefixes []string) (StagedPlan, error) 
 // it: against the worktree, with one tracked file left dirty and unstaged, seven
 // of eight verdicts moved. The staged-file check does not cover that case,
 // because the file that moved them was never staged.
+//
+// A repository that does not build from its index alone names the generated
+// paths git does not carry in a `.ditto.json` at its root:
+//
+//	{"generated": ["frontend/dist", "frontend/wailsjs"]}
+//
+// Those are copied from the working tree after the index is materialised, and
+// each copy is announced. Naming a path git tracks is refused, because the index
+// version is the one a staged run measures.
 //
 // Options are applied after the scope and the root, so a caller can set a
 // threshold or a test command but cannot quietly point the run somewhere else.
