@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.6.1] - 2026-08-28
 
+### Added
+
+- **A counter for the repository, not for the fixture.**
+  `mutantsPerReleaseOnThisRepository` records what one full run of the gate has
+  to pay for: **660** today. Every other recorded counter measures a six-file
+  synthetic fixture, and all eight stayed green while the real cost went from
+  431 mutants to 660 and the gate blew past its thirty-minute timeout. It is
+  what `internal/perfbench/doc.go` already promised in prose -- "how many mutants
+  a scope produces ... a change in one is always meaningful" -- and the one
+  number in that sentence nothing measured. Counting costs no test command and
+  no sandbox.
+
+  It ships behind a `livetree` build tag, run by `make test.counters`, which the
+  pre-commit hook now runs alongside `lint` and `test.failfast`. **That is not a
+  detail.** Untagged, the counter read the tree it was compiled inside -- and
+  ditto's sandbox carries every `_test.go` while each mutant runs `./...`, so it
+  ran inside every mutant's sandbox and read the *mutated* tree. Any mutation
+  that changes the number of mutable sites moved the count, the assertion failed,
+  `make` exited non-zero, and ditto recognises a killed mutant by exactly that.
+
+  Measured end to end on a mutant that survives on its own
+  (`internal/schemata/instrument.go:147:3 -> Range Break`): untagged, the suite
+  reported `REGRESSION ... 661, baseline 660 (+1)` and the mutant was scored
+  killed; tagged, `DONE 368 tests, 10 skipped` and it survived. A census by virus
+  puts **66 of the 660 mutants** -- every `Range Break` -- in reach of that
+  defect. See `docs/experiments/a-counter-that-answers-for-itself.md`.
+
 ### Fixed
 
 - **A symlink anywhere in the tree broke the sandbox, two different ways.**
