@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`.ditto.json`, for the repositories that do not build from their index.** A
+  sandbox is built from the index, and that is what makes a verdict about the
+  change rather than about the desk it was written on. Some repositories still
+  need something git does not carry: a generated directory the build embeds,
+  generated bindings. Name those paths and they are copied from the working tree
+  after the index is materialised.
+
+  ```json
+  {"generated": ["frontend/dist", "frontend/wailsjs"]}
+  ```
+
+  It does not widen what is read, and the guards are the point. **Naming a path
+  git tracks is refused**: a tracked path has an index version, and letting the
+  working tree win there is the hole the sandbox exists to close -- measured at
+  7 of 8 verdicts moving. A named path that is not there is refused too, rather
+  than skipped, because it was named for a reason. And every copy is announced,
+  since those are the only bytes in the sandbox that did not come from git.
+
+  Measured on a repository whose root package could not compile from its index:
+  refused without the file, and **9 mutants, 8 killed, 1 survived** with it --
+  the same verdicts a tracked placeholder produced, and no placeholder.
+
 ## [0.5.0] - 2026-08-27
 
 The release that makes a sandbox a sandbox. Both entries below are the same
