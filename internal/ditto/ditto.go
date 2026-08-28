@@ -6,6 +6,7 @@ import (
 	"github.com/Disble/ditto/internal/gomutatedfile"
 	"github.com/Disble/ditto/internal/gosourcefile"
 	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/internal/verdict"
 	"github.com/Disble/ditto/viruses"
 )
 
@@ -52,6 +53,25 @@ type Diagnostic struct {
 
 func (d *Diagnostic) IsOk() bool {
 	return d.res.Await().IsOk()
+}
+
+// Reason is why this mutant died, and Unknown when ditto was not told.
+//
+// Ditto recognises a killed mutant by a non-zero exit, which a mutant that never
+// compiled also produces. Measured on internal/schemata/instrument.go: 78
+// mutants, 50 reported killed, 10 of which did not compile and 1 of which hung
+// until its timeout -- 22% of the kills credited to tests that never ran. See
+// docs/metrics.md, metric 2.
+//
+// A survivor has no death to explain, so it answers Unknown too. The reason is
+// about a kill.
+func (d *Diagnostic) Reason() verdict.Reason {
+	res := d.res.Await()
+	if !res.IsOk() {
+		return verdict.Unknown
+	}
+
+	return verdict.ReasonOf(result.Output(res))
 }
 
 func (d *Diagnostic) Diff(differ gomutatedfile.Differ) string {

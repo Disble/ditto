@@ -7,6 +7,7 @@ import (
 	"github.com/Disble/ditto/internal/future"
 	"github.com/Disble/ditto/internal/gomutatedfile"
 	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/internal/verdict"
 )
 
 type TestRunner interface {
@@ -89,7 +90,7 @@ func (l *Laboratory) verifyBaseline(sandbox ditto.TemporaryRepository) {
 			// reader is told a suite is red and left to guess which of a hundred
 			// reasons it is, in a sandbox they cannot see.
 			panic(ditto.NewRefusalError("ditto: the test command fails on unmutated code, so every mutant would be scored " +
-				"killed; refusing to score against a red baseline\n\n" + result.Output(res)))
+				"killed; refusing to score against a red baseline\n\n" + verdict.Text(result.Output(res))))
 		}
 	})
 }

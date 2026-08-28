@@ -1,6 +1,7 @@
 package verdict_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Disble/ditto/internal/verdict"
@@ -10,7 +11,7 @@ import (
 // fixture built for this: one package that does not compile, one whose test
 // fails an assertion. See docs/experiments/what-the-field-already-decided.md.
 const buildFailed = `{"ImportPath":"example.com/x/pkg [example.com/x/pkg.test]","Action":"build-output","Output":"# example.com/x/pkg\n"}
-{"ImportPath":"example.com/x/pkg [example.com/x/pkg.test]","Action":"build-output","Output":"pkg\a.go:3:37: undefined: notAThing\n"}
+{"ImportPath":"example.com/x/pkg [example.com/x/pkg.test]","Action":"build-output","Output":"pkg/a.go:3:37: undefined: notAThing\n"}
 {"ImportPath":"example.com/x/pkg [example.com/x/pkg.test]","Action":"build-fail"}
 {"Action":"start","Package":"example.com/x/pkg"}
 {"Action":"output","Package":"example.com/x/pkg","Output":"FAIL\texample.com/x/pkg [build failed]\n"}
@@ -61,4 +62,38 @@ func TestABuildFailureIsNotAnAssertion(t *testing.T) {
 	if verdict.ReasonOf(buildFailed) == verdict.Assertion {
 		t.Fatal("a mutant that never compiled was credited to a test")
 	}
+}
+
+// Text exists because the reason is only available when the test command emits
+// the JSON stream, and a stream is not something to show a human. A refusal
+// that prints raw events instead of the compiler's own words is worse than the
+// one it replaced.
+func TestTextRebuildsWhatAHumanNeedsToRead(t *testing.T) {
+	t.Parallel()
+
+	got := verdict.Text(buildFailed)
+
+	for _, want := range []string{"undefined: notAThing", "[build failed]"} {
+		if !contains(got, want) {
+			t.Fatalf("Text lost %q:\n%s", want, got)
+		}
+	}
+
+	if contains(got, `"Action"`) {
+		t.Fatalf("Text handed back the stream instead of the message:\n%s", got)
+	}
+}
+
+// Output that was never the stream comes back untouched: there is nothing to
+// rebuild, and mangling it would lose the only thing the reader has.
+func TestTextLeavesPlainOutputAlone(t *testing.T) {
+	t.Parallel()
+
+	if got := verdict.Text(notJSON); got != notJSON {
+		t.Fatalf("Text = %q, want it unchanged", got)
+	}
+}
+
+func contains(haystack, needle string) bool {
+	return len(haystack) >= len(needle) && strings.Contains(haystack, needle)
 }

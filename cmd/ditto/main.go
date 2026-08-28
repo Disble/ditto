@@ -83,7 +83,7 @@ func (e *excludes) Set(value string) error {
 func runCommand(args []string) error {
 	flags := flag.NewFlagSet("ditto run", flag.ContinueOnError)
 	root := flags.String("root", ".", "repository root to mutate")
-	testCommand := flags.String("test-command", "go test -count=1 ./...", "command that decides whether a mutant died")
+	testCommand := flags.String("test-command", "go test -count=1 -json ./...", "command that decides whether a mutant died; `-json` is what lets ditto say WHY it died")
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
 	gated := flags.Bool("gated", false, "run a file's mutants from one compilation instead of one each")
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
@@ -155,7 +155,7 @@ func optionsFor(
 func stagedCommand(args []string, out *os.File) error {
 	flags := flag.NewFlagSet("ditto staged", flag.ContinueOnError)
 	directory := flags.String("cwd", ".", "a directory inside the repository; its root is resolved from here")
-	testCommand := flags.String("test-command", "go test -count=1 ./...", "command that decides whether a mutant died")
+	testCommand := flags.String("test-command", "go test -count=1 -json ./...", "command that decides whether a mutant died; `-json` is what lets ditto say WHY it died")
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
 	dry := flags.Bool("dry", false, "report what the staged change justifies and run nothing")
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
