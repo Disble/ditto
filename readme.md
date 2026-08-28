@@ -106,6 +106,30 @@ Policy stays with you: `--threshold`, `--test-command`, and `--exclude-prefix`
 (repeatable) are yours to set, and Ditto has an opinion about none of them
 beyond its defaults.
 
+### When the index is not the whole story
+
+A sandbox is built from the index, and that is deliberate. Some repositories do
+not build from their index alone: a generated directory the build needs — an
+embedded frontend bundle, generated bindings — is on disk and not in git, so the
+sandbox arrives without it and the package that needs it cannot compile.
+
+Name those paths, one at a time, in a `.ditto.json` at the repository root:
+
+```json
+{
+  "generated": ["frontend/dist", "frontend/wailsjs"]
+}
+```
+
+They are copied from the working tree after the index is materialised, and the
+run says which ones — they are the only bytes in the sandbox that did not come
+from git, and a reader deciding whether to trust a verdict deserves to know.
+
+This does not widen what is read. **Naming a path git tracks is refused**, not
+obeyed: a tracked path has an index version and that is the one a staged run
+measures. A path that is not there is refused too, rather than skipped — it was
+named because the build needs it.
+
 ### Installation as a library
 
 1. Install ditto:
