@@ -4,7 +4,7 @@ description: "Trigger: release, cut a version, tag, publish, changelog, ship it,
 license: Apache-2.0
 metadata:
   author: "disble"
-  version: "2.1"
+  version: "2.2"
 ---
 
 ## Activation Contract
@@ -135,9 +135,22 @@ Always pass `--repo Disble/ditto`.
    triggers CI, CodeQL and OSV-Scanner on its own. If it does not, event
    triggers have been turned off again — check before dispatching by hand,
    because a dispatched green and an event green are not the same evidence.
-7. **Read the checks that do run.** SonarCloud is inherited from upstream and
-   applies its own quality gate; it is not part of this project's own bar, and it
-   is still red or green in public. Report which.
+7. **Read every check, including the ones the pull request does not show.**
+   SonarCloud is inherited from upstream and applies its own quality gate; it is
+   not part of this project's own bar, and it is still red or green in public.
+   Report which.
+
+   **The mutation gate is not on the pull request.** `mutation.yml` chains off CI
+   with `workflow_run`, which only fires for `push`, so `gh pr checks` never
+   lists it and a green pull request says nothing about it. Ask for it by sha:
+
+       gh api "repos/Disble/ditto/actions/runs?per_page=15" \
+         --jq '.workflow_runs[] | .head_sha[0:7] + "  " + .name + "  " + (.conclusion // "-")'
+
+   Measured, and the reason this step exists: it was red on **every push from
+   0.4.0 through 0.6.0** -- three releases -- with a panic in the first seconds
+   naming the file it died on. Nobody opened it. The defect was real and it was
+   in the sandbox: `docs/experiments/a-symlink-in-the-tree.md`.
 8. **Tag and publish only after a green run on the exact commit being tagged.**
    A rebase merge rewrites SHAs, so the branch's green belongs to a commit that
    no longer exists on `main` — v0.3.0 nearly shipped that way. Re-run on the

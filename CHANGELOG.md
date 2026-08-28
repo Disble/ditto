@@ -8,6 +8,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A symlink anywhere in the tree broke the sandbox, two different ways.**
+  `filepath.WalkDir` does not follow links, so one arrives as a non-directory
+  entry and the sandbox read it as a file. A link to a **directory** returned
+  `EISDIR` and killed the whole walk before the first mutant -- any repository
+  with a `node_modules/.bin`, a pnpm store, a devbox profile or a vendored
+  checkout. A link to a **file** was worse for being quiet: `os.ReadFile`
+  follows one, so the sandbox came back holding a regular file where the
+  repository has a link, with no error and no message.
+
+  Both sandboxes now reproduce the link with its raw target -- the full walk and
+  the `.ditto.json` generated paths, through the one function they share.
+
+  The raw target is the fix, not a detail. Rewritten to an absolute path the link
+  resolves back to the repository under measurement, and a suite writing through
+  it edits the tree ditto was asked to leave alone: measured, the source came
+  back holding `REWRITTEN BY THE SUITE`. It is also what git does -- a tracked
+  symlink materialises as the link, never as its target -- so a full run and a
+  staged run agree about what the repository is.
+
+  Found by reading ditto's own mutation gate, red on every push since 0.4.0.
+  See `docs/experiments/a-symlink-in-the-tree.md`.
 - **`ditto staged -h` was advertising a default that changed two releases ago.**
   It said `"link" (default)` for `--sandbox`; the default has been `copy` since
   0.5.0. A help text that misstates a default is worse than one that omits it.
@@ -21,9 +42,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pkg.go.dev shows, and the only documentation a library consumer sees — and
   `ditto staged -h`, which has no flag to reveal it and therefore says so in
   `flags.Usage`.
+- `WithSandboxStrategy` reached the readme's option table, two releases after it
+  shipped. It was the checklist's first catch on a surface nobody had opened.
 - The release skill grew a checklist for exactly this. It shipped in 0.6.0
   documented in two of five surfaces, and the CHANGELOG being the hardest one to
-  forget is why the others get missed.
+  forget is why the others get missed. Its "read the checks" step now names the
+  mutation gate, which chains off CI with `workflow_run` and therefore never
+  appears on a pull request -- the reason a panic went unread for three
+  releases.
 
 ## [0.6.0] - 2026-08-28
 

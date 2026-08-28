@@ -19,6 +19,10 @@ type FSRepository struct {
 	// strategy is how each file reaches the sandbox: "link", "copy" or "hardlink".
 	strategy string
 
+	// relinked counts the symlinks reproduced as symlinks. Nothing else can say
+	// a sandbox held any, and a run over a tree full of them used to die.
+	relinked int
+
 	// hardLinked and copied are exact counters, so which strategy actually ran
 	// can be read rather than assumed. A hard link and a copy are both regular
 	// files, so nothing downstream can tell them apart -- and the fallback is
@@ -163,6 +167,7 @@ func (r *FSRepository) LinkAllToTemporaryRepository(temporaryPath string) ditto.
 // repository built. The fallback is silent by design, so without these nothing
 // can say which path a run actually took.
 func (r *FSRepository) HardLinked() int { return r.hardLinked }
+func (r *FSRepository) Relinked() int   { return r.relinked }
 func (r *FSRepository) Copied() int     { return r.copied }
 
 // materialize puts one file into the sandbox. The default is a copy, and the
@@ -191,6 +196,23 @@ func (r *FSRepository) Copied() int     { return r.copied }
 // The cost is a fixed one. On a 1960-file repository, copying adds ~15s to a
 // release however many mutants it runs: 16.5s over four and 15.0s over nine.
 func (r *FSRepository) materialize(source, destination string, entry fs.DirEntry) error {
+	// A symlink is not a file to copy, whatever the strategy says. WalkDir does
+	// not follow one, so it arrives here as a non-directory entry: read as a
+	// file, a link to a directory returns EISDIR and kills the whole walk, and a
+	// link to a file is silently followed and lands in the sandbox as a regular
+	// file the repository never had.
+	//
+	// What goes in the sandbox is the link itself, carrying its raw target. That
+	// is what git does with a tracked symlink, so a full run and a staged run
+	// agree about what the repository is; and it is what keeps a relative link
+	// resolving inside the sandbox, where a write through it reaches the copy
+	// rather than the repository under measurement.
+	//
+	// See docs/experiments/a-symlink-in-the-tree.md.
+	if entry.Type()&fs.ModeSymlink != 0 {
+		return r.relink(source, destination, entry)
+	}
+
 	switch r.strategy {
 	case "link":
 		// The old strategy, kept reachable because it is what every release before
@@ -228,6 +250,21 @@ func (r *FSRepository) materialize(source, destination string, entry fs.DirEntry
 	}
 
 	return fmt.Errorf("%w: %q", errUnknownStrategy, r.strategy)
+}
+
+// relink reproduces one symlink in the sandbox, target and all.
+//
+// Following it instead would copy whatever it points at: a nix profile, a pnpm
+// store, a vendored checkout. The tree ditto measures would stop being the tree
+// on disk, and it would do so silently.
+func (r *FSRepository) relink(source, destination string, entry fs.DirEntry) error {
+	if err := filecopy.File(source, destination, entry); err != nil {
+		return err //nolint:wrapcheck // filecopy already names both paths
+	}
+
+	r.relinked++
+
+	return nil
 }
 
 // errUnknownStrategy names a sandbox strategy nothing implements.
