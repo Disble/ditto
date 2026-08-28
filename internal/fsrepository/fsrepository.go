@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/filecopy"
 	"github.com/Disble/ditto/internal/gosourcefile"
 )
 
@@ -206,7 +207,7 @@ func (r *FSRepository) materialize(source, destination string, entry fs.DirEntry
 	case "copy", "":
 		r.copied++
 
-		return copyFile(source, destination, entry)
+		return filecopy.File(source, destination, entry) //nolint:wrapcheck // filecopy already names both paths
 	case "hardlink":
 		// A hard link is a second name for the same bytes, so it IS a regular
 		// file and costs no copy. It is safe here only because Overwrite removes
@@ -223,7 +224,7 @@ func (r *FSRepository) materialize(source, destination string, entry fs.DirEntry
 		// cheap path is unavailable.
 		r.copied++
 
-		return copyFile(source, destination, entry)
+		return filecopy.File(source, destination, entry) //nolint:wrapcheck // filecopy already names both paths
 	}
 
 	return fmt.Errorf("%w: %q", errUnknownStrategy, r.strategy)
@@ -231,24 +232,3 @@ func (r *FSRepository) materialize(source, destination string, entry fs.DirEntry
 
 // errUnknownStrategy names a sandbox strategy nothing implements.
 var errUnknownStrategy = errors.New("unknown sandbox strategy")
-
-func copyFile(source, destination string, entry fs.DirEntry) error {
-	info, err := entry.Info()
-	if err != nil {
-		return fmt.Errorf("failed reading '%s': %w", source, err)
-	}
-
-	data, err := os.ReadFile(source)
-	if err != nil {
-		return fmt.Errorf("failed reading '%s': %w", source, err)
-	}
-
-	// G703 traces the destination back to the walked repository. Both ends are
-	// named by the caller — the root it asked to mutate and the temporary
-	// directory this run created — and the walk is what the function is for.
-	if err := os.WriteFile(destination, data, info.Mode().Perm()); err != nil { //nolint:gosec
-		return fmt.Errorf("failed writing '%s': %w", destination, err)
-	}
-
-	return nil
-}
