@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Disble/ditto/internal/filecopy"
 )
 
 // ConfigName is the file a repository uses to name what the sandbox is missing.
@@ -134,25 +136,6 @@ func copyTree(source, destination string) error {
 			return fmt.Errorf("creating %s: %w", filepath.Dir(target), err)
 		}
 
-		return copyFile(path, target, entry)
+		return filecopy.File(path, target, entry)
 	})
-}
-
-// copyFile writes one file into the sandbox as a real file, keeping its mode.
-func copyFile(source, destination string, entry fs.DirEntry) error {
-	info, err := entry.Info()
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", source, err)
-	}
-
-	data, err := os.ReadFile(source)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", source, err)
-	}
-
-	if err := os.WriteFile(destination, data, info.Mode().Perm()); err != nil { //nolint:gosec // the destination is this run's sandbox
-		return fmt.Errorf("writing %s: %w", destination, err)
-	}
-
-	return nil
 }
