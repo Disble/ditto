@@ -98,6 +98,36 @@ func TestGeneratedPathsReachTheSandbox(t *testing.T) {
 	}
 }
 
+// A generated directory is exactly where a symlink turns up: node_modules/.bin,
+// a pnpm store, a package linked into place. Copying used to read one as a file,
+// which returns EISDIR for a link to a directory and takes the whole copy with
+// it. See docs/experiments/a-symlink-in-the-tree.md.
+func TestALinkInsideAGeneratedPathIsReproduced(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	write(t, filepath.Join(root, "frontend", "dist", "assets", "app.js"), "console.log(1)")
+
+	if err := os.Symlink("assets", filepath.Join(root, "frontend", "dist", "linked")); err != nil {
+		t.Skipf("this machine cannot create symlinks: %v", err)
+	}
+
+	sandbox := &Sandbox{Root: t.TempDir()}
+
+	if _, err := repositoryAt(t, root).CopyGenerated(sandbox, []string{"frontend/dist"}); err != nil {
+		t.Fatalf("CopyGenerated: %v", err)
+	}
+
+	target, err := os.Readlink(filepath.Join(sandbox.Root, "frontend", "dist", "linked"))
+	if err != nil {
+		t.Fatalf("the sandbox should hold a link: %v", err)
+	}
+
+	if target != "assets" {
+		t.Fatalf("link target = %q, want the raw one", target)
+	}
+}
+
 // This is the guard, and it is the whole reason the setting is safe. A tracked
 // path has an index version, and a staged run measures that one. Letting the
 // working tree's win here would reopen the hole the sandbox exists to close --

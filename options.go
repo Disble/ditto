@@ -182,6 +182,11 @@ func ForceColors() func(Options) Options {
 // a file and not a copy of one, and Go refuses to embed an irregular file, so a
 // package with an embed directive cannot build in a linked sandbox.
 // See docs/experiments/the-sandbox-is-a-reference.md.
+//
+// None of the three touches a symlink the repository already has: that is
+// reproduced as the same link, carrying its raw target, so the sandbox holds the
+// tree that is on disk rather than one flattened into regular files.
+// See docs/experiments/a-symlink-in-the-tree.md.
 func WithSandboxStrategy(strategy string) func(Options) Options {
 	return func(options Options) Options {
 		options.SandboxStrategy = strategy
