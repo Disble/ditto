@@ -83,6 +83,24 @@ They live in `docs/metrics.md`, and the reviews that produced them are in
 This section changed direction on 2026-08-28, under the rule below: a measurement
 contradicted what was written here, so the claim went with its evidence.
 
+## A ratchet that only records is not a gate
+
+**Added 2026-08-29, from a counter added three days earlier to catch exactly
+this.** `mutantsPerReleaseOnThisRepository` fired six times in one session, and
+all six times the response was to write the new number down. It never changed a
+decision.
+
+The test a counter has to pass is not "is it exact" — it is **does it help
+somebody decide something**. The exact counters below pass it where they name
+work: a sandbox that stopped pooling, a walk that started descending into `.git`.
+They fail it where they only report growth, because growth is a fact about the
+repository and not a question about it.
+
+So a counter that only ever records belongs in `perf/baseline.json` as diagnosis,
+without a threshold, and `docs/metrics.md` says which are which. The performance
+question that actually has a decision in it is binary — does the gate finish —
+and no count predicts it, because cost per mutant is not uniform.
+
 ## Performance is the metric
 
 For a library whose reason to exist is being cheap enough to run, "it got

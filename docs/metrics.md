@@ -76,6 +76,42 @@ widens **every** file, not only the offending one, and `RunStaged` never prints
 the `Derived`/`Reason` it carries — only `--dry` does. A run can report survivors
 on lines nobody touched and say nothing.
 
+## Performance: one decision, and the rest is diagnosis
+
+**Correction, 2026-08-29.** This document listed several performance counters as
+metrics. Applying the owner's own test to them — *does it help me make a specific
+decision?* — most of them fail.
+
+`mutantsPerRelease` fired **six times** in the session that wrote this file. All
+six times the response was identical: **write the new number down**. It never
+changed a decision. A ratchet that only ever records is a changelog with a
+threshold on it.
+
+`compilationsPerRelease` is the same shape. It says gating removes 54% of
+compilations; it does not say whether to turn gating on — the verdict comparison
+decides that — and it does not say whether the gate finishes.
+
+They are **diagnostics**, and good ones. They tell you WHERE the time went once
+you already know there is too much of it. What they cannot do is tell you there
+is too much of it, and giving them thresholds dressed them as something they are
+not.
+
+**The performance decision is one, and it is binary: does the gate finish?**
+
+No integer here predicts it, and the reason is the same one that started this
+document. Cost per mutant is not uniform: a killed mutant stops at the first
+failure under `-failfast`, a survivor pays the whole suite, a mutant stopped by
+the deadline pays the deadline. A count multiplied by an average is the vanity
+metric this file exists to reject, and its derivatives inherit the vice.
+
+So the performance section below keeps its counters as **diagnosis, without
+thresholds**, and the one line that is a metric is the observed completion of the
+gate itself. The number that would change a decision is the one nobody has:
+something that predicts completion from the composition of the mutant set rather
+than from its size.
+
+### Diagnosis, not gates
+
 ### 4. `mutantsPerRelease` — what one full run has to pay for
 
 Recorded in `perf/baseline.json`, ratcheting in both directions.
