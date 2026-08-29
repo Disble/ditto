@@ -31,6 +31,11 @@ and `docs/experiments/false-kills.md` already carries the per-file breakdown.
 The harness exists; it is skipped behind `DITTO_FALSEKILL_ROOT` and has to be
 promoted from probe to gate.
 
+The exclusion lives in both reporters — the shipped one and the test double. A
+double that scores differently from the thing it stands in for measures the old
+rules, and every test through it goes on agreeing with a version of ditto that no
+longer exists.
+
 **This is not a scoring question.** It was treated as one for a long time here,
 and that was the mistake: `docs/experiments/what-the-field-already-decided.md`.
 
