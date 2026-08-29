@@ -175,6 +175,23 @@ named because the build needs it.
 
 ### Results
 
+**A mutant that never compiled is not in the score.** A failing compile exits
+non-zero, which is how ditto recognises a kill, so those used to be counted as
+caught by tests that never ran them. They now leave the numerator *and* the
+denominator, and the report says how many there were and which mutation operator
+produced them:
+
+```
+┃ • Killed:       1
+┃ ✓ Score:     0.33 (minimum: 0.00)
+┃ 2 of the 5 mutants generated never compiled, and are out of the score entirely.
+┃   1 from Integer Decrement
+┃   1 from Integer Increment
+```
+
+Measured on that fixture, the old number was **0.60**. If a threshold was tuned
+against a score from before this, expect it to move.
+
 **Read the survivors, not the number.** The score is a summary of your tests, and
 a summary is all it is: Google abandoned the ratio in IEEE TSE 2021 as "neither
 concrete nor actionable", fewer than 5% of mutants carry the signal, and below a
@@ -289,7 +306,7 @@ The table below presents all available options.
 | Option                 | Default                               | Description                                                                                                                                                                                                                                                                    |
 | ---------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `WithRepositoryRoot`   | `.`                                   | A string that configures which directory is the repository root. This is usually required when your mutation test file lives some other place that is not root itself.                                                                                                         |
-| `WithTestCommand`      | `go test -count=1 ./...`              | The test command to run, as string. You may configure it as you wish, as a `makefile` phony target, for example. Or simply run the standard `go test` command with extra flags, such as `timeout` and `tags`.                                                                  |
+| `WithTestCommand`      | `go test -count=1 -json ./...`        | The test command to run, as string. **`-json` is why the default carries it**: the event stream is the only place a failing command says whether the mutant did not compile, and a mutant that never compiled is not one a test caught. A command that does not emit it still works; ditto simply cannot name the reason and says so rather than guessing. You may configure it as you wish, as a `makefile` phony target, for example. Or simply run the standard `go test` command with extra flags, such as `timeout` and `tags`.                                                                  |
 | `WithMinimumThreshold` | `1.0`                                 | A float between `0.0` and `1.0`. This represents the minimum mutation test score to consider the execution successful.                                                                                                                                                         |
 | `Parallel`             | `false`                               | Indicates whether to run the tests on the mutants in parallel. Given Ditto is executed via Go's testing framework, the level of parallelism can be configured when running the mutation tests from the command line. For example with `go test -v -tags=mutation -parallel 3`. |
 | `IgnoreSourceFiles`    | `nil`                                 | Regular expression representing source files to be filtered out and not suffer any mutations.                                                                                                                                                                                  |
