@@ -96,6 +96,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   puts **66 of the 660 mutants** -- every `Range Break` -- in reach of that
   defect. See `docs/experiments/a-counter-that-answers-for-itself.md`.
 
+- **A deadline, at last.** `grep -rn "timeout" --include=*.go .` used to find one
+  hit in the whole product, and it was a doc comment. `gobuildrunner` runs a test
+  binary directly, where `-test.timeout` defaults to **0 — disabled** — and only
+  the `go test` driver injects the ten-minute default, so on the gated path **a
+  mutant that loops never returned**. `loopcondition`, `loopbreak` and
+  `rangebreak` are all in the default virus set, so writing one is routine.
+
+  Both paths are bounded now, and a mutant the deadline stops is a **kill
+  carrying its own reason** — which is what PIT, Stryker and Infection all do. It
+  needs no parsing: ditto fired the clock, so ditto knows.
+
+- **The report names the virus behind a non-viable mutant**, because metric 1's
+  threshold is external (Major 1.8%, PIT 0%) and a rate alone names no work:
+
+      ┃ 2 of the 3 kills above never compiled — no test earned them.
+      ┃   1 from Integer Decrement
+      ┃   1 from Integer Increment
+
+- **A staged run announces a widened scope.** When the diff cannot be turned into
+  byte ranges the plan falls back to whole files — and widens *every* file, not
+  only the one it could not read. `Derived` and `Reason` had been on the plan
+  since the beginning and only `--dry` ever printed them, so a real run widened
+  in silence and reported survivors on lines nobody touched.
+
 ### Fixed
 
 - **A symlink anywhere in the tree broke the sandbox, two different ways.**

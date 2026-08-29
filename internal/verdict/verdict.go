@@ -33,6 +33,15 @@ const (
 	// score rather than counting it -- see docs/metrics.md.
 	BuildFailed Reason = "build-failed"
 
+	// Deadline is a mutant ditto stopped itself, because its test command ran
+	// past the time the unmutated suite needed. It is a KILL with its own
+	// reason, not an unjudged one -- PIT's TIMED_OUT(true), Stryker's TimedOut
+	// and Infection's TIMED_OUT all agree, and a suite that never returns is a
+	// difference the tests did notice.
+	//
+	// It needs no parsing: ditto fired the clock, so ditto knows.
+	Deadline Reason = "deadline"
+
 	// Unknown is what ditto says when it was not told. A test command that is
 	// not `go test -json` carries no structured reason, and guessing Assertion
 	// there would manufacture exactly the unearned kills this package exists to
@@ -52,12 +61,25 @@ type event struct {
 	FailedBuild string `json:"FailedBuild"` //nolint:tagliatelle // go test -json emits these names
 }
 
+// DeadlineMarker is what a runner writes into the captured output when it
+// stopped the command itself.
+//
+// Reading it back is not the prose-reading this package refuses. Ditto wrote
+// this sentence; the ban is on inferring a verdict from somebody else's words,
+// and a runner that knows it fired its own clock is not inferring anything. It
+// is a sentence rather than a code because the same output goes to a reader.
+const DeadlineMarker = "this mutant was killed by the deadline, not by an assertion"
+
 // ReasonOf classifies the captured output of one test command.
 //
 // Two independent signals mark a build failure, and either is enough: the
 // `build-fail` action, and a `fail` event carrying FailedBuild. Measured on
 // go1.27, neither appears when a test fails for real.
 func ReasonOf(output string) Reason {
+	if strings.Contains(output, DeadlineMarker) {
+		return Deadline
+	}
+
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	scanner.Buffer(make([]byte, 0, bufferSize), maxLine)
 

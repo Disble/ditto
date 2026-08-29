@@ -23,6 +23,27 @@ type StagedPlan struct {
 	Reason  string
 }
 
+// ScopeNotice is what a run has to say about its own scope, and empty when the
+// scope held.
+//
+// When the diff cannot be turned into byte ranges the plan falls back to whole
+// files -- and widens EVERY file, not only the one it could not read. Verdicts
+// then come back at addresses the change never touched, which is a lie about
+// scope rather than merely a wider bill: measured on the fixture in
+// internal/perfbench, a scope that does not keep each range beside its file
+// strays to eight such addresses.
+//
+// Derived and Reason have been on this plan since the beginning and only --dry
+// ever printed them, so a real run widened in silence. docs/metrics.md metric 3.
+func (p StagedPlan) ScopeNotice() string {
+	if p.Derived {
+		return ""
+	}
+
+	return "ditto: the staged scope could not be derived, so every staged file is mutated as a " +
+		"whole -- survivors may sit on lines this change never touched. Reason: " + p.Reason
+}
+
 // Mutable reports whether there is anything to do.
 func (p StagedPlan) Mutable() bool { return len(p.Files) > 0 }
 
@@ -110,6 +131,13 @@ func RunStaged(directory string, excludePrefixes []string, options ...Option) er
 	config, err := repository.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("reading the repository configuration: %w", err)
+	}
+
+	// Said before anything runs, because a reader who sees survivors at lines
+	// they never touched deserves to know the scope widened before they go
+	// looking for the bug.
+	if notice := plan.ScopeNotice(); notice != "" {
+		fmt.Fprintln(os.Stdout, notice)
 	}
 
 	copied, err := repository.CopyGenerated(sandbox, config.Generated)

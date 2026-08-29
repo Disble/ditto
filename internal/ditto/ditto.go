@@ -85,7 +85,11 @@ func (d *Diagnostic) Label() string {
 // Address and Change are what a survivor is reported as before any diff is
 // rendered: where it is, and what it wrote there.
 func (d *Diagnostic) Address() string { return d.file.Address() }
-func (d *Diagnostic) Change() string  { return d.file.Change() }
+
+// Virus names the mutation operator behind this diagnostic, which is the unit a
+// non-viable mutant is fixed in. docs/metrics.md metric 1.
+func (d *Diagnostic) Virus() string  { return d.file.Virus() }
+func (d *Diagnostic) Change() string { return d.file.Change() }
 
 func NewDiagnostic(res future.Future[result.Result[string]], file *gomutatedfile.GoMutatedFile) *Diagnostic {
 	return &Diagnostic{

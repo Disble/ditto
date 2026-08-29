@@ -97,3 +97,19 @@ func TestTextLeavesPlainOutputAlone(t *testing.T) {
 func contains(haystack, needle string) bool {
 	return len(haystack) >= len(needle) && strings.Contains(haystack, needle)
 }
+
+// A mutant stopped by a deadline is a KILL with its own reason, not an unjudged
+// one -- PIT's TIMED_OUT(true), Stryker's TimedOut, Infection's TIMED_OUT are
+// unanimous. Ditto knows it fired because ditto's own clock fired it, so this
+// needs no parsing at all.
+func TestADeadlineIsItsOwnReason(t *testing.T) {
+	t.Parallel()
+
+	if verdict.Deadline == verdict.Assertion {
+		t.Fatal("a mutant stopped by a clock was credited to a test")
+	}
+
+	if verdict.Deadline == verdict.Unknown {
+		t.Fatal("ditto fired the deadline itself, so it is never unknown")
+	}
+}
