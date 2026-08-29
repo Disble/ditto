@@ -104,3 +104,65 @@ this repository.
   the unselected arm, which is how the one mutant in `writer.go` was found. The
   others are untested, and guessing at them here would be the same mistake this
   note opens by describing.
+
+## Measured on ditto itself, 2026-08-29
+
+The harness could not run at all until today. `virusOf` cut the virus name off a
+label by removing the prefix `path + " → "`, and the label became
+`path:line:col → Virus` when the report gained line and column — a change this
+probe was never updated for, so it failed a `require` before the first mutant.
+**The 7.3% above therefore predates that format change**, and this is the first
+measurement of the rate on this repository.
+
+    mutants 748, of which do not build 83 (11.1%)
+    H1 AST      : caught 42 of 83, wrongly refused 1 that compiles
+    H2 go/types : caught 83 of 83, wrongly refused 0
+    viruses that produced one: 4 of 14
+
+Against the benchmark — **Major 1.8%, PIT 0%** — ditto is six times worse than
+the state of the art, and it is four operators doing it:
+
+| count | cause | virus |
+| --- | --- | --- |
+| 38 | `index -1 must not be negative` | Integer Decrement |
+| 8 | `declared and not used` | Comparison Replace |
+| 4 | an import left unused | Comparison Replace |
+| 2 | `-1 overflows uint32` | Integer Decrement |
+| ~9 | `operator - not defined on string` | Arithmetic |
+
+**A first attempt measured 80.4% and was wrong.** The probe walks the whole tree
+and the gate excludes `testdata/`, whose files are deliberately broken fragments
+for the virus tests — 4158 mutants against the real 748. Measuring the wrong
+population is how a number four times too large looked like a finding.
+
+### What this now costs, and what it does not
+
+**It no longer inflates the score.** `internal/verdict` names a kill that never
+compiled, and the reporter takes it out of the numerator and the denominator.
+Run against a fixture with two non-viable mutants of five:
+
+    ┃ • Killed:       1
+    ┃ ✓ Score:     0.33 (minimum: 0.00)
+    ┃ 2 of the 5 mutants generated never compiled, and are out of the score entirely.
+    ┃   1 from Integer Increment
+    ┃   1 from Integer Decrement
+
+So the accuracy defect this note opened is closed: the number people act on no
+longer carries them.
+
+**What remains is the generator.** Ditto still produces 83 mutants it then has to
+run and discard, which is 11.1% of every release paid for nothing, and 11.1%
+against a benchmark of 1.8% is a defect of the mutation operators rather than of
+the score. Two ways to close it, and the measurement chooses between them:
+
+- **Cripple the operator** — refuse `Integer Decrement` on a literal `0`, since a
+  negative literal is not a `BasicLit` in Go and 0 is the only way down. It
+  removes 40 of the 83. But 87 mutants are `0 → -1` and only 40 fail to build, so
+  it also throws away **47 that compile**. Trading thoroughness for honesty when
+  the honesty is already bought elsewhere is a bad trade.
+- **Refuse after generation, with `go/types`** — measured here at **83 of 83 with
+  zero wrong refusals**, one subprocess per package. It removes all of them and
+  loses nothing.
+
+The second is the answer and it is not built. `docs/backlog.md`.
+

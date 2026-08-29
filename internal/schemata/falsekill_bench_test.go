@@ -146,10 +146,14 @@ const separator = " → "
 func virusOf(t *testing.T, mutant *gomutatedfile.GoMutatedFile) string {
 	t.Helper()
 
-	name, found := strings.CutPrefix(mutant.Label(), mutant.Path()+separator)
+	// The label is ADDRESS + separator + virus, and the address is
+	// path:line:col -- it stopped being the bare path when the report gained
+	// line and column, and this probe was never updated, so it could not run at
+	// all. Cutting on the address is what makes the attribution real.
+	name, found := strings.CutPrefix(mutant.Label(), mutant.Address()+separator)
 	require.True(t, found,
-		"label %q does not begin with path %q, so the virus cannot be read off it",
-		mutant.Label(), mutant.Path())
+		"label %q does not begin with address %q, so the virus cannot be read off it",
+		mutant.Label(), mutant.Address())
 
 	return name
 }
