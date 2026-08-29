@@ -241,3 +241,31 @@ measured at 4 mutants where the whole fixture charges 48.
 
 The gate asks the repository-sized question on every push and then complains
 about the repository-sized bill.
+
+## The gate that finishes
+
+`make test.mutation.staged`, on one staged file:
+
+    staged scope: 1 file(s), 1 with byte ranges
+    ┃ • Total:        4
+    ┃ • Killed:       4
+    ┃ • Survived:     0
+    ┃ ✓ Score:     1.00 (minimum: 0.50)
+    --- PASS: TestStagedMutation (82.45s)
+
+**Four mutants, 82 seconds, green**, against 727 mutants that do not finish in
+thirty minutes. Not a smaller timeout — a smaller question, which is the one the
+tool was built to ask.
+
+It uses `RunStaged` rather than `Release`, and that is not a detail: `Release`
+reads the worktree and a staged gate has to read the index. Measured on a fixture
+built for it, one tracked file left dirty and unstaged moved **seven of eight
+verdicts**. Scoping correctly and then measuring the wrong bytes would be the
+same defect wearing the fix's clothes.
+
+It skips when nothing is staged, because a scope of nothing is a commit that
+touched no Go source, not a failure.
+
+`make test.mutation` stays. The repository-sized answer is still worth having on
+a machine with the time for it; it is just not what a gate should ask on every
+change.
