@@ -120,6 +120,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   since the beginning and only `--dry` ever printed them, so a real run widened
   in silence and reported survivors on lines nobody touched.
 
+- **A mutant that never compiled leaves the score entirely.** Naming it in the
+  report was not enough -- labelling is not excluding, and the denominator kept
+  carrying it. The kill predicate is undefined for a program that does not exist:
+  Zhu, Hall & May, *ACM Computing Surveys* 29(4) 1997, Def. 3.1 is
+  `S = D / (M − E)`, and gremlins, cargo-mutants, Stryker and go-mutesting all
+  exclude it. Measured on a fixture with two non-viable mutants of five, the
+  reported score went from **0.60 to 0.33** — one earned kill of one viable
+  mutant, which is what the tests actually did:
+
+      ┃ • Total:        3
+      ┃ ✓ Score:     0.33 (minimum: 0.00)
+      ┃ 2 of the 5 mutants generated never compiled, and are out of the score entirely.
+      ┃   1 from Integer Decrement
+      ┃   1 from Integer Increment
+
 ### Fixed
 
 - **A symlink anywhere in the tree broke the sandbox, two different ways.**

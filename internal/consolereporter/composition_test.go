@@ -96,3 +96,36 @@ func killFrom(virus, output string) *ditto.Diagnostic {
 			[]byte("package pkg\n\nvar n = 2\n")),
 	)
 }
+
+// A mutant that never compiled leaves the numerator AND the denominator.
+//
+// Not a modelling choice: the kill predicate is undefined for a program that
+// does not exist. Zhu, Hall & May, ACM Computing Surveys 29(4) 1997, Def 3.1:
+// S = D / (M - E). Stryker states the same formula with the classes named --
+// "Compile error: The mutant caused a compile error... It is not represented in
+// your mutation score" -- and gremlins, cargo-mutants, Stryker.NET and
+// go-mutesting all exclude it. Naming it in the report was not enough: labelling
+// is not excluding, and the score kept carrying it.
+func TestANonViableMutantLeavesTheScoreEntirely(t *testing.T) {
+	t.Parallel()
+
+	logger := fakelogger.New()
+	reporter := consolereporter.New(logger, stubdiffer.New(""), scorecalculator.New(), 0.0)
+
+	reporter.AddDiagnostic(killWith(`{"Action":"fail","Test":"TestAdd"}`))
+	reporter.AddDiagnostic(killWith(buildFailedStream))
+	reporter.AddDiagnostic(killWith(buildFailedStream))
+	reporter.Summarize()
+
+	printed := strings.Join(logger.LoggedLines(), "\n")
+
+	// One earned kill of one viable mutant. Counting the two that never built
+	// gives 3 of 3 and a perfect score for a suite that caught one thing.
+	if !strings.Contains(printed, "Score:     1.00") {
+		t.Fatalf("the score still carries the mutants that never built:\n%s", printed)
+	}
+
+	if !strings.Contains(printed, "Total:        1") {
+		t.Fatalf("the denominator still carries them:\n%s", printed)
+	}
+}

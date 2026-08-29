@@ -509,3 +509,27 @@ It is named in `docs/metrics.md` as the fifth metric and deliberately not gated:
 and nobody has run it against a real repository. A threshold set before that
 number exists would be invented.
 
+## 17. The gated path cannot express every mutant, and nothing counts the gap
+
+Measured by others, not here. A mutant switched at run time has to be a branch
+both arms of which compile and type-check, so a whole class cannot be expressed:
+compile-time constant contexts, static initialisers, type-incompatible operands.
+Stryker.NET skips constants for exactly this reason -- *"MutantControl.IsActive(0)
+is not a constant value. That is why we skip constant values from mutating"* --
+and Stryker excludes static mutants from the score entirely.
+
+**Schemata is therefore neither a superset nor a subset of the ordinary path.**
+That gap will never be zero, so it belongs in its own non-fatal metric rather
+than inside the agreement one, which is gated at zero.
+
+## 18. A sanity check the field has and ditto does not
+
+Dextool runs the test suite against the instrumented binary with **no mutant
+active** and requires it to pass, before using the schema at all. A schema that
+fails there is blacklisted.
+
+Ditto's `instrumentation-fidelity.md` H1 asserts the same property, but only
+inside a probe behind `DITTO_PROBE=1`. It is the check that catches the worst
+failure mode of instrumentation -- the suite behaving differently under the
+schema with nothing mutated, which INFLATES the score rather than breaking it.
+
