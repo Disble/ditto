@@ -550,3 +550,26 @@ Gating removes compilations and removes no invocations at all. That is a wall
 clock question, this repository reports wall clock rather than gating on it, and
 no integer measured here answers it.
 
+## 20. The generator makes 11.1% garbage, and the cheap refusal is measured
+
+Measured on ditto itself for the first time on 2026-08-29 — the harness had been
+broken since the report gained line and column, so `docs/experiments/false-kills.md`
+records the fix as well as the number:
+
+    mutants 748, of which do not build 83 (11.1%)
+    H2 go/types : caught 83 of 83, wrongly refused 0
+
+Benchmark: **Major 1.8%, PIT 0%.** Six times worse than the state of the art, from
+four operators of fourteen.
+
+It no longer inflates the score — `internal/verdict` names them and the reporter
+excludes them from both sides — so this is no longer an accuracy defect. It is
+**11.1% of every release run and discarded**, and a generator that should not
+have produced them.
+
+The refusal is `internal/schemata/typecheck_test.go`, which is test-only. Making
+it product code costs one `go list` per package, against 748 test-command
+invocations. That ratio is why this is worth doing and why nothing cheaper is
+needed: the AST-only alternative catches 42 of 83 and **wrongly refuses one that
+compiles**, which is the wrong direction to be wrong in.
+
