@@ -116,6 +116,48 @@ invocations at all** — a gated mutant still runs the binary once. The fixed
 compiles *and* runs, so how much of it survives when only the compile is removed
 is unmeasured.
 
-### H3
+### H3 — corroborated on the scope measured, and the scope is the caveat
 
-*(measuring)*
+Two real packages of ditto, both paths, the same test command:
+
+    mutants, ordinary : 10
+    mutants, gated    : 10
+    symmetric difference of the mutant set : empty
+    verdicts: every mutant PASS on both paths
+    ordinary: total 10, killed 10, score 1.00
+    gated   : total 10, killed 10, score 1.00
+
+**But all ten were killed on both paths, and a set with no survivor in it cannot
+show a disagreement about survival.** That is the weakness of this measurement
+and no reading of it should be stronger than that sentence.
+
+The scope was reduced to get here. The first attempt covered
+`internal/gomutatedfile`, and at roughly two and a half minutes per verdict the
+66 runs came to nearly three hours — the measurement paying the exact cost the
+hypothesis exists to remove. It was stopped and narrowed rather than left to run,
+and the narrowing is why the sample holds no survivor.
+
+What is known beyond this sample: `disagreement-class.md` measured the one class
+where the paths were ever seen to differ, and it is the mutant that does not
+compile — which now leaves the score on **both** paths, so the only recorded
+disagreement is no longer scored by either.
+
+## Decision
+
+The rule fixed in advance says: H3 holds and H1 holds → turn gating on.
+
+Both held, and **the rule fires on evidence thinner than it assumed.** H3 was
+written expecting a scope with survivors in it, and what it got was ten mutants
+that every path kills. Recording that the rule fired is not the same as recording
+that the question is settled.
+
+What would settle it is one run over a scope with survivors — `instrument.go`
+alone had 28 — and that run costs about forty minutes. It is the next
+measurement, and it is named here rather than skipped.
+
+## What none of this decided
+
+Whether the gate finishes in thirty minutes. Compilations fall 54%; invocations
+do not fall at all. The wall-clock question is still open, and this repository
+reports wall clock rather than gating on it, so it needs its own run and its own
+sentence — not an inference from an integer that was measuring something else.

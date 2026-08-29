@@ -533,3 +533,20 @@ inside a probe behind `DITTO_PROBE=1`. It is the check that catches the worst
 failure mode of instrumentation -- the suite behaving differently under the
 schema with nothing mutated, which INFLATES the score rather than breaking it.
 
+## 19. Gating is measured and not turned on
+
+`docs/experiments/turning-gating-on.md` measured it: 60.1% of this repository's
+729 mutants are gateable, and gating removes **394 of 729 compilations, 54%**.
+The two paths agreed on every mutant of the scope tested.
+
+It is not turned on, and the reason is written rather than hidden. **The scope
+that agreed held no survivor** — ten mutants, all killed on both paths — and a
+set with nothing surviving in it cannot show a disagreement about survival. The
+run that would settle it is one scope with survivors in it; `instrument.go` alone
+has 28, and that run costs about forty minutes.
+
+Also unanswered, and separately: **whether the gate then fits in thirty minutes.**
+Gating removes compilations and removes no invocations at all. That is a wall
+clock question, this repository reports wall clock rather than gating on it, and
+no integer measured here answers it.
+
