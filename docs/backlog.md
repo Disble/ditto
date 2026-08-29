@@ -573,3 +573,24 @@ invocations. That ratio is why this is worth doing and why nothing cheaper is
 needed: the AST-only alternative catches 42 of 83 and **wrongly refuses one that
 compiles**, which is the wrong direction to be wrong in.
 
+## 21. The gate asks a repository-sized question on every push
+
+Measured three times, all to the same end: with gating on and `make` resolved,
+the gate reaches **424 of 727 mutants** and dies at `-timeout=30m`. Two levers
+are spent.
+
+- **Gating** removes 54% of compilations and the run still does not finish.
+- **Cutting the suite** the mutant is judged by, from 69.3s to 37.2s, changed the
+  gate by 424 against 422. `-failfast` already stops a killed mutant at its first
+  failing test, so the expensive tests are only paid by SURVIVORS, and they are
+  the minority. A 46% cut in the suite bought 0.5% in the gate, and the change
+  was reverted.
+
+What is left is not a lever. **Ditto's own answer to a repository-sized bill is
+`ditto staged`** — mutate what the change touched. `WithChangedRanges` is
+recorded at 4 laboratory runs where the whole fixture charges 48, dharness uses
+the staged path, and this repository's own gate does not.
+
+Raising the timeout is not on this list. The number would move and the question
+would not.
+
