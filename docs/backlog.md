@@ -490,6 +490,14 @@ A deadline is a prerequisite for metric 2, not a metric itself: once it exists, 
 mutant that hits it is a **kill with its own reason**, which is what PIT, Stryker
 and Infection all do.
 
+**Closed 2026-08-28**, and one part of the fix is worth keeping: `CommandContext`
+alone does not bound anything. It kills the process it started, and `go test`
+starts the test binary — killing the parent leaves the child holding the pipe, so
+`CombinedOutput` waits forever on a command that was already cancelled. Measured:
+the deadline test ran to its own 30s safety net on Linux while Windows happened
+to return. `WaitDelay` is what closes it. The hang this deadline exists to stop,
+living inside the fix for it.
+
 ## 16. The two paths disagree and nothing counts by how much
 
 `fidelity_probe_test.go` asserts the gated and ordinary paths still disagree
