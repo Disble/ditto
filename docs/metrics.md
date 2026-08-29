@@ -114,10 +114,41 @@ disagree about the same mutant — `docs/experiments/disagreement-class.md` has 
 measured, and `fidelity_probe_test.go` **asserts the disagreement is still
 present**. Two implementations, two answers, at most one right.
 
-It is not gated because **its population is unmeasured**: the probe sits behind
-`DITTO_PROBE=1` and nobody knows how many mutants disagree on a real repository.
-A threshold without that number would be invented, which is the failure this
-whole document exists to correct.
+**A focused review settled the threshold, and the answer is that there is no
+published basis for a tolerant one.** Nobody has measured a disagreement rate
+between schemata and compile-per-mutant execution, so nobody has proposed a
+tolerance. The three nearest checks in the literature all demanded **exact set
+equality**: the Clang mutation paper verified its invalid-mutant labels against
+actual compilation failures, AccMut carries an equality theorem, and Dextool
+assumes the generator is wrong and mitigates with a fallback and a sanity check
+rather than tolerating a percentage. An execution optimisation is validated by
+equality, not by proximity.
+
+So the threshold is **0 — over the mutants both paths consider viable**, and that
+qualifier is the whole finding. Comparing verdicts on a mutant one path refuses
+to build is a category error, not a discrepancy: under schemata the compiled code
+is not the mutant, it is the original plus a branch, and the source-text mutant
+does not exist as a program. Running the branch does not rescue a mutant that
+never built; it runs a different program that happens to evaluate the mutated
+expression. **Neither path should score it.**
+
+Ditto's one measured disagreement is exactly that case, so it is outside the
+comparison rather than inside it. What is still unmeasured is the population of
+disagreements among mutants both paths DO run, and that is what keeps this
+ungated.
+
+Two more things the review named, both recorded in `docs/backlog.md`:
+
+- **Schemata is neither a superset nor a subset.** There are mutants the ordinary
+  path compiles that a schema cannot express at all — compile-time constant
+  contexts, static initialisers, type-incompatible branches. Stryker.NET skips
+  constants for exactly this reason, and Stryker excludes static mutants from the
+  score outright. So an expressiveness gap is expected and belongs in its own
+  non-fatal metric, never in the agreement one.
+- **Branch overhead is real and measured** — the Clang paper reports a 120%
+  delay on CppCheck from the inserted ternaries. Where a timeout is a kill, the
+  two paths can disagree legitimately without either being broken, so timeouts
+  come out of the comparison.
 
 ## How a verdict is classified
 

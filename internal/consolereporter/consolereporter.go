@@ -39,13 +39,21 @@ func (r *ConsoleReporter) AddDiagnostic(diagnostic *ditto.Diagnostic) {
 }
 
 func (r *ConsoleReporter) Summarize() result.Result[any] {
-	total := len(r.diagnostics)
-
 	var killed, survived int
 
 	survivors := []*ditto.Diagnostic{}
 
 	for _, diagnostic := range r.diagnostics {
+		// A mutant that never compiled leaves the numerator AND the denominator.
+		// The kill predicate is undefined for a program that does not exist:
+		// Zhu, Hall & May, ACM Computing Surveys 29(4) 1997, Def 3.1 --
+		// S = D / (M − E) -- and gremlins, cargo-mutants, Stryker and
+		// go-mutesting all exclude it. It is counted and named below instead,
+		// because it is a defect of the GENERATOR with a benchmark to answer to.
+		if diagnostic.IsOk() && diagnostic.Reason() == verdict.BuildFailed {
+			continue
+		}
+
 		if diagnostic.IsOk() {
 			killed++
 		} else {
@@ -54,6 +62,8 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 			survivors = append(survivors, diagnostic)
 		}
 	}
+
+	total := killed + survived
 
 	// Addresses first, diffs after. Survivors are the only part of this report
 	// anybody acts on, and printing them after the diffs turned the report into
@@ -94,7 +104,7 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 	r.logger.Logf("┃ " + scoreColor("%s Score: %8.2f (minimum: %.2f)", scoreIcon, score, r.minimumThreshold) + "    ┃")
 	r.logger.Logf("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛")
 
-	r.logUnearned(unearned, killed, byVirus)
+	r.logUnearned(unearned, len(r.diagnostics), byVirus)
 
 	return res
 }
@@ -148,13 +158,13 @@ func (r *ConsoleReporter) logDiff(diagnostic *ditto.Diagnostic) {
 // line people stop reading. And it can only see what the test command told it:
 // the reason is read from `go test -json`, and a command that emits something
 // else yields no reason rather than a guess. See docs/metrics.md, metric 2.
-func (r *ConsoleReporter) logUnearned(unearned, killed int, byVirus map[string]int) {
+func (r *ConsoleReporter) logUnearned(unearned, generated int, byVirus map[string]int) {
 	if unearned == 0 {
 		return
 	}
 
 	r.logger.Logf("┃ %s", color.BoldRed(
-		"%d of the %d kills above never compiled — no test earned them.", unearned, killed))
+		"%d of the %d mutants generated never compiled, and are out of the score entirely.", unearned, generated))
 
 	// The rate has an external benchmark -- Major 1.8%, PIT 0% -- and a rate
 	// alone names no work. The virus is what somebody fixes.
