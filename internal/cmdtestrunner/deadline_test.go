@@ -65,7 +65,12 @@ func TestACommandThatFinishesIsLeftAlone(t *testing.T) {
 
 func writeBlockingProgram(t *testing.T, root string) {
 	t.Helper()
-	writeProgram(t, root, "package main\n\nfunc main() { select {} }\n")
+	// A busy loop, not `select {}`: Go's runtime detects an all-goroutines-asleep
+	// deadlock and exits on its own, which is not a hang and would have let this
+	// test pass for the wrong reason. Measured -- it did, on Linux, while Windows
+	// timed out first. A spinning loop is also the real case: loopcondition is in
+	// the default virus set and writing one is what it does.
+	writeProgram(t, root, "package main\n\nfunc main() {\n\tfor {\n\t}\n}\n")
 }
 
 func writeQuickProgram(t *testing.T, root string) {
