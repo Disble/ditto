@@ -116,7 +116,24 @@ invocations at all** — a gated mutant still runs the binary once. The fixed
 compiles *and* runs, so how much of it survives when only the compile is removed
 is unmeasured.
 
-### H3 — corroborated on the scope measured, and the scope is the caveat
+### H3 — corroborated, on a scope with survivors in it
+
+Re-run over `internal/schemata/instrument.go`, chosen because it holds 28
+survivors. 3574 s, both paths:
+
+    ordinary: total 78, killed 50, survived 28
+    gated   : total 78, killed 50, survived 28
+
+    same 78 mutants on both paths
+    same verdict for every one of the 78
+
+**This is the run the first attempt could not be.** The earlier comparison held
+ten mutants that every path killed, and a set with no survivor in it cannot show
+a disagreement about survival. This one has 28, and they agree.
+
+Gating is turned on.
+
+### H3, first attempt — corroborated on a scope too weak to decide it
 
 Two real packages of ditto, both paths, the same test command:
 
