@@ -207,3 +207,37 @@ Two consequences, both mine:
   *the test command fails*. The fallback for it stands.
 
 The gate resolves make the way the hook does now, and runs.
+
+## Does the gate finish? No, and two levers are now spent
+
+Three full runs, all to the same end.
+
+| run | configuration | mutants of 727 | result |
+| --- | --- | --- | --- |
+| 1 | gating on, `make` resolved | 422 | timed out at 1801.057s |
+| 2 | + the three nested-release tests skipped | 360 | timed out — **contaminated**, coverage runs were on the same machine |
+| 3 | same as 2, nothing else running | **424** | timed out at 1800.885s |
+
+**424 against 422.** The suite skip bought nothing, and the reason is measurable
+rather than mysterious: `-failfast` already stops a killed mutant at its first
+failing test, so it never reaches the expensive ones. Cutting the suite from
+69.3s to 37.2s — 46% — only helps **survivors**, and they are the minority. A 46%
+reduction in the suite produced a 0.5% change in the gate.
+
+That is the non-uniform cost of a mutant, measured on this repository rather than
+quoted from the literature, and it refutes the arithmetic that justified the
+change: 4.27 s/mutant divided by 1.86 predicted 2.30 and would have fit. The
+prediction assumed every mutant pays the whole suite. Most pay a fraction.
+
+The skip is reverted. A change with no measured benefit does not ship, and this
+one also removed three tests from a mutant's judgment.
+
+### What is left, and it is not a lever — it is the product
+
+Mutating 727 mutants on every push is the wrong shape. Ditto's own answer to that
+is `ditto staged`: mutate what the change touched, and pay for that. It is the
+feature this tool exists for, dharness uses it, and `WithChangedRanges` is
+measured at 4 mutants where the whole fixture charges 48.
+
+The gate asks the repository-sized question on every push and then complains
+about the repository-sized bill.
