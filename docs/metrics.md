@@ -96,6 +96,19 @@ you already know there is too much of it. What they cannot do is tell you there
 is too much of it, and giving them thresholds dressed them as something they are
 not.
 
+Two systematic reviews of the 2021–2026 literature settled this from outside, and
+they converge: **there is no accepted performance metric for a mutation run.** The
+canonical enumeration holds 18 cost metrics and not one of them is the absolute
+cost of a run; the mutant count as a surrogate is a documented threat to validity
+at **44% average error**, growing with repository size; and **nobody gates a build
+on the cost of a mutation run** — every gate surveyed is a score gate.
+
+The one published model that predicts a run's duration assumes uniform per-mutant
+cost, and its own data refutes it: timed-out mutants took **93%** of the analysis
+time on one subject. So the non-uniform cost of a mutant is an open gap in the
+field, not an oversight here. See
+`docs/experiments/what-the-field-measures-about-cost.md`.
+
 **The performance decision is one, and it is binary: does the gate finish?**
 
 No integer here predicts it, and the reason is the same one that started this
@@ -108,7 +121,13 @@ So the performance section below keeps its counters as **diagnosis, without
 thresholds**, and the one line that is a metric is the observed completion of the
 gate itself. The number that would change a decision is the one nobody has:
 something that predicts completion from the composition of the mutant set rather
-than from its size.
+than from its size — and the reviews say nobody has it.
+
+What ditto does have, and did not build for this: **`internal/verdict` records why
+each mutant died**. `Assertion` / `BuildFailed` / `Deadline` is exactly the
+partition the field says nobody models cost by, and almost no tool can, because
+almost no tool knows the reason. Decomposing a run's time by that partition is
+the measurement worth making here, and it has not been made.
 
 ### Diagnosis, not gates
 
