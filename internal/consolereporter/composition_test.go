@@ -65,3 +65,34 @@ func TestTheReportIsQuietWhenEveryKillWasEarned(t *testing.T) {
 		t.Fatalf("the report invented a problem:\n%s", printed)
 	}
 }
+
+// Metric 1 is a rate with an external benchmark -- Major 1.8%, PIT 0% -- and a
+// rate alone names no work. The virus that produced the mutant is what somebody
+// fixes, so the report has to carry it.
+func TestTheReportNamesTheVirusThatProducedThem(t *testing.T) {
+	t.Parallel()
+
+	logger := fakelogger.New()
+	reporter := consolereporter.New(logger, stubdiffer.New(""), scorecalculator.New(), 0.0)
+
+	reporter.AddDiagnostic(killFrom("Integer Decrement", buildFailedStream))
+	reporter.AddDiagnostic(killFrom("Integer Decrement", buildFailedStream))
+	reporter.AddDiagnostic(killFrom("Range Break", buildFailedStream))
+	reporter.Summarize()
+
+	printed := strings.Join(logger.LoggedLines(), "\n")
+	for _, want := range []string{"Integer Decrement", "Range Break"} {
+		if !strings.Contains(printed, want) {
+			t.Fatalf("the report does not name %q, so nobody knows what to fix:\n%s", want, printed)
+		}
+	}
+}
+
+func killFrom(virus, output string) *ditto.Diagnostic {
+	return ditto.NewDiagnostic(
+		future.Resolved(result.Ok(output)),
+		gomutatedfile.New(virus, "pkg/a.go",
+			[]byte("package pkg\n\nvar n = 1\n"),
+			[]byte("package pkg\n\nvar n = 2\n")),
+	)
+}

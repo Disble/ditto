@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Disble/ditto/internal/cmdtestrunner"
 	"github.com/Disble/ditto/internal/ditto"
 	"github.com/Disble/ditto/internal/result"
 )
@@ -152,7 +153,13 @@ func (r *GoBuildRunner) build(root string) (string, error) {
 // root instead made an untouched package fail, which read exactly like the
 // instrumentation having broken it.
 func (r *GoBuildRunner) run(root string) result.Result[string] {
-	command := exec.Command(r.binary, "-test.count=1") //nolint:gosec,noctx // the binary is the one just built
+	// -test.timeout is passed because a test binary invoked directly takes 0 --
+	// timeout disabled -- and only the `go test` driver injects the 10 minute
+	// default. Without it a mutant that loops never returns and the release
+	// never ends; loopcondition, loopbreak and rangebreak are all in the default
+	// virus set. docs/backlog.md entry 15.
+	command := exec.Command(r.binary, "-test.count=1", //nolint:gosec,noctx // the binary is the one just built
+		"-test.timeout="+cmdtestrunner.DefaultDeadline.String())
 	command.Dir = filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(r.packagePath, "./")))
 	command.Env = environment(r.mutant)
 

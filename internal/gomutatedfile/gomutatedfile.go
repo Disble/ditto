@@ -180,3 +180,10 @@ func (f *GoMutatedFile) Diff(differ Differ) string {
 		f.rawMutatedContent,
 	)
 }
+
+// Virus is the mutation operator that produced this file.
+//
+// It is what somebody fixes when a mutant does not compile: the rate has an
+// external benchmark -- Major 1.8%, PIT 0% -- and a rate alone names no work.
+// docs/metrics.md metric 1.
+func (f *GoMutatedFile) Virus() string { return f.infectionName }

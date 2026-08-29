@@ -1,6 +1,7 @@
 package consolereporter
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/Disble/ditto/internal/color"
@@ -65,10 +66,12 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 	}
 
 	unearned := 0
+	byVirus := map[string]int{}
 
 	for _, diagnostic := range r.diagnostics {
 		if diagnostic.IsOk() && diagnostic.Reason() == verdict.BuildFailed {
 			unearned++
+			byVirus[diagnostic.Virus()]++
 		}
 	}
 
@@ -91,7 +94,7 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 	r.logger.Logf("┃ " + scoreColor("%s Score: %8.2f (minimum: %.2f)", scoreIcon, score, r.minimumThreshold) + "    ┃")
 	r.logger.Logf("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛")
 
-	r.logUnearned(unearned, killed)
+	r.logUnearned(unearned, killed, byVirus)
 
 	return res
 }
@@ -145,11 +148,24 @@ func (r *ConsoleReporter) logDiff(diagnostic *ditto.Diagnostic) {
 // line people stop reading. And it can only see what the test command told it:
 // the reason is read from `go test -json`, and a command that emits something
 // else yields no reason rather than a guess. See docs/metrics.md, metric 2.
-func (r *ConsoleReporter) logUnearned(unearned, killed int) {
+func (r *ConsoleReporter) logUnearned(unearned, killed int, byVirus map[string]int) {
 	if unearned == 0 {
 		return
 	}
 
 	r.logger.Logf("┃ %s", color.BoldRed(
 		"%d of the %d kills above never compiled — no test earned them.", unearned, killed))
+
+	// The rate has an external benchmark -- Major 1.8%, PIT 0% -- and a rate
+	// alone names no work. The virus is what somebody fixes.
+	viruses := make([]string, 0, len(byVirus))
+	for virus := range byVirus {
+		viruses = append(viruses, virus)
+	}
+
+	sort.Slice(viruses, func(i, j int) bool { return byVirus[viruses[i]] > byVirus[viruses[j]] })
+
+	for _, virus := range viruses {
+		r.logger.Logf("┃   %d from %s", byVirus[virus], virus)
+	}
 }

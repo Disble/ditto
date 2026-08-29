@@ -11,12 +11,12 @@ The distinction that organises everything below:
 
 ## The four
 
-| # | metric | threshold | where the threshold comes from | the decision it drives |
-| --- | --- | --- | --- | --- |
-| 1 | `nonViableRate`, broken down by virus | ≤ 1.8% | **external**: Major 1.8%, PIT 0% | which mutation operator to fix |
-| 2 | `verdictsWithoutAReason` | 0 | binary — the reason is there or it is not | can this kill be audited? |
-| 3 | `verdictsOutsideTheChange` | 0 | measured: addresses the diff never touched | did this run measure my change? |
-| 4 | `mutantsPerRelease` | bidirectional ratchet | the previous number | does this change make the gate cost more? |
+| # | metric | threshold | where the threshold comes from | the decision it drives | status |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `nonViableRate`, broken down by virus | ≤ 1.8% | **external**: Major 1.8%, PIT 0% | which mutation operator to fix | **live** — the report names the count and the viruses behind it, at no extra cost, because the run already knows which kills never compiled |
+| 2 | `verdictsWithoutAReason` | 0 | binary — the reason is there or it is not | can this kill be audited? | **live** — `Assertion`, `BuildFailed` and `Deadline` are read; `Unknown` when the command is not `go test -json` |
+| 3 | `verdictsOutsideTheChange` | 0 | measured: addresses the diff never touched | did this run measure my change? | **live** — guarded by an address discriminator with its own control, and a widened scope now announces itself |
+| 4 | `mutantsPerRelease` | bidirectional ratchet | the previous number | does this change make the gate cost more? | **live** — and it fired three times while this was being written |
 
 ### 1. `nonViableRate` — mutants that do not compile, over mutants generated
 
