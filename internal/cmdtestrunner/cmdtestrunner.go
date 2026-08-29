@@ -55,6 +55,11 @@ func New(name string, args ...string) *CMDTestRunner {
 // recorded in docs/backlog.md rather than guessed at here.
 const DefaultDeadline = 10 * time.Minute
 
+// waitDelay bounds how long Wait keeps reading after the deadline has already
+// killed the command. It only has to outlast the write of whatever was already
+// buffered.
+const waitDelay = 2 * time.Second
+
 // NewWithDeadline is New with the bound named. A mutant whose command runs past
 // it is stopped and reported as killed BY THE DEADLINE, which PIT, Stryker and
 // Infection all treat as a kill carrying its own reason.
@@ -73,6 +78,18 @@ func (t *CMDTestRunner) Test(repository ditto.TemporaryRepository) result.Result
 	command := exec.CommandContext(ctx, t.name, t.args...) //nolint:gosec // the command is the caller's own
 	command.Dir = repository.Root()
 	command.Env = withoutGitEnvironment(os.Environ())
+
+	// WaitDelay is the part that actually bounds this. Leaving it out looks
+	// fixed and is not. CommandContext kills the process it started, but
+	// `go test` starts the test binary, and killing the parent leaves the child
+	// alive holding the pipe -- so CombinedOutput waits forever on a command
+	// that was already cancelled. Measured: on Linux the deadline test ran until
+	// its own 30s safety net while Windows happened to return; the very hang
+	// this deadline exists to stop, inside the fix for it.
+	//
+	// After the delay the pipes are closed and Wait returns, whatever the
+	// grandchild is still doing.
+	command.WaitDelay = waitDelay
 
 	output, err := command.CombinedOutput()
 
