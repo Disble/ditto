@@ -178,3 +178,32 @@ Whether the gate finishes in thirty minutes. Compilations fall 54%; invocations
 do not fall at all. The wall-clock question is still open, and this repository
 reports wall clock rather than gating on it, so it needs its own run and its own
 sentence — not an inference from an integer that was measuring something else.
+
+## What two runs of the gate measured, and it was not ditto
+
+Turning gating on appeared to kill the gate in 6.44 seconds. It did not.
+
+`ditto_mutation_test.go` hardcoded `make`, and this machine is Windows, where GNU
+make answers to `mingw32-make`. `.githooks/pre-commit` has probed three names
+since the day the hook was unrunnable for exactly this — so the fact was written
+down in this repository and used anyway.
+
+The command therefore failed instantly with no output. Ditto reads a non-zero
+exit as a killed mutant and an unmutated one as a red baseline, so it refused in
+under three seconds. **A test command that cannot start is not a red baseline**,
+and nothing here had ever run.
+
+The second run, with gating turned back off, refused the same way in 2.93s. That
+is what settled it: the failure was identical without the change blamed for it.
+
+Two consequences, both mine:
+
+- **`Gated()` was turned off on a false diagnosis** and is turned back on. The
+  measurement that justified it — 54% of compilations, and identical verdicts
+  over 78 mutants with 28 survivors — was never in question.
+- **The first failure was real and is separate.** That run reached the point of
+  instrumenting `cmd/ditto/main.go` and reading its suite, which is further than
+  the other two got, and its message was different: *fails its own suite*, not
+  *the test command fails*. The fallback for it stands.
+
+The gate resolves make the way the hook does now, and runs.
