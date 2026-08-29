@@ -101,18 +101,28 @@ func TestGatedLaboratory(t *testing.T) {
 	// mutant of the file is scored killed — a perfect score produced by a broken
 	// suite, with nothing in the output naming the cause. Measured at 4 of 4
 	// killed against 1 of 4 on the same mutants; docs/experiments/changed-scope.md.
-	t.Run("refuses when the suite fails with no mutant selected", func(t *testing.T) {
+	// The instrumented file failing its own suite means the schema broke it, not
+	// that the repository is red -- the whole point of instrumenting is that the
+	// unselected arms are the original. Refusing the run for it was too wide: it
+	// killed the gate on cmd/ditto/main.go in 6.44 seconds, measured, while
+	// every other file was fine.
+	//
+	// Falling back cannot hide a genuinely red repository, because the ordinary
+	// path this falls back to runs verifyBaseline once per release and refuses
+	// there. One guard covers it; two, and the wider one only removes files it
+	// could have measured.
+	t.Run("sends a file its own schema broke to the old path", func(t *testing.T) {
 		runner := &fakeRunner{built: true, redBaseline: true}
-		lab := gatedlaboratory.NewWithRunner(&countingLaboratory{}, fakeTemporary{}, runner)
+		delegate := &countingLaboratory{}
+		lab := gatedlaboratory.NewWithRunner(delegate, fakeTemporary{}, runner)
 
-		assert.PanicsWithError(t,
-			"ditto: calc/calc.go fails its own suite with no mutant selected, so every "+
-				"mutant of it would be scored killed; refusing to score against a red baseline",
-			func() {
-				lab.TestAll(fakeRepository{}, mutantsOf(
-					strings.Replace(source, "a > b", "a >= b", 1),
-				))
-			})
+		results := lab.TestAll(fakeRepository{}, mutantsOf(
+			strings.Replace(source, "a > b", "a >= b", 1),
+		))
+
+		assert.Len(t, results, 1)
+		assert.Equal(t, 0, lab.Gated())
+		assert.Equal(t, 1, lab.FellBack())
 	})
 
 	t.Run("scores normally when the suite passes with no mutant selected", func(t *testing.T) {

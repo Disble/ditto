@@ -109,17 +109,28 @@ func (l *GatedLaboratory) TestAll(
 	// the file's own suite, and this path is the only one that ever measures it.
 	//
 	// Ok here means the command failed. For a selected run that is a killed
-	// mutant; with nothing selected it is a red baseline, and under a red
-	// baseline every selected run fails too — so every mutant of the file is
-	// scored killed and the report says 1.00 without naming a cause. Measured at
+	// mutant; with nothing selected it means the SCHEMA broke this file, because
+	// unselected arms are the original — so every mutant of it would be scored
+	// killed and the report would say 1.00 without naming a cause. Measured at
 	// 4 of 4 against 1 of 4 on the same mutants, docs/experiments/changed-scope.md.
+	//
+	// The whole file goes back to its own path, exactly as one that does not
+	// build does. It used to refuse the entire run instead, and that was too
+	// wide: turning gating on for this repository died on cmd/ditto/main.go in
+	// 6.44 seconds while every other file was fine, and a schema that cannot
+	// carry one file is a reason to stop schematising that file, not to stop
+	// measuring the repository. Dextool blacklists such a schema and continues.
+	//
+	// Falling back cannot hide a genuinely red repository: the ordinary path
+	// this returns to runs verifyBaseline once per release and refuses there.
+	// One guard covers that, and the wider one only removed files it could have
+	// measured.
 	//
 	// The run is already paid for. Reading it is what keeps it from being a lie.
 	if first.IsOk() {
 		files[0].RestoreIn(sandbox)
 
-		panic(ditto.NewRefusalError("ditto: " + files[0].Path() + " fails its own suite with no mutant selected, so every " +
-			"mutant of it would be scored killed; refusing to score against a red baseline"))
+		return l.all(repository, files)
 	}
 
 	return l.selectEach(repository, files, planned.Selector, runner, sandbox)
