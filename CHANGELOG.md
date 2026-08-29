@@ -4,181 +4,190 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.1] - 2026-08-28
+## [0.7.0] - 2026-08-29
 
-### Changed
+A release about ditto's own answers: whether they can be believed, and whether
+the gate that produces them ever finishes. Both were measured rather than
+assumed, and both were wrong.
 
-- **The mutation score is no longer how ditto's quality is judged.** It measures
-  the user's tests; it is not a statement about whether ditto's answer can be
-  believed, and it is never a gate here. Two systematic reviews -- one over the
-  peer-reviewed literature, one over the source and docs of PIT, Stryker,
-  Infection, mutmut, Cosmic Ray, MutPy, cargo-mutants and the Go tools -- settled
-  a question three rounds of argument here had not.
+### Breaking
 
-  "Unjudged" is not one class. A mutant that does not compile leaves the
-  numerator **and** the denominator, because the kill predicate is undefined for
-  a program that does not exist (Zhu, Hall & May, *ACM Computing Surveys* 29(4),
-  1997, Def. 3.1: `S = D / (M − E)`). A timeout is a **kill**, reported as its
-  own reason -- unanimous across PIT, Stryker and Infection. A suspected
-  equivalent counts as survived under a metric renamed to a stated lower bound.
+- **The mutation score changes value for the same code.** A mutant that never
+  compiled used to be counted as killed — a failing compile exits non-zero, and
+  that is how ditto recognises a kill — and it now leaves the numerator **and**
+  the denominator. Measured on a fixture with two non-viable mutants of five, the
+  reported score went from **0.60 to 0.33**: one earned kill of one viable
+  mutant, which is what the tests actually did.
 
-  And the field already says not to report one number: Google abandoned the ratio
-  in IEEE TSE 2021 as *"neither concrete nor actionable"*; fewer than 5% of
-  mutants are subsuming and the all-mutants ratio does not track the subsuming
-  one (ISSTA 2016); the correlation with real faults is weak once suite size is
-  controlled (ICSE 2018); and below a high threshold the number is disconnected
-  from fault revelation entirely (ICSE 2017) -- ditto's own gate runs at 0.5,
-  which is below.
+  Anyone with a `WithMinimumThreshold` tuned to the old number will see it move,
+  and it moves toward the truth. The kill predicate is undefined for a program
+  that does not exist: Zhu, Hall & May, *ACM Computing Surveys* 29(4) 1997,
+  Def. 3.1 is `S = D / (M − E)`, and gremlins, cargo-mutants, Stryker and
+  go-mutesting all exclude it.
 
-  The score now ships with its composition beside it or not at all. Four metrics
-  take its place, each naming the decision it drives and where its threshold
-  comes from: `docs/metrics.md`, with the reviews in
-  `docs/experiments/what-the-field-already-decided.md`.
+  Measured on this repository: **83 of 748 mutants do not build, 11.1%**, against
+  a benchmark of Major 1.8% and PIT 0%.
+
+- **The default test command gains `-json`**, in both places it is defined, so
+  the captured output of a failing command is now the `go test` event stream. It
+  is what lets ditto say WHY a mutant died; `verdict.Text` renders it back for
+  anything a human reads.
 
 ### Added
 
-- **`internal/verdict` -- a verdict now carries why.** Ditto read any non-zero
-  exit as a killed mutant: a failed assertion, a mutant that never compiled, a
-  timeout, a missing binary. Measured on `internal/schemata/instrument.go`, 78
-  mutants: 50 reported killed, of which **10 did not compile and 1 hung until its
-  timeout**. 22% of the kills were not assertions.
+- **`internal/verdict` — a verdict carries why it happened.** Ditto read any
+  non-zero exit as a killed mutant: a failed assertion, a mutant that never
+  compiled, a timeout, a missing binary. Measured on one file, 78 mutants: 50
+  reported killed, of which **10 did not compile and 1 hung until its timeout**.
+  22% of the kills were not assertions.
 
-  The reason is read from `go test -json`, which emits `"Action":"build-fail"`
-  and a `fail` event carrying `"FailedBuild"` -- neither of which appears when a
-  test fails for real. It costs **no extra subprocess**, and it is JSON rather
-  than prose. Exit codes cannot carry it: measured on go1.27, `go test`,
-  `go build`, `go vet` and `go test -json` all exit 1 either way, and a test
-  pins that so a Go release which changes it is caught here.
+  The reason comes from `go test -json`, which emits an `Action: build-fail`
+  event and a `fail` event carrying `FailedBuild` — neither of which appears when
+  a test fails for real. **No extra subprocess.** Exit codes cannot carry it:
+  measured on go1.27, `go test`, `go build`, `go vet` and `go test -json` all
+  exit 1 either way, and a test pins that so a Go release which changes it is
+  caught here.
 
   A command that is not `go test -json` yields `Unknown` rather than a guess.
-  Reporting `Assertion` there would manufacture the very kills this exists to
-  count.
 
-  **The report now says it.** A run whose kills were not all earned prints, under
-  the summary:
-
-      ┃ • Killed:       3
-      ┃ ✓ Score:     0.60 (minimum: 0.00)
-      ┃ 2 of the 3 kills above never compiled — no test earned them.
-
-  Measured on a fixture built for it: the honest score there is 1 of 3, and
-  `0.60` was indistinguishable from an earned 0.60 until this line existed. It
-  stays silent when every kill was earned, because a line printed on every run is
-  a line people stop reading.
-
-  Ditto's default test command gains `-json` -- **in both places it is defined**.
-  Changing only `release.go` left `cmd/ditto` on its own default and the CLI
-  captured plain text, which the suite could not see and running the binary
-  showed in one line.
-
-- **A counter for the repository, not for the fixture.**
-  `mutantsPerReleaseOnThisRepository` records what one full run of the gate has
-  to pay for: **660** today. Every other recorded counter measures a six-file
-  synthetic fixture, and all eight stayed green while the real cost went from
-  431 mutants to 660 and the gate blew past its thirty-minute timeout. It is
-  what `internal/perfbench/doc.go` already promised in prose -- "how many mutants
-  a scope produces ... a change in one is always meaningful" -- and the one
-  number in that sentence nothing measured. Counting costs no test command and
-  no sandbox.
-
-  It ships behind a `livetree` build tag, run by `make test.counters`, which the
-  pre-commit hook now runs alongside `lint` and `test.failfast`. **That is not a
-  detail.** Untagged, the counter read the tree it was compiled inside -- and
-  ditto's sandbox carries every `_test.go` while each mutant runs `./...`, so it
-  ran inside every mutant's sandbox and read the *mutated* tree. Any mutation
-  that changes the number of mutable sites moved the count, the assertion failed,
-  `make` exited non-zero, and ditto recognises a killed mutant by exactly that.
-
-  Measured end to end on a mutant that survives on its own
-  (`internal/schemata/instrument.go:147:3 -> Range Break`): untagged, the suite
-  reported `REGRESSION ... 661, baseline 660 (+1)` and the mutant was scored
-  killed; tagged, `DONE 368 tests, 10 skipped` and it survived. A census by virus
-  puts **66 of the 660 mutants** -- every `Range Break` -- in reach of that
-  defect. See `docs/experiments/a-counter-that-answers-for-itself.md`.
-
-- **A deadline, at last.** `grep -rn "timeout" --include=*.go .` used to find one
-  hit in the whole product, and it was a doc comment. `gobuildrunner` runs a test
-  binary directly, where `-test.timeout` defaults to **0 — disabled** — and only
-  the `go test` driver injects the ten-minute default, so on the gated path **a
-  mutant that loops never returned**. `loopcondition`, `loopbreak` and
-  `rangebreak` are all in the default virus set, so writing one is routine.
+- **A deadline, at last.** Searching the whole product for a timeout used to find
+  one hit, and it was a doc comment. A test binary invoked directly takes
+  `-test.timeout` **0 — disabled** — so on the gated path a mutant that loops
+  never returned, and `loopcondition`, `loopbreak` and `rangebreak` are all in
+  the default virus set.
 
   Both paths are bounded now, and a mutant the deadline stops is a **kill
-  carrying its own reason** — which is what PIT, Stryker and Infection all do. It
-  needs no parsing: ditto fired the clock, so ditto knows.
+  carrying its own reason**, which is what PIT, Stryker and Infection all do.
 
-- **The report names the virus behind a non-viable mutant**, because metric 1's
-  threshold is external (Major 1.8%, PIT 0%) and a rate alone names no work:
+- **The report names what nobody's test earned**, with the operator behind it,
+  because the rate has an external benchmark and a rate alone names no work:
 
-      ┃ 2 of the 3 kills above never compiled — no test earned them.
-      ┃   1 from Integer Decrement
-      ┃   1 from Integer Increment
-
-- **A staged run announces a widened scope.** When the diff cannot be turned into
-  byte ranges the plan falls back to whole files — and widens *every* file, not
-  only the one it could not read. `Derived` and `Reason` had been on the plan
-  since the beginning and only `--dry` ever printed them, so a real run widened
-  in silence and reported survivors on lines nobody touched.
-
-- **A mutant that never compiled leaves the score entirely.** Naming it in the
-  report was not enough -- labelling is not excluding, and the denominator kept
-  carrying it. The kill predicate is undefined for a program that does not exist:
-  Zhu, Hall & May, *ACM Computing Surveys* 29(4) 1997, Def. 3.1 is
-  `S = D / (M − E)`, and gremlins, cargo-mutants, Stryker and go-mutesting all
-  exclude it. Measured on a fixture with two non-viable mutants of five, the
-  reported score went from **0.60 to 0.33** — one earned kill of one viable
-  mutant, which is what the tests actually did:
-
-      ┃ • Total:        3
+      ┃ • Killed:       1
       ┃ ✓ Score:     0.33 (minimum: 0.00)
       ┃ 2 of the 5 mutants generated never compiled, and are out of the score entirely.
       ┃   1 from Integer Decrement
       ┃   1 from Integer Increment
 
+- **`make test.mutation.staged` — a gate that measures the change and finishes.**
+  The repository-sized gate reaches **424 of 727 mutants** and dies at thirty
+  minutes, measured three times. The same gate over one staged file: **4 mutants,
+  82 seconds, green.** Not a smaller timeout — a smaller question, and the one
+  this tool was built to ask.
+
+  It reads the index rather than the worktree, which is the whole point: one
+  tracked file left dirty and unstaged moved **seven of eight verdicts**.
+
+- **`mutantsPerReleaseOnThisRepository`** in `perf/baseline.json`, behind a
+  `livetree` build tag. Every other recorded counter measures a six-file fixture,
+  and all eight stayed green while the real cost went from 431 mutants to 727.
+
+  The tag is not packaging: untagged, the counter read the tree it was compiled
+  inside, and ditto's sandbox carries every test file while each mutant runs the
+  whole package list — so it ran inside every mutant's sandbox and answered for
+  the mutant instead of measuring it. A census puts **66 of 727** mutants in
+  reach of that.
+
+- **A staged run announces a widened scope.** When the diff cannot be turned into
+  byte ranges the plan falls back to whole files — and widens *every* file, not
+  only the one it could not read. `Derived` and `Reason` had been on the plan
+  since the beginning and only `--dry` ever printed them.
+
 ### Fixed
 
 - **A symlink anywhere in the tree broke the sandbox, two different ways.**
   `filepath.WalkDir` does not follow links, so one arrives as a non-directory
-  entry and the sandbox read it as a file. A link to a **directory** returned
-  `EISDIR` and killed the whole walk before the first mutant -- any repository
-  with a `node_modules/.bin`, a pnpm store, a devbox profile or a vendored
-  checkout. A link to a **file** was worse for being quiet: `os.ReadFile`
-  follows one, so the sandbox came back holding a regular file where the
-  repository has a link, with no error and no message.
+  entry and was read as a file. A link to a **directory** returned `EISDIR` and
+  killed the whole walk before the first mutant — any repository with a
+  `node_modules/.bin`, a pnpm store or a vendored checkout. A link to a **file**
+  was worse for being quiet: the sandbox came back holding a regular file where
+  the repository has a link.
 
-  Both sandboxes now reproduce the link with its raw target -- the full walk and
-  the `.ditto.json` generated paths, through the one function they share.
+  Both sandboxes reproduce the link with its **raw** target now. Rewritten to an
+  absolute path it resolves back to the repository under measurement, and a suite
+  writing through it edits the tree ditto was asked to leave alone — measured,
+  the source came back rewritten by the suite.
 
-  The raw target is the fix, not a detail. Rewritten to an absolute path the link
-  resolves back to the repository under measurement, and a suite writing through
-  it edits the tree ditto was asked to leave alone: measured, the source came
-  back holding `REWRITTEN BY THE SUITE`. It is also what git does -- a tracked
-  symlink materialises as the link, never as its target -- so a full run and a
-  staged run agree about what the repository is.
+- **`CommandContext` alone bounds nothing.** It kills the process it started, and
+  `go test` starts the test binary: killing the parent leaves the child holding
+  the pipe, so `CombinedOutput` waits forever on a command already cancelled.
+  Measured — the deadline test ran to its own 30-second safety net on Linux while
+  Windows happened to return. `WaitDelay` closes it.
 
-  Found by reading ditto's own mutation gate, red on every push since 0.4.0.
-  See `docs/experiments/a-symlink-in-the-tree.md`.
-- **`ditto staged -h` was advertising a default that changed two releases ago.**
-  It said `"link" (default)` for `--sandbox`; the default has been `copy` since
-  0.5.0. A help text that misstates a default is worse than one that omits it.
-- **`-h` exits 0.** `flag` reports a help request as an error under
-  `ContinueOnError`, and passing it back made asking for help look like failing.
+- **The gate could not run on Windows at all.** `ditto_mutation_test.go`
+  hardcoded `make`, where GNU make answers to `mingw32-make`; the command failed
+  instantly with no output and ditto read that as a red baseline. It resolves the
+  name the way `.githooks/pre-commit` has since the day the hook was unrunnable
+  for the same reason.
+
+- **A schema that breaks one file gives that file back**, rather than refusing
+  the whole run. An instrumented file failing its own suite means the schema
+  broke it, and that is a reason to stop schematising that file, not to stop
+  measuring the repository. Falling back cannot hide a genuinely red repository:
+  the ordinary path runs `verifyBaseline` once per release and refuses there.
+
+- **The false-kill harness could not run.** It read the virus name off a label by
+  cutting the file path from the front, and the label gained line and column at
+  some point after that was written. The **7.3%** quoted from it all along
+  predates the change; the rate is **11.1%**.
+
+- **The test double now scores the way the reporter does.** The exclusion landed
+  in `consolereporter` and stopped there, so every test through the fake went on
+  agreeing with a version of ditto that no longer exists.
+
+- **`ditto staged -h` advertised a default that changed two releases ago** — it
+  said `link` was the default for `--sandbox`, which has been `copy` since 0.5.0
+  — and **`-h` exits 0**, since `flag` reports a help request as an error under
+  `ContinueOnError`.
+
+### Changed
+
+- **Gating is on for ditto's own gate.** It removes **394 of 727 compilations,
+  54%**, because 60.1% of this repository's mutants can be expressed as a runtime
+  branch — and over `internal/schemata/instrument.go`, 78 mutants with **28
+  survivors** in them, both paths returned the same mutants and the same verdict
+  for every one. The survivors are the point: an earlier comparison over a scope
+  where everything died proved nothing and was thrown away.
+
+- **Most of the performance counters are diagnosis, not gates.**
+  `mutantsPerRelease` fired six times in the session that added it, and all six
+  times the response was to write the new number down. A ratchet that only
+  records is a changelog with a threshold on it.
+
+  Two systematic reviews of the 2021–2026 literature say why: there is **no
+  accepted performance metric for a mutation run** — the canonical enumeration
+  holds 18 cost metrics and not one is the absolute cost of a run — the mutant
+  count as a surrogate is a documented threat to validity at **44% average
+  error**, and **nobody gates a build on the cost of a mutation run**.
+
+- **The mutation score is no longer how ditto's own quality is judged.** It
+  measures the user's tests. It ships with its composition beside it or not at
+  all, and it is never a gate here: Google abandoned the ratio in IEEE TSE 2021
+  as neither concrete nor actionable, fewer than 5% of mutants are subsuming, the
+  correlation with real faults is weak once suite size is controlled, and below a
+  high threshold the number is disconnected from fault revelation altogether —
+  ditto's own gate runs at 0.5, which is below.
+
+  `docs/metrics.md` carries the four metrics that replace it, each naming the
+  decision it drives and where its threshold comes from.
 
 ### Documentation
 
-- `.ditto.json` is now named where people actually look: the `Settings` section
-  of the readme, the doc comments on `RunStaged` and `PlanStaged` — which is what
-  pkg.go.dev shows, and the only documentation a library consumer sees — and
-  `ditto staged -h`, which has no flag to reveal it and therefore says so in
-  `flags.Usage`.
-- `WithSandboxStrategy` reached the readme's option table, two releases after it
-  shipped. It was the checklist's first catch on a surface nobody had opened.
-- The release skill grew a checklist for exactly this. It shipped in 0.6.0
-  documented in two of five surfaces, and the CHANGELOG being the hardest one to
-  forget is why the others get missed. Its "read the checks" step now names the
-  mutation gate, which chains off CI with `workflow_run` and therefore never
-  appears on a pull request -- the reason a panic went unread for three
-  releases.
+- `docs/metrics.md`, and in `docs/experiments/`:
+  `what-the-field-already-decided.md`, `what-the-field-measures-about-cost.md`,
+  `turning-gating-on.md`, `a-counter-that-answers-for-itself.md` and
+  `counting-the-real-repository.md` — the reviews, the measurements, and the
+  predictions that were wrong.
+- `AGENTS.md` gains what the score is and is not, and that a ratchet which only
+  records is not a gate. Both contradict what was written there before, under
+  that file's own rule: when a measurement contradicts something already written
+  down, the measurement wins.
+- `readme.md`: **read the survivors, not the number.**
+- `.ditto.json` reached the readme's Settings section, the doc comments
+  `pkg.go.dev` shows, and `ditto staged -h` — it shipped in 0.6.0 documented in
+  two of five surfaces, and the release skill grew a checklist for the class.
+- `docs/backlog.md` entries 14–21: what is measured and not built, including the
+  11.1% of mutants the generator produces and discards, and the repository-sized
+  gate that does not finish.
 
 ## [0.6.0] - 2026-08-28
 
@@ -549,7 +558,7 @@ here, not yet built.
 - The `retract` block. It named published versions of the upstream module path,
   which do not exist under this one.
 
-[0.6.1]: https://github.com/Disble/ditto/releases/tag/v0.6.1
+[0.7.0]: https://github.com/Disble/ditto/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Disble/ditto/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Disble/ditto/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Disble/ditto/releases/tag/v0.4.0
