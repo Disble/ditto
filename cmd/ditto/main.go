@@ -123,6 +123,7 @@ func runCommand(args []string) error {
 	testCommand := flags.String("test-command", "go test -count=1 -json ./...", testCommandHelp)
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
 	gated := flags.Bool("gated", false, "run a file's mutants from one compilation instead of one each")
+	confirm := flags.Bool("confirm-kills", false, confirmKillsHelp)
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
 	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
 
@@ -144,7 +145,7 @@ func runCommand(args []string) error {
 		return fmt.Errorf("--threshold is %.2f, and a mutation score is between 0 and 1", *threshold) //nolint:err113 // the number is the message
 	}
 
-	options, err := optionsFor(*root, *testCommand, float32(*threshold), *gated, *loud, exclude)
+	options, err := optionsFor(*root, *testCommand, float32(*threshold), *gated, *confirm, *loud, exclude)
 	if err != nil {
 		return err
 	}
@@ -159,7 +160,7 @@ func runCommand(args []string) error {
 func optionsFor(
 	root, testCommand string,
 	threshold float32,
-	gated, loud bool,
+	gated, confirm, loud bool,
 	exclude excludes,
 ) ([]ditto.Option, error) {
 	options := []ditto.Option{
@@ -182,6 +183,10 @@ func optionsFor(
 		options = append(options, ditto.Gated())
 	}
 
+	if confirm {
+		options = append(options, ditto.ConfirmKills())
+	}
+
 	if loud {
 		options = append(options, ditto.Verbose())
 	}
@@ -196,6 +201,7 @@ func stagedCommand(args []string, out io.Writer) error {
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
 	dry := flags.Bool("dry", false, "report what the staged change justifies and run nothing")
 	gated := flags.Bool("gated", false, "run a file's mutants from one compilation instead of one each")
+	confirm := flags.Bool("confirm-kills", false, confirmKillsHelp)
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
 	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
 
@@ -229,7 +235,7 @@ func stagedCommand(args []string, out io.Writer) error {
 		return reportPlan(*directory, exclude, out)
 	}
 
-	options := stagedOptions(*testCommand, float32(*threshold), *gated, *loud, *sandbox)
+	options := stagedOptions(*testCommand, float32(*threshold), *gated, *confirm, *loud, *sandbox)
 
 	return ditto.RunStaged(*directory, exclude, options...) //nolint:wrapcheck // this is the top of the program: the message is already the one a reader needs
 }
@@ -241,7 +247,7 @@ func stagedCommand(args []string, out io.Writer) error {
 // the test command with no way to decline it. Nothing about one compilation per
 // file is specific to a whole-repository release, and the staged path mutates
 // fewer files, which is the case where that compilation is easiest to repay.
-func stagedOptions(testCommand string, threshold float32, gated, loud bool, sandbox string) []ditto.Option {
+func stagedOptions(testCommand string, threshold float32, gated, confirm, loud bool, sandbox string) []ditto.Option {
 	options := []ditto.Option{
 		ditto.WithTestCommand(testCommand),
 		ditto.WithMinimumThreshold(threshold),
@@ -249,6 +255,10 @@ func stagedOptions(testCommand string, threshold float32, gated, loud bool, sand
 
 	if gated {
 		options = append(options, ditto.Gated())
+	}
+
+	if confirm {
+		options = append(options, ditto.ConfirmKills())
 	}
 
 	if loud {
@@ -322,6 +332,13 @@ const testCommandHelp = "the `command` that decides whether a mutant died. It ru
 	"sequentially, so ./... costs your whole suite times your mutant count -- name the package " +
 	"that owns the change instead. -json is what lets ditto say WHY a mutant died; without it a " +
 	"mutant that never compiled is counted as killed"
+
+// confirmKillsHelp names the cost as well as the behaviour, for the reason
+// testCommandHelp does.
+const confirmKillsHelp = "re-run a mutant that died by assertion, once, and believe the second answer " +
+	"when it disagrees. Doubles the cost of every assertion kill, and buys nothing on a suite that " +
+	"does not flake -- but the baseline check runs once per release, so a suite that goes red at " +
+	"mutant 37 otherwise scores a kill no test earned"
 
 // stagedConfigHelp names the one thing about `staged` that is not a flag.
 //

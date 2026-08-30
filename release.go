@@ -8,6 +8,7 @@ import (
 
 	"github.com/Disble/ditto/internal/cmdtestrunner"
 	"github.com/Disble/ditto/internal/color"
+	"github.com/Disble/ditto/internal/confirminglaboratory"
 	"github.com/Disble/ditto/internal/consolereporter"
 	"github.com/Disble/ditto/internal/ditto"
 	"github.com/Disble/ditto/internal/fsrepository"
@@ -300,6 +301,13 @@ func assemble(opts Options, logger ditto.Logger, loud bool) (ditto.Laboratory, *
 	if opts.Gated {
 		gates = gatedlaboratory.New(lab, opts.TemporaryDir)
 		lab = gates
+	}
+
+	// Above gating, so a gated kill is confirmed too: the re-run goes through
+	// Test and recompiles that one mutant on its own, which is the point --
+	// asking the same shared compilation twice would not be asking again.
+	if opts.ConfirmKills {
+		lab = confirminglaboratory.New(logger, lab)
 	}
 
 	// Above gating, because a gated mutant never reaches the laboratory below it

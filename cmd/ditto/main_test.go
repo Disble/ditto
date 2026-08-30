@@ -46,7 +46,7 @@ func TestVersion(t *testing.T) {
 func TestStagedGated(t *testing.T) {
 	t.Run("staged can gate", func(t *testing.T) {
 		options := ditto.Options{}
-		for _, option := range stagedOptions("go test -count=1 -json ./...", 0.8, true, false, "") {
+		for _, option := range stagedOptions("go test -count=1 -json ./...", 0.8, true, false, false, "") {
 			options = option(options)
 		}
 
@@ -55,7 +55,7 @@ func TestStagedGated(t *testing.T) {
 
 	t.Run("and does not gate unless asked", func(t *testing.T) {
 		options := ditto.Options{}
-		for _, option := range stagedOptions("go test -count=1 -json ./...", 0.8, false, false, "") {
+		for _, option := range stagedOptions("go test -count=1 -json ./...", 0.8, false, false, false, "") {
 			options = option(options)
 		}
 
