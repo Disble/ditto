@@ -31,6 +31,7 @@ type Options struct {
 	Viruses                   []viruses.Virus
 	ChangedRanges             map[string][]Range
 	Gated                     bool
+	ConfirmKills              bool
 	Verbose                   bool
 	SandboxStrategy           string
 	// RepositoryRoot is kept beside Repository so a later option can rebuild it.
@@ -64,6 +65,26 @@ func Verbose() func(Options) Options {
 func Gated() func(Options) Options {
 	return func(options Options) Options {
 		options.Gated = true
+
+		return options
+	}
+}
+
+// ConfirmKills re-runs a mutant that died by assertion, once, and believes the
+// second answer when it disagrees.
+//
+// It exists because verifyBaseline is a sync.Once: it refuses a suite that is
+// already red before anything is scored, and cannot see one that goes red at
+// mutant 37. With no retry anywhere, a spurious failure during a mutant run is
+// a kill no test earned and nothing in the report tells it from a real one.
+//
+// Off by default because it doubles the cost of every assertion kill, and a
+// repository whose suite does not flake buys nothing with it. Only assertion
+// kills are re-run: a mutant that never built already leaves the score on both
+// sides, and a deadline is a clock ditto fired itself.
+func ConfirmKills() func(Options) Options {
+	return func(options Options) Options {
+		options.ConfirmKills = true
 
 		return options
 	}
