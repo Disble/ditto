@@ -114,6 +114,18 @@ func RunStaged(directory string, excludePrefixes []string, options ...Option) er
 		return nil
 	}
 
+	return runInSandbox(directory, plan, options)
+}
+
+// runInSandbox is everything a scoped release does once its scope is known.
+//
+// Staged and changed differ in exactly one thing — which pair of trees the diff
+// is read from — and shared everything below it: the same sandbox built from the
+// index, the same `.ditto.json` for what git does not carry, the same notice
+// when the diff could not be turned into ranges. Keeping one copy is not tidying:
+// two copies of this drift, and a drift here means one entry point measuring
+// different bytes than the other while both report the same kind of number.
+func runInSandbox(directory string, plan StagedPlan, options []Option) error {
 	repository, err := staged.New(staged.OSRunner{}, directory)
 	if err != nil {
 		return fmt.Errorf("reading the repository: %w", err)
@@ -121,7 +133,7 @@ func RunStaged(directory string, excludePrefixes []string, options ...Option) er
 
 	sandbox, err := repository.Materialize()
 	if err != nil {
-		return fmt.Errorf("materialising the staged content: %w", err)
+		return fmt.Errorf("materialising the content to measure: %w", err)
 	}
 	defer sandbox.Close()
 

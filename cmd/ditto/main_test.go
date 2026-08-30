@@ -3,13 +3,11 @@ package main
 import (
 	"bytes"
 	"flag"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Disble/ditto"
+	"github.com/Disble/ditto/internal/dittotesting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -181,7 +179,7 @@ func TestChangedDispatchPassesItsFlagsOn(t *testing.T) {
 // this cost" without paying for it. The per-file lines and the widened-scope
 // notice are the whole output, and neither had ever been exercised.
 func TestChangedDryReportsTheScope(t *testing.T) {
-	dir := fixtureRepository(t)
+	dir := dittotesting.GitRepositoryWithAChange(t)
 	out := &bytes.Buffer{}
 
 	err := changedCommand([]string{"--since", "base", "--dry", "--cwd", dir}, out)
@@ -194,7 +192,7 @@ func TestChangedDryReportsTheScope(t *testing.T) {
 }
 
 func TestChangedDrySaysWhenThereIsNothingToDo(t *testing.T) {
-	dir := fixtureRepository(t)
+	dir := dittotesting.GitRepositoryWithAChange(t)
 	out := &bytes.Buffer{}
 
 	// Its own base: a range from a commit to itself is empty by construction.
@@ -202,57 +200,4 @@ func TestChangedDrySaysWhenThereIsNothingToDo(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "nothing changed since HEAD is worth mutating")
-}
-
-// fixtureRepository is a repository with exactly one committed Go change in it,
-// tagged `base` before that change.
-func fixtureRepository(t *testing.T) string {
-	t.Helper()
-
-	dir := t.TempDir()
-
-	gitInFixture(t, dir, "init")
-	gitInFixture(t, dir, "config", "user.email", "fixture@example.com")
-	gitInFixture(t, dir, "config", "user.name", "fixture")
-	writeInFixture(t, dir, "kept.go", "package fixture\n\nfunc Kept() int { return 1 }\n")
-	gitInFixture(t, dir, "add", "-A")
-	gitInFixture(t, dir, "commit", "-m", "base")
-	gitInFixture(t, dir, "tag", "base")
-
-	writeInFixture(t, dir, "added.go", "package fixture\n\nfunc Added(a, b int) bool { return a > b }\n")
-	gitInFixture(t, dir, "add", "-A")
-	gitInFixture(t, dir, "commit", "-m", "add")
-
-	return dir
-}
-
-// gitInFixture clears the git addressing this process inherited. A hook exports
-// GIT_DIR and friends as absolute paths, and a fixture that inherited them would
-// quietly operate on the real checkout instead.
-func gitInFixture(t *testing.T, dir string, args ...string) {
-	t.Helper()
-
-	command := exec.CommandContext(t.Context(), "git", args...)
-	command.Dir = dir
-
-	kept := []string{}
-
-	for _, variable := range os.Environ() {
-		name, _, _ := strings.Cut(variable, "=")
-		if !strings.HasPrefix(name, "GIT_") {
-			kept = append(kept, variable)
-		}
-	}
-
-	command.Env = kept
-
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
-	}
-}
-
-func writeInFixture(t *testing.T, dir, name, content string) {
-	t.Helper()
-
-	require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
 }
