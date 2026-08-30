@@ -4,6 +4,75 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-30
+
+A release about what a run SAYS. Every item came from one exchange with a
+consumer repository whose `ditto staged` run printed nothing for over ten
+minutes, twice, and was reported as a hang. It was not stuck. Nothing it did was
+wrong; nothing it did was visible either, and that turned out to be the defect.
+
+### Added
+
+- **A progress line per mutant.** A release names each file and its mutant count
+  before running any of them, and names each mutant before handing it over —
+  before, not after, because a line printed once a mutant has finished cannot say
+  which mutant a stall is inside.
+
+  This is the whole of the reported problem. ditto printed nothing at all between
+  `Releasing Ditto…` and the report, so a run advancing normally and a run that
+  was genuinely stuck produced identical bytes. "No mutants appeared after ten
+  minutes" was evidence of nothing, which is why it was misread as a setup stall
+  and then misdiagnosed a second time as a baseline that had hit its deadline.
+  The reporter's own measurement — a 27.4s suite — already refuted that, and
+  nobody multiplied it by the mutant count because neither number was on screen.
+
+- **The baseline says what the suite cost.** The laboratory already ran the suite
+  once on unmutated code and threw the duration away. It is the per-mutant price
+  of the test command, and printed beside the mutant count it is the whole bill.
+
+- **`ditto version`**, which also answers `--version` and `-version`. The number
+  comes from `runtime/debug` rather than a constant, so there is no second place
+  for it to go stale, and a binary built from a checkout says it has no released
+  version instead of naming one.
+
+  It is not cosmetic: whether a mutant that never compiled is scored as killed
+  differs between 0.6.0 and 0.7.0, and until now nothing a user could type said
+  which build they had.
+
+- **`--gated` on `ditto staged`.** `run` always had it. Nothing about one
+  compilation per file is specific to a whole-repository release, and the staged
+  path mutates fewer files, which is where a compilation is easiest to repay.
+
+- **`--confirm-kills`**, opt-in on both subcommands. The baseline check is a
+  `sync.Once`: it refuses a suite that is ALREADY red, and cannot see one that
+  goes red at mutant 37, where a spurious failure becomes a kill no test earned
+  and nothing in the report tells it from a real one.
+
+  Only assertion kills are re-run — a mutant that never built already leaves the
+  score on both sides, and a deadline is a clock ditto fired itself. A survivor
+  is never re-run either: a flake manufactures failures, and cannot make a mutant
+  the tests caught look like it escaped. Off by default, because it doubles the
+  price of every assertion kill and buys nothing on a suite that does not flake.
+
+### Fixed
+
+- **`--test-command` rendered as `-test-command -json` in `-h`**, which reads
+  like a second flag. `flag.PrintDefaults` takes the first backquoted word in a
+  usage string as the flag's VALUE NAME. Found by running the binary; no
+  assertion on the help constant could have seen it, and the new test renders the
+  flag set instead.
+
+### Changed
+
+- **`--test-command`'s description names its cost.** It said what the flag does
+  and what its default is, and a reader who understood every word still ran
+  `./...` against a 27-second suite — once per mutant, sequentially. It now says
+  that, and says what dropping `-json` costs rather than only what it does.
+
+  The readme carries the same warning with the measured delta, because two
+  separate repositories wrote that sentence into their own docs rather than
+  getting it from here.
+
 ## [0.7.0] - 2026-08-29
 
 A release about ditto's own answers: whether they can be believed, and whether
@@ -558,6 +627,7 @@ here, not yet built.
 - The `retract` block. It named published versions of the upstream module path,
   which do not exist under this one.
 
+[0.8.0]: https://github.com/Disble/ditto/releases/tag/v0.8.0
 [0.7.0]: https://github.com/Disble/ditto/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Disble/ditto/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Disble/ditto/releases/tag/v0.5.0
