@@ -90,6 +90,7 @@ ditto version                             # which build is this?
 ditto run --threshold 0.8                 # mutate the repository
 ditto staged --dry                        # what would a staged change cost?
 ditto staged --threshold 0.8              # mutate only what it justifies
+ditto changed --since v1.2.0 --dry        # and the same, for a change already committed
 ```
 
 `ditto staged` reads the change you have staged and nothing else: which files it
@@ -126,6 +127,35 @@ refuses an irregular file.
 
 Keep `-json`. It is what lets ditto tell a mutant that never compiled from one a
 test caught; without it, the first is counted as the second.
+
+### In CI, where nothing is staged
+
+`ditto staged` reads the index, and a CI checkout has nothing in it: the change
+is already committed. A gate pointed at the staged scope there skips, reports
+success, and measures nothing.
+
+`ditto changed --since <ref>` asks the same question of `<ref>...HEAD` — the diff
+against their merge base, so a base that has moved on does not drag somebody
+else's commits into the bill.
+
+```shell
+ditto changed --since "$(git describe --tags --abbrev=0 HEAD^)" --threshold 0.8
+```
+
+It refuses a checkout with uncommitted work in it, and that refusal is the point
+rather than fussiness: a range scope names bytes of `HEAD` while the sandbox is
+written from the index, and those are the same tree only while nothing is
+modified or staged.
+
+There is no default base. On a CI checkout the useful one is the last release, on
+a branch it is the trunk, and a base guessed wrong is either a bill nobody asked
+for or a scope of nothing reported as green.
+
+This is how **ditto's own gate** runs. The repository-sized question — 783
+mutants — died at its thirty minutes having reached about 424, four times over,
+and both levers were spent: gating removes 54% of the compilations and does not
+close it, and cutting the mutant's suite by 46% moved the gate by 0.5%. The bill
+was the wrong size rather than badly paid.
 
 ### When the index is not the whole story
 

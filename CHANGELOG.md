@@ -4,6 +4,47 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-08-30
+
+The release that makes ditto's own gate finish, by making it ask a question it
+can afford.
+
+### Added
+
+- **`ditto changed --since <ref>`**, and `PlanChanged` / `RunChanged` behind it.
+  It is `staged` asked of a committed range instead of the index: the scope is
+  `<ref>...HEAD`, the diff against their merge base, so a base that has moved on
+  does not drag somebody else's commits into the bill. The diff parsing, the byte
+  offsets, the fail-open rule and the sandbox are the staged path's, unchanged.
+
+  It exists because `ditto staged` cannot be a CI gate. A CI checkout has nothing
+  staged — the change is already committed — so a gate pointed at the staged
+  scope skips, reports success, and measures nothing.
+
+  It refuses a checkout with uncommitted work in it. A range scope names bytes of
+  `HEAD` while the sandbox is written from the index, and those are the same tree
+  only while nothing is modified or staged; scoping against one and mutating the
+  other is the defect already measured at seven of eight verdicts moving.
+
+  There is no default base, and there will not be one: on a CI checkout the
+  useful base is the last release, on a branch it is the trunk, and a base
+  guessed wrong is either a bill nobody asked for or a scope of nothing reported
+  as green.
+
+### Changed
+
+- **ditto's own CI gate mutates the change rather than the repository.** The
+  repository-sized run asks for 783 mutants and dies at its thirty minutes having
+  reached about 424, measured four times. Both levers were already spent: gating
+  removes 54% of the compilations and does not close it, and cutting the mutant's
+  suite by 46% moved the gate by 0.5%, because `-failfast` already stops a killed
+  mutant at its first failing test. The bill was the wrong size rather than badly
+  paid — backlog entry 21, open since the measurement and now closed.
+
+  `make test.mutation` is untouched and `workflow_dispatch` still reaches it. The
+  repository-sized question is worth asking on purpose; it was being asked on
+  every push, against a clock it could not beat.
+
 ## [0.8.0] - 2026-08-30
 
 A release about what a run SAYS. Every item came from one exchange with a
@@ -627,6 +668,7 @@ here, not yet built.
 - The `retract` block. It named published versions of the upstream module path,
   which do not exist under this one.
 
+[0.9.0]: https://github.com/Disble/ditto/releases/tag/v0.9.0
 [0.8.0]: https://github.com/Disble/ditto/releases/tag/v0.8.0
 [0.7.0]: https://github.com/Disble/ditto/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Disble/ditto/releases/tag/v0.6.0
