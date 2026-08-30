@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"strings"
 	"testing"
 
@@ -80,4 +81,23 @@ func TestTestCommandHelp(t *testing.T) {
 	t.Run("says what dropping -json costs, not only what it does", func(t *testing.T) {
 		assert.Contains(t, testCommandHelp, "counted as killed")
 	})
+}
+
+// TestTestCommandHelpRendersItsValueName is here because the defect it covers is
+// invisible to every other test: flag.PrintDefaults takes the FIRST backquoted
+// word in a usage string as the flag's value name, so a stray pair of backticks
+// silently renames the flag's argument. The line shipped for two releases
+// rendering as `-test-command -json`, which reads like a second flag, and no
+// assertion on the constant could ever have seen it.
+func TestTestCommandHelpRendersItsValueName(t *testing.T) {
+	rendered := &bytes.Buffer{}
+
+	flags := flag.NewFlagSet("ditto staged", flag.ContinueOnError)
+	flags.SetOutput(rendered)
+	flags.String("test-command", "go test -count=1 -json ./...", testCommandHelp)
+	flags.PrintDefaults()
+
+	assert.Contains(t, rendered.String(), "-test-command command")
+	assert.NotContains(t, rendered.String(), "-test-command -json")
+	assert.NotContains(t, rendered.String(), "-test-command ./...")
 }

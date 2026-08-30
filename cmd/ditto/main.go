@@ -315,9 +315,12 @@ func describeRanges(ranges []ditto.Range) string {
 // Naming it in the flag help is the same decision stagedConfigHelp already made
 // below, for the same reason: `-h` is where a reader looks at the moment they
 // are deciding what to type, and the readme is not.
-const testCommandHelp = "command that decides whether a mutant died. It runs ONCE PER MUTANT, " +
-	"sequentially, so `./...` costs your whole suite times your mutant count -- name the package " +
-	"that owns the change instead. `-json` is what lets ditto say WHY a mutant died; without it a " +
+// The first backquoted word is not decoration: flag.PrintDefaults renders it as
+// the flag's VALUE NAME. Naming anything else there is how this line used to
+// render as `-test-command -json`, which reads like a second flag.
+const testCommandHelp = "the `command` that decides whether a mutant died. It runs ONCE PER MUTANT, " +
+	"sequentially, so ./... costs your whole suite times your mutant count -- name the package " +
+	"that owns the change instead. -json is what lets ditto say WHY a mutant died; without it a " +
 	"mutant that never compiled is counted as killed"
 
 // stagedConfigHelp names the one thing about `staged` that is not a flag.

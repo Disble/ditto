@@ -20,6 +20,7 @@ import (
 	"github.com/Disble/ditto/internal/iologger"
 	"github.com/Disble/ditto/internal/laboratory"
 	"github.com/Disble/ditto/internal/prettydiff"
+	"github.com/Disble/ditto/internal/progresslaboratory"
 	"github.com/Disble/ditto/internal/result"
 	"github.com/Disble/ditto/internal/scopedrepository"
 	"github.com/Disble/ditto/internal/scorecalculator"
@@ -230,7 +231,7 @@ func newRelease(options []Option, hostVerbose bool) *release {
 // start is the run itself, identical whichever entry point asked for it.
 func (r *release) start() {
 	r.logger.Logf("%s %s", color.Yellow("┃"), color.Green("Releasing Ditto…"))
-	ditto.New(r.opts.Repository, r.lab, r.reporter).Release(
+	ditto.New(r.logger, r.opts.Repository, r.lab, r.reporter).Release(
 		r.opts.Viruses...,
 	)
 }
@@ -292,7 +293,7 @@ func (r *release) reclaim() {
 // above it cannot be asked. The pointer is nil, concretely rather than as an
 // interface holding a nil, when the run is not gated.
 func assemble(opts Options, logger ditto.Logger, loud bool) (ditto.Laboratory, *gatedlaboratory.GatedLaboratory) {
-	var lab ditto.Laboratory = laboratory.New(opts.TestRunner, opts.TemporaryDir)
+	var lab ditto.Laboratory = laboratory.New(logger, opts.TestRunner, opts.TemporaryDir)
 
 	var gates *gatedlaboratory.GatedLaboratory
 
@@ -300,6 +301,11 @@ func assemble(opts Options, logger ditto.Logger, loud bool) (ditto.Laboratory, *
 		gates = gatedlaboratory.New(lab, opts.TemporaryDir)
 		lab = gates
 	}
+
+	// Above gating, because a gated mutant never reaches the laboratory below it
+	// and would go unannounced; and below verbose, so what is logged is what
+	// actually ran. Always installed: a run that says nothing is the defect.
+	lab = progresslaboratory.New(logger, lab)
 
 	if loud {
 		lab = verboselaboratory.New(logger, lab)

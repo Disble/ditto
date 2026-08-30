@@ -1,4 +1,13 @@
 ┃ Releasing Ditto…
+┃ calc/calc.go — 7 mutants
+┃   calc/calc.go:9:12 → Arithmetic
+┃ baseline: the suite took <duration> on unmutated code, and every mutant runs it again.
+┃   calc/calc.go:12:11 → Arithmetic
+┃   calc/calc.go:16:41 → Arithmetic
+┃   calc/calc.go:4:41 → Comparison
+┃   calc/calc.go:8:8 → Comparison
+┃   calc/calc.go:4:40 → Comparison Invert
+┃   calc/calc.go:8:7 → Comparison Invert
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
 ┃ 🧬 Survivors
 ┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄

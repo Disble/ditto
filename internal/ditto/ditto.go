@@ -1,6 +1,7 @@
 package ditto
 
 import (
+	"github.com/Disble/ditto/internal/color"
 	"github.com/Disble/ditto/internal/future"
 	"github.com/Disble/ditto/internal/goinfectedfile"
 	"github.com/Disble/ditto/internal/gomutatedfile"
@@ -104,13 +105,15 @@ type Reporter interface {
 }
 
 type Ditto struct {
+	logger     Logger
 	repository Repository
 	laboratory Laboratory
 	reporter   Reporter
 }
 
-func New(repository Repository, laboratory Laboratory, reporter Reporter) *Ditto {
+func New(logger Logger, repository Repository, laboratory Laboratory, reporter Reporter) *Ditto {
 	return &Ditto{
+		logger:     logger,
 		repository: repository,
 		laboratory: laboratory,
 		reporter:   reporter,
@@ -129,6 +132,13 @@ func (o *Ditto) Release(viri ...viruses.Virus) {
 		if len(mutants) == 0 {
 			continue
 		}
+
+		// Said before the file's mutants run, not after, because this is the
+		// number a reader needs in order to know what the silence that follows
+		// is going to cost. It is also the multiplier for the baseline duration
+		// the laboratory prints -- the two factors of the bill, adjacent, which
+		// is what nobody had when a ten-minute wait was reported as a hang.
+		o.logger.Logf("%s %s — %d mutants", color.Yellow("┃"), mutants[0].Path(), len(mutants))
 
 		for i, res := range o.test(mutants) {
 			o.reporter.AddDiagnostic(NewDiagnostic(res, mutants[i]))

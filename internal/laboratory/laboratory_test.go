@@ -5,6 +5,7 @@ import (
 
 	"github.com/Disble/ditto/internal/ditto"
 	"github.com/Disble/ditto/internal/dittotesting"
+	"github.com/Disble/ditto/internal/dittotesting/fakelogger"
 	"github.com/Disble/ditto/internal/dittotesting/fakerepository"
 	"github.com/Disble/ditto/internal/dittotesting/faketempdirectory"
 	"github.com/Disble/ditto/internal/gomutatedfile"
@@ -79,7 +80,7 @@ func TestLaboratoryRefusesARedBaseline(t *testing.T) {
 	|`)
 
 	runner := &alwaysFailingRunner{}
-	subject := laboratory.New(runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
+	subject := laboratory.New(fakelogger.New(), runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
 	repository := fakerepository.New(fakerepository.FS{"source.go": source}, fakerepository.NewTemporary())
 
 	// The command's own output travels with the refusal, so a reader is told why
@@ -119,7 +120,7 @@ func TestLaboratoryChecksTheBaselineOnce(t *testing.T) {
 	|`)
 
 	runner := &observingRunner{answer: result.Ok("mutants died")}
-	subject := laboratory.New(runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
+	subject := laboratory.New(fakelogger.New(), runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
 	repository := fakerepository.New(
 		fakerepository.FS{"source.go": source},
 		fakerepository.NewTemporary(), fakerepository.NewTemporary(), fakerepository.NewTemporary(),
@@ -157,7 +158,7 @@ func TestLaboratory(t *testing.T) {
 	)
 
 	runner := &observingRunner{answer: result.Ok("mutants died")}
-	subject := laboratory.New(runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
+	subject := laboratory.New(fakelogger.New(), runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
 
 	fut := subject.Test(
 		repository,
