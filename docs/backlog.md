@@ -573,7 +573,26 @@ invocations. That ratio is why this is worth doing and why nothing cheaper is
 needed: the AST-only alternative catches 42 of 83 and **wrongly refuses one that
 compiles**, which is the wrong direction to be wrong in.
 
-## 21. The gate asks a repository-sized question on every push
+## 21. The gate asks a repository-sized question on every push — **closed 2026-08-30**
+
+Closed by building the answer this entry already named. `PlanChanged` and
+`RunChanged` scope a release to `base...HEAD` — the same diff-to-byte-ranges
+machinery the staged path uses, asked of a committed range instead of the index —
+and CI now runs `make test.mutation.changed` instead of the repository-sized one.
+
+The staged gate could not be that gate, which is why this stayed open after
+`ditto staged` existed: it reads the index, and on a CI checkout nothing is
+staged, so it would skip and report a green that measured nothing.
+
+A range scope names bytes of HEAD while the sandbox is written from the index,
+so `RunChanged` refuses a checkout with uncommitted work in it. Those two trees
+are the same one only while nothing is modified or staged, and scoping against
+one while mutating the other is the defect already measured at seven of eight
+verdicts moving.
+
+`make test.mutation` is unchanged and still reachable by hand. The
+repository-sized question is worth asking on purpose; it was being asked on every
+push, against a clock it cannot beat.
 
 Measured three times, all to the same end: with gating on and `make` resolved,
 the gate reaches **424 of 727 mutants** and dies at `-timeout=30m`. Two levers

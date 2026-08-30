@@ -49,6 +49,8 @@ func command(args []string, help io.Writer) error {
 		return runCommand(args[1:])
 	case "staged":
 		return stagedCommand(args[1:], os.Stdout)
+	case "changed":
+		return changedCommand(args[1:], os.Stdout)
 	case "-h", "--help", "help":
 		usage(help)
 
@@ -99,6 +101,7 @@ func usage(out io.Writer) {
 
   ditto run [flags]       mutate a repository and report what survived
   ditto staged [flags]    mutate only what a staged change justifies
+  ditto changed [flags]   mutate only what a committed change justifies
   ditto version           the module version this binary was built from
 
 Run `+"`ditto run -h`"+` for its flags.
@@ -270,6 +273,102 @@ func stagedOptions(testCommand string, threshold float32, gated, confirm, loud b
 	}
 
 	return options
+}
+
+// changedCommand is `staged` for a change that is already committed.
+//
+// A gate cannot ask the index anything: on a CI checkout nothing is staged, so a
+// run pointed at the staged scope skips and reports a green that measured
+// nothing. This asks the same question of `--since ref ... HEAD` instead.
+func changedCommand(args []string, out io.Writer) error {
+	flags := flag.NewFlagSet("ditto changed", flag.ContinueOnError)
+	directory := flags.String("cwd", ".", "a directory inside the repository; its root is resolved from here")
+	since := flags.String("since", "", "the `ref` to measure the change against, for example a tag or origin/main")
+	testCommand := flags.String("test-command", "go test -count=1 -json ./...", testCommandHelp)
+	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
+	dry := flags.Bool("dry", false, "report what the change justifies and run nothing")
+	gated := flags.Bool("gated", false, "run a file's mutants from one compilation instead of one each")
+	confirm := flags.Bool("confirm-kills", false, confirmKillsHelp)
+	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
+	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
+
+	var exclude excludes
+
+	flags.Var(&exclude, "exclude-prefix", "repository-relative prefix never worth mutating; repeatable")
+
+	flags.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage of ditto changed:")
+		flags.PrintDefaults()
+		fmt.Fprint(os.Stderr, changedConfigHelp)
+	}
+
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+
+		return fmt.Errorf("reading the flags: %w", err)
+	}
+
+	if *since == "" {
+		return errNoBaseRef
+	}
+
+	if *threshold < 0 || *threshold > 1 {
+		return fmt.Errorf("--threshold is %.2f, and a mutation score is between 0 and 1", *threshold) //nolint:err113 // the number is the message
+	}
+
+	if *dry {
+		return reportChangedPlan(*directory, *since, exclude, out)
+	}
+
+	options := stagedOptions(*testCommand, float32(*threshold), *gated, *confirm, *loud, *sandbox)
+
+	return ditto.RunChanged(*directory, *since, exclude, options...) //nolint:wrapcheck // this is the top of the program: the message is already the one a reader needs
+}
+
+// errNoBaseRef refuses to guess. There is no default that is right in a CI
+// checkout and in a working tree and on a branch, and a scope guessed wrong is
+// either a bill nobody asked for or a green that measured nothing.
+var errNoBaseRef = errors.New("ditto changed needs --since, for example: ditto changed --since origin/main")
+
+// changedConfigHelp names what `-h` would otherwise not say.
+const changedConfigHelp = `
+The scope is ` + "`--since <ref>...HEAD`" + `, the diff against their merge base, so a
+base that has moved on does not drag somebody else's commits into the bill.
+
+The checkout must have no uncommitted work in it. A range scope names bytes of
+HEAD and the sandbox is written from the index; those are the same tree only
+while nothing is modified or staged.
+
+.ditto.json works here exactly as it does for ` + "`staged`" + `.
+`
+
+// reportChangedPlan answers what a committed change would cost without paying
+// for it.
+func reportChangedPlan(directory, baseRef string, exclude excludes, out io.Writer) error {
+	plan, err := ditto.PlanChanged(directory, baseRef, exclude)
+	if err != nil {
+		return fmt.Errorf("reading the change: %w", err)
+	}
+
+	if !plan.Mutable() {
+		fmt.Fprintf(out, "ditto: nothing changed since %s is worth mutating.\n", baseRef)
+
+		return nil
+	}
+
+	fmt.Fprintf(out, "ditto: %d file(s) changed since %s under %s\n", len(plan.Files), baseRef, plan.Root)
+
+	for _, file := range plan.Files {
+		fmt.Fprintf(out, "  %s: %s\n", file, describeRanges(plan.Ranges[file]))
+	}
+
+	if !plan.Derived {
+		fmt.Fprintf(out, "  scope: %s\n", plan.Reason)
+	}
+
+	return nil
 }
 
 // reportPlan answers what a staged change would cost without paying for it. A
