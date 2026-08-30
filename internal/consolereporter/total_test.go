@@ -71,3 +71,36 @@ type noGates struct{}
 
 func (noGates) Gated() int    { return 0 }
 func (noGates) FellBack() int { return 0 }
+
+// TestADecoratorOverSomethingThatCannotCountSaysUnknown is the other half of the
+// forwarding, and the half its mutants found unguarded.
+//
+// A decorator whose delegate cannot answer must read as UNKNOWN, not as zero.
+// Zero means "the scope produced nothing to judge", and a decorator that
+// invented it would turn a genuinely failing run into a silent success. The
+// sentinel is -1 because a count cannot be negative.
+func TestADecoratorOverSomethingThatCannotCountSaysUnknown(t *testing.T) {
+	logger := fakelogger.New()
+
+	for name, wrapped := range map[string]ditto.Reporter{
+		"verbose": verbosereporter.New(logger, countlessReporter{}),
+		"gated":   gatedreporter.New(logger, noGates{}, countlessReporter{}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			counted, ok := wrapped.(interface{ Total() int })
+			if !ok {
+				t.Fatalf("the %s reporter does not forward the count at all", name)
+			}
+
+			if got := counted.Total(); got != -1 {
+				t.Fatalf("Total() = %d over a reporter that cannot count, want -1", got)
+			}
+		})
+	}
+}
+
+// countlessReporter is every reporter that existed before the count did.
+type countlessReporter struct{}
+
+func (countlessReporter) AddDiagnostic(*ditto.Diagnostic) {}
+func (countlessReporter) Summarize() result.Result[any]   { return result.Err[any]("") }
