@@ -3,23 +3,8 @@ package ditto
 import (
 	"testing"
 
-	"github.com/Disble/ditto/internal/ditto"
-	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/internal/dittotesting/fakereporter"
 )
-
-// countlessReporter is a reporter that cannot say how much it scored, which is
-// every reporter that existed before the count did and any a caller supplies.
-type countlessReporter struct{}
-
-func (countlessReporter) AddDiagnostic(*ditto.Diagnostic) {}
-func (countlessReporter) Summarize() result.Result[any]   { return result.Err[any]("") }
-
-// countingReporter can.
-type countingReporter struct{ total int }
-
-func (countingReporter) AddDiagnostic(*ditto.Diagnostic) {}
-func (countingReporter) Summarize() result.Result[any]   { return result.Err[any]("") }
-func (r countingReporter) Total() int                    { return r.total }
 
 // TestScoredIsUnknownRatherThanZero is the distinction the whole empty-scope fix
 // rests on, and the one its mutants found unguarded.
@@ -32,13 +17,13 @@ func (r countingReporter) Total() int                    { return r.total }
 func TestScoredIsUnknownRatherThanZero(t *testing.T) {
 	t.Parallel()
 
-	unreadable := &release{reporter: countlessReporter{}}
+	unreadable := &release{reporter: fakereporter.Countless{}}
 	if got := unreadable.scored(); got != -1 {
 		t.Fatalf("a reporter that cannot count scored %d, want -1", got)
 	}
 
 	for _, total := range []int{0, 1, 47} {
-		readable := &release{reporter: countingReporter{total: total}}
+		readable := &release{reporter: fakereporter.Counting{Scored: total}}
 		if got := readable.scored(); got != total {
 			t.Fatalf("scored() = %d, want %d", got, total)
 		}
@@ -52,7 +37,7 @@ func TestAnUnreadableCountIsNotAnEmptyScope(t *testing.T) {
 
 	rel := &release{
 		opts:     Options{MinimumThreshold: 0.5},
-		reporter: countlessReporter{},
+		reporter: fakereporter.Countless{},
 	}
 
 	if rel.scored() == 0 {
