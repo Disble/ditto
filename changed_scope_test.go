@@ -98,24 +98,27 @@ func TestPlanChangedRefusesSomewhereThatIsNotARepository(t *testing.T) {
 	}
 }
 
-// RunChanged refuses a dirty checkout, and that refusal is the whole safety of
-// reusing the index-backed sandbox: a range scope names bytes of HEAD, and those
-// are the same bytes only while nothing is modified or staged.
-func TestRunChangedRefusesADirtyCheckout(t *testing.T) {
-	dir := dittotesting.GitRepository(t)
+// RunChanged refuses a STAGED change, and that refusal is the whole safety of
+// reusing the index-backed sandbox: the sandbox is written from the index while
+// a range scope names bytes of HEAD, so the two agree while the index does.
+//
+// A worktree-only modification is a different thing and is deliberately allowed;
+// it never reaches the sandbox, so it cannot move a verdict. That case is pinned
+// in internal/staged rather than here, because allowing it here would run a real
+// release.
+func TestRunChangedRefusesAStagedChange(t *testing.T) {
+	dir := dittotesting.GitRepositoryWithAChange(t)
 
-	dittotesting.WriteFile(t, dir, "added.go", "package fixture\n\nfunc Added(a, b int) bool { return a > b }\n")
-	dittotesting.Git(t, dir, "add", "-A")
-	dittotesting.Git(t, dir, "commit", "-m", "add")
 	dittotesting.WriteFile(t, dir, "kept.go", "package fixture\n\nfunc Kept() int { return 2 }\n")
+	dittotesting.Git(t, dir, "add", "kept.go")
 
 	err := ditto.RunChanged(dir, "base", nil)
 	if err == nil {
-		t.Fatal("a dirty checkout was accepted")
+		t.Fatal("a staged change was accepted")
 	}
 
 	if !strings.Contains(err.Error(), "kept.go") {
-		t.Fatalf("the refusal does not name what is dirty: %v", err)
+		t.Fatalf("the refusal does not name what is staged: %v", err)
 	}
 }
 

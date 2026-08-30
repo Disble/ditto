@@ -21,10 +21,13 @@ can afford.
   staged — the change is already committed — so a gate pointed at the staged
   scope skips, reports success, and measures nothing.
 
-  It refuses a checkout with uncommitted work in it. A range scope names bytes of
-  `HEAD` while the sandbox is written from the index, and those are the same tree
-  only while nothing is modified or staged; scoping against one and mutating the
-  other is the defect already measured at seven of eight verdicts moving.
+  It refuses a checkout with staged changes in it. A range scope names bytes of
+  `HEAD` while the sandbox is written from the index, and those agree exactly
+  while the index agrees with HEAD; scoping against one and mutating the other is
+  the defect already measured at seven of eight verdicts moving. A worktree-only
+  modification never reaches the sandbox and is allowed — written the other way
+  round first, it refused ditto's own CI in fifty-one seconds, because the Devbox
+  install step modifies a tracked lockfile.
 
   There is no default base, and there will not be one: on a CI checkout the
   useful base is the last release, on a branch it is the trunk, and a base

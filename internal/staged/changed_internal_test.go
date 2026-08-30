@@ -90,36 +90,42 @@ func TestChangedScopeOfDerivesByteRanges(t *testing.T) {
 	}
 }
 
-// TestRequireCleanRefusesADirtyCheckout is what makes reusing the index-backed
-// sandbox honest.
+// TestRequireNothingStagedGuardsTheRightTree is what makes reusing the
+// index-backed sandbox honest, and the precise condition is the point.
 //
-// A range scope names bytes of HEAD, and the sandbox is written from the INDEX.
-// Those are the same bytes only while the checkout is clean, and a scope that
-// names one tree while the mutants run in another is the defect measured at
-// seven of eight verdicts moving. Refusing is cheap; being wrong is not.
-func TestRequireCleanRefusesADirtyCheckout(t *testing.T) {
+// The sandbox is `git checkout-index --all`, so it holds the INDEX; a range
+// scope names bytes of HEAD. Those agree while the index agrees with HEAD, which
+// is narrower than a clean worktree — and the difference is not academic. Written
+// as a clean-worktree check, this refused ditto's own CI in fifty-one seconds,
+// because the Devbox install step modifies a tracked lockfile that has nothing
+// to do with any change.
+func TestRequireNothingStagedGuardsTheRightTree(t *testing.T) {
 	t.Parallel()
 
-	repository, _ := scripted(map[string]string{"status --porcelain": " M internal/thing/thing.go\n"})
+	t.Run("refuses a staged change, because the sandbox would carry it", func(t *testing.T) {
+		t.Parallel()
 
-	err := repository.RequireClean()
-	if err == nil {
-		t.Fatal("a dirty checkout was accepted")
-	}
+		repository, _ := scripted(map[string]string{"diff --cached --name-only": "internal/thing/thing.go\n"})
 
-	if !strings.Contains(err.Error(), "thing.go") {
-		t.Fatalf("the refusal does not name what is dirty: %v", err)
-	}
-}
+		err := repository.RequireNothingStaged()
+		if err == nil {
+			t.Fatal("a staged change was accepted")
+		}
 
-func TestRequireCleanAcceptsACleanCheckout(t *testing.T) {
-	t.Parallel()
+		if !strings.Contains(err.Error(), "thing.go") {
+			t.Fatalf("the refusal does not name what is staged: %v", err)
+		}
+	})
 
-	repository, _ := scripted(map[string]string{"status --porcelain": ""})
+	t.Run("allows a worktree modification, because the sandbox never sees it", func(t *testing.T) {
+		t.Parallel()
 
-	if err := repository.RequireClean(); err != nil {
-		t.Fatalf("a clean checkout was refused: %v", err)
-	}
+		repository, _ := scripted(map[string]string{"diff --cached --name-only": ""})
+
+		if err := repository.RequireNothingStaged(); err != nil {
+			t.Fatalf("a worktree-only modification was refused: %v", err)
+		}
+	})
 }
 
 // TestChangedScopeFailsOpenRatherThanGuessing covers both fail-open branches.

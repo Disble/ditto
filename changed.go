@@ -47,12 +47,16 @@ func PlanChanged(directory, baseRef string, excludePrefixes []string) (StagedPla
 
 // RunChanged mutates exactly what a committed change justifies.
 //
-// It refuses a checkout with uncommitted work in it, and that refusal is the
-// whole safety of the thing. The sandbox is written from the INDEX and a range
-// scope names bytes of HEAD; those are the same tree only while nothing is
-// modified or staged. Scoping against one tree and mutating another is the
-// defect already measured on a fixture built for it — seven of eight verdicts
-// moved — and it is silent, which is why this stops rather than warns.
+// It refuses a checkout whose index has moved away from HEAD, and that refusal
+// is the whole safety of the thing. The sandbox is written from the INDEX and a
+// range scope names bytes of HEAD; those agree exactly while the index agrees
+// with HEAD. Scoping against one tree and mutating another is the defect already
+// measured on a fixture built for it — seven of eight verdicts moved — and it is
+// silent, which is why this stops rather than warns.
+//
+// A worktree modification is not that. It is never written into the sandbox, so
+// it cannot move a verdict, and refusing it only stops runs that would have been
+// correct.
 //
 // Everything below the scope is the staged path unchanged: the same sandbox, the
 // same `.ditto.json` for what git does not carry, the same notice when the diff
@@ -72,7 +76,7 @@ func RunChanged(directory, baseRef string, excludePrefixes []string, options ...
 		return fmt.Errorf("reading the repository: %w", err)
 	}
 
-	if err := repository.RequireClean(); err != nil {
+	if err := repository.RequireNothingStaged(); err != nil {
 		return fmt.Errorf("checking the checkout: %w", err)
 	}
 

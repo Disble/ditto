@@ -142,10 +142,11 @@ else's commits into the bill.
 ditto changed --since "$(git describe --tags --abbrev=0 HEAD^)" --threshold 0.8
 ```
 
-It refuses a checkout with uncommitted work in it, and that refusal is the point
-rather than fussiness: a range scope names bytes of `HEAD` while the sandbox is
-written from the index, and those are the same tree only while nothing is
-modified or staged.
+It refuses a checkout with **staged** changes in it, and that refusal is the
+point rather than fussiness: a range scope names bytes of `HEAD` while the
+sandbox is written from the index, and those agree exactly while the index
+agrees with HEAD. A worktree-only modification is never written into the sandbox
+and is allowed.
 
 There is no default base. On a CI checkout the useful one is the last release, on
 a branch it is the trunk, and a base guessed wrong is either a bill nobody asked
