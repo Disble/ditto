@@ -1,7 +1,9 @@
 package ditto
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/Disble/ditto/internal/staged"
 )
@@ -80,5 +82,21 @@ func RunChanged(directory, baseRef string, excludePrefixes []string, options ...
 		return fmt.Errorf("checking the checkout: %w", err)
 	}
 
-	return runInSandbox(directory, plan, options)
+	err = runInSandbox(directory, plan, options)
+
+	// A change CAN legitimately contain no mutable expression -- a new switch
+	// case, a comment, a rename -- and a gate that fails for that is failing a
+	// change for being correct. Measured on ditto's own gate the day after it
+	// went green: one added switch case, a scope of one file, zero mutants, and
+	// a red run that had found nothing wrong with anything.
+	//
+	// Run and RunStaged keep the refusal. A repository or an index that yields
+	// nothing is a scope somebody configured wrong; a diff is not.
+	if errors.As(err, &NoMutantsError{}) {
+		fmt.Fprintf(os.Stdout, "ditto: nothing in the change since %s is mutable, so there was nothing to score.\n", baseRef)
+
+		return nil
+	}
+
+	return err
 }

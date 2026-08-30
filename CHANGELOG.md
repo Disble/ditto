@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.10.0] - 2026-08-30
 
+### Fixed
+
+- **A change with nothing mutable in it no longer fails `ditto changed`.** The
+  score calculator reports `-1` for an empty run, which is below every threshold,
+  so a scope that produced no mutants and a suite that failed were the same
+  answer. `Run` and `RunStaged` keep that refusal — a repository or an index
+  yielding nothing is a scope somebody configured wrong — but a diff is not: a
+  new `switch` case, a comment, a rename are all legitimately unmutatable, and
+  failing a gate for one is failing a change for being correct.
+
+  Found by this repository's own gate the day after it went green, on the `-v`
+  commit below: one added `switch` case, a scope of one file, zero mutants, and a
+  red run that had found nothing wrong with anything.
+
+  The count is read through an optional interface, and the reporter decorators
+  now forward it. Without that it was unreadable exactly when the stack is
+  deepest, which is the gated run that raised the problem — backlog entry 12's
+  class, caught again.
+
 ### Added
 
 - **`-v` and `--version` alongside `ditto version`.** Nothing new is reported;
