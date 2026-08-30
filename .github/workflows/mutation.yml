@@ -24,9 +24,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # The gate measures a RANGE, so it needs the history the range lives
+          # in. A shallow clone has neither the tags nor the base commit, and
+          # `git describe` would answer nothing -- which the gate reports as an
+          # unset base rather than silently measuring the whole repository.
+          fetch-depth: 0
 
       - name: Install Devbox
         uses: jetify-com/devbox-install-action@v0.15.0
 
+      # The CHANGED gate, not the repository-sized one. TestMutation asks for 736
+      # mutants and dies at its thirty minutes having reached about 424, measured
+      # four times; both levers are spent. Backlog entry 21's recorded answer is
+      # that ditto's own answer to a repository-sized bill is to mutate what the
+      # change touched, and this is that answer wired up.
+      #
+      # `make test.mutation` is still there, and workflow_dispatch still reaches
+      # it, because the repository-sized question is worth asking on purpose --
+      # just not on every push, against a clock it cannot beat.
       - name: "🧬 Mutation Tests"
-        run: devbox run -- make test.mutation
+        run: devbox run -- make test.mutation.changed

@@ -71,6 +71,18 @@ test.mutation.staged: $(pre-reqs)
 	@go test -timeout=30m -count=1 -v -tags=mutation -run TestStagedMutation
 .PHONY: test.mutation.staged
 
+# test.mutation.changed is the gate CI runs, and the one that finishes.
+#
+# It mutates what changed since $(gate-base) rather than what the repository
+# contains. The staged gate cannot do this job: it reads the index, and on a CI
+# checkout nothing is staged, so it would skip and report a green that measured
+# nothing. Backlog entry 21.
+gate-base ?= $(shell git describe --tags --abbrev=0 HEAD^ 2>/dev/null)
+
+test.mutation.changed: $(pre-reqs)
+	@DITTO_GATE_BASE=$(gate-base) go test -timeout=30m -count=1 -v -tags=mutation -run TestChangedMutation
+.PHONY: test.mutation.changed
+
 test.mutation: $(pre-reqs)
 	@go test -timeout=30m -count=1 -v -tags=mutation
 .PHONY: test.mutation
