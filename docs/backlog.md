@@ -594,3 +594,157 @@ the staged path, and this repository's own gate does not.
 Raising the timeout is not on this list. The number would move and the question
 would not.
 
+## 22. A healthy run and a hang are byte-identical on stdout
+
+Reported by `autoreas-bridge` on 2026-08-30, and it cost two people an afternoon
+between them.
+
+`ditto staged` was run with the default test command. Nothing was printed after
+the two `.ditto.json` copy lines and `┃ Releasing Ditto…`, and the run was killed
+at ten minutes. Twice. It was reported as a setup stall that never reached
+mutation.
+
+It had reached mutation. It was mutating the whole time.
+
+Without `-verbose` ditto prints nothing at all between `Releasing Ditto…` and the
+report: `Ditto.Release` does not log, `laboratory.Test` does not log, and
+`consolereporter.AddDiagnostic` only appends to a slice. `Summarize` is the sole
+logging call on the path. So **"no mutants appeared after ten minutes" is
+evidence of nothing** — a run advancing normally produces exactly those bytes,
+and so does a run that is genuinely stuck.
+
+That is what made the report unfalsifiable, and it is what made the first
+diagnosis wrong: a bounded ten-minute baseline was offered as the cause and
+accepted, when the reporter's own measurement — a 27.4s suite — already refuted
+it. One multiplication would have killed it. Nobody did the multiplication
+because the output gave nothing to multiply.
+
+The fix is a progress line per mutant. It ends the failure mode outright rather
+than documenting it, and it makes the arithmetic available at the moment somebody
+needs it.
+
+## 23. The flag help says what a flag does, never what it costs
+
+`ditto staged -h` prints, for the flag at the centre of entry 22:
+
+    command that decides whether a mutant died; `-json` is what lets ditto
+    say WHY it died (default "go test -count=1 -json ./...")
+
+Every word is true. None of it says the thing that matters at the moment of
+typing: **the command runs once per mutant, sequentially**, so `./...` multiplies
+the whole suite by the mutant count. The reporter read that line, understood it,
+and ran the default. In their words: showing the default is not the same as
+showing the default's cost.
+
+The same shape twice over. The help explains what `-json` does, not that omitting
+it makes `verdict.ReasonOf` return `Unknown`, which counts as a kill — so a
+custom `--test-command` without it silently restores the inflation entry 6 exists
+to remove.
+
+Two repositories independently wrote the missing sentence into their own docs
+rather than getting it from ditto: `dharness/docs/mutation-testing.md` and
+`autoreas-bridge`. Two teams documenting the same trap is the tool's gap.
+
+**This repository has already accepted the argument once.** `stagedCommand`
+installs a custom `flags.Usage` to append `stagedConfigHelp`, and its comment
+says why: *"There is no flag for `.ditto.json`, so `-h` is the one place a reader
+would look and not find it. Named here rather than left to the readme."* The
+thing that is not a flag got named in `-h`. The cost of a flag that is one did
+not.
+
+The number that argues it, from the reporting repository: a >10-minute silent run
+became seconds under
+
+    ditto staged --exclude-prefix tools/ --exclude-prefix frontend/ \
+      --threshold 0.80 --test-command "go test -count=1 -json ./internal/<pkg>/"
+
+The readme's `staged` section currently says policy "stays with you" and
+`--test-command` is "yours to set", which is accurate and does not carry that
+delta.
+
+## 24. A run says nothing about what it is about to cost
+
+Proposed by the same reporter, and it composes with entry 22 rather than
+duplicating it: a progress line says the run is advancing, a forecast says how
+long it will take. Either alone leaves half the question open, and it is the
+forecast half that would have made them fix their command in the first thirty
+seconds instead of concluding the tool was broken.
+
+The shape wanted is one line after the baseline: mutant count, the measured
+baseline duration, their product, and the lever.
+
+**It is not the one-liner it looks like, and an issue that claims otherwise gets
+closed by the first person who reads the loop.** `Ditto.Release` iterates
+`repository.ListGoSourceFiles()` and calls `Incubate` *inside* that loop, and
+`verifyBaseline` fires inside the first `laboratory.Test`. At the moment the
+baseline finishes, ditto knows the first file's mutants and not the total.
+
+Getting the total means incubating every file before the first test runs. That
+moves no counter in `perf/baseline.json` — `Incubate` already parses each source
+once for the whole mutator set, and the same parses and AST walks happen either
+way, only earlier. What it does change is that every file's mutants are held at
+once rather than one file's at a time, and this repository's own run is 727 of
+them, each carrying a mutated copy of its source.
+
+A forecast that does not need the total is the cheaper shape and is not obviously
+worse: the first file's count and the measured baseline are both in hand at the
+right moment, and a per-file line as each file starts says the same thing
+incrementally.
+
+## 25. There is no way to ask the binary its version
+
+`cmd/ditto/main.go` dispatches `run`, `staged`, and `-h`/`--help`/`help`.
+Anything else prints usage to stderr and exits 1, so `ditto --version` reports
+that `--version` is not a subcommand. The only route to the answer is
+
+    go version -m "$(command -v ditto)"
+
+It is not cosmetic. Answering the reporter's question about whether a
+non-compiling mutant is scored as killed required knowing which build they had,
+because the answer differs: v0.6.0 carries `verifyBaseline` but has no
+`internal/verdict` and no `-json` in its default command, so there a mutant that
+never compiled **is** counted as a kill. v0.7.0 excludes it from both sides of
+the score. Same question, opposite answers, and nothing the user can type tells
+them which one applies to them.
+
+## 26. `-gated` cannot be reached from `staged`
+
+`runCommand` registers `-gated`. `stagedCommand` does not, and `Options.Gated`
+defaults false, so every mutant of a staged run pays the fixed cost of starting
+the test command — measured at **750–950 ms per mutant** in
+`docs/experiments/gated-gain-slow.md`, which also records the limit of that
+number: it was taken on a trivial package where the compile is nearly free, so it
+is the floor of the toll rather than its typical value.
+
+Nothing about gating is specific to a whole-repository release. The staged path
+mutates fewer files, which is the case where one compilation per file is easiest
+to repay.
+
+This is the flag's availability, not the question entry 19 asks. Entry 19 is
+about whether to turn gating on for *this* repository's own gate, and is still
+open on its own evidence. This one is that a user of `ditto staged` cannot make
+the choice at all.
+
+## 27. A flake scores a false kill, and nothing re-runs it
+
+Reported by `autoreas-bridge`, who have one: roughly **1 run in 5** of their full
+suite fails on a cold run, package still unidentified. It is theirs to chase. The
+argument it produces is ditto's.
+
+`verifyBaseline` is a `sync.Once`. It catches a suite that is already red before
+anything is scored, and it refuses rather than reporting — which is the guard
+entry 6's measurement bought. It cannot catch a suite that goes red at mutant 37.
+There is no retry anywhere in the codebase, so a spurious failure during a mutant
+run classifies as `verdict.Assertion` and is a **false kill indistinguishable
+from a real one in the output**. It is the same defect as the compile-failure
+kill, arriving from the other direction: a number people act on, quietly
+containing kills no test earned.
+
+A confirmation re-run does not have to double the cost of every kill. Only kills
+whose reason is `Assertion` can be flakes: `BuildFailed` already leaves the score
+entirely, and `Deadline` is one ditto fired its own clock for and therefore
+cannot be spurious. That scopes the retry to a subset rather than all of them,
+which is the difference between an obvious cost and an arguable one.
+
+It is a design question rather than a defect, and it is on this list because it
+now has a repository behind it instead of a hypothetical.
