@@ -585,10 +585,14 @@ The staged gate could not be that gate, which is why this stayed open after
 staged, so it would skip and report a green that measured nothing.
 
 A range scope names bytes of HEAD while the sandbox is written from the index,
-so `RunChanged` refuses a checkout with uncommitted work in it. Those two trees
-are the same one only while nothing is modified or staged, and scoping against
-one while mutating the other is the defect already measured at seven of eight
-verdicts moving.
+so `RunChanged` refuses a checkout whose INDEX has moved away from HEAD. Scoping
+against one tree while mutating the other is the defect already measured at seven
+of eight verdicts moving.
+
+Written as a clean-worktree check first, and CI refuted that in fifty-one
+seconds: the Devbox install step modifies a tracked lockfile with nothing to do
+with any change, and the gate refused to run at all. A worktree modification is
+never written into the sandbox, so it cannot move a verdict.
 
 `make test.mutation` is unchanged and still reachable by hand. The
 repository-sized question is worth asking on purpose; it was being asked on every

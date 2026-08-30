@@ -68,28 +68,35 @@ func (r *Repository) ChangedScopeOf(baseRef string, files []string) (Scope, erro
 // else's commits.
 func rangeOf(baseRef string) string { return baseRef + "...HEAD" }
 
-// RequireClean refuses a checkout with uncommitted work in it.
+// RequireNothingStaged refuses a checkout whose index has moved away from HEAD.
 //
-// This is what makes the range scope safe to run in the existing sandbox. That
-// sandbox is written from the INDEX, and a range scope names bytes of HEAD; the
-// two are the same tree only while nothing is modified or staged. Scoping
-// against one tree and mutating another is the defect already measured on a
-// fixture built for it — seven of eight verdicts moved — and it is silent, which
-// is why this refuses rather than warns.
+// This is what makes the range scope safe to run in the existing sandbox, and
+// the precise condition matters. That sandbox is `git checkout-index --all`, so
+// it holds the INDEX; a range scope names bytes of HEAD. The two agree exactly
+// while the index agrees with HEAD, which is a narrower thing than a clean
+// worktree.
+//
+// It was written as a clean-worktree check first, and CI refuted that in
+// fifty-one seconds: the Devbox install step modifies `devbox.lock`, a tracked
+// file with nothing to do with any change, and the gate refused to run at all. A
+// worktree modification is never written into the sandbox, so it cannot move a
+// verdict; a STAGED one is, and would mean scoping against one tree while
+// mutating another -- the defect already measured at seven of eight verdicts
+// moving, and silent.
 //
 // The staged path needs no such check: it derives its scope from the index and
 // mutates the index, and RejectPartial covers the one file that could disagree.
-func (r *Repository) RequireClean() error {
-	output, err := r.git("status", "--porcelain")
+func (r *Repository) RequireNothingStaged() error {
+	output, err := r.git("diff", "--cached", "--name-only")
 	if err != nil {
-		return fmt.Errorf("checking whether the checkout is clean: %w", err)
+		return fmt.Errorf("checking whether anything is staged: %w", err)
 	}
 
-	dirty := strings.TrimSpace(string(output))
-	if dirty == "" {
+	staged := strings.TrimSpace(string(output))
+	if staged == "" {
 		return nil
 	}
 
 	return fmt.Errorf( //nolint:err113 // the listing is the message
-		"ditto: a range scope measures committed bytes, and this checkout has uncommitted work:\n%s", dirty)
+		"ditto: a range scope measures committed bytes, and this checkout has staged changes:\n%s", staged)
 }
