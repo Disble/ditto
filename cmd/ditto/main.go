@@ -55,7 +55,7 @@ func command(args []string, help io.Writer) error {
 		usage(help)
 
 		return nil
-	case "-version", "--version", "version":
+	case "-v", "-version", "--version", "version":
 		fmt.Fprintln(help, versionLine(buildVersion()))
 
 		return nil
@@ -103,6 +103,7 @@ func usage(out io.Writer) {
   ditto staged [flags]    mutate only what a staged change justifies
   ditto changed [flags]   mutate only what a committed change justifies
   ditto version           the module version this binary was built from
+                          (also -v, --version)
 
 Run `+"`ditto run -h`"+` for its flags.
 `)
