@@ -121,3 +121,83 @@ func TestRequireCleanAcceptsACleanCheckout(t *testing.T) {
 		t.Fatalf("a clean checkout was refused: %v", err)
 	}
 }
+
+// TestChangedScopeFailsOpenRatherThanGuessing covers both fail-open branches.
+//
+// Mutating too much is a cost; mutating the wrong bytes is a wrong answer. So a
+// diff that yields no usable range widens to whole files and says why, rather
+// than producing a scope nobody can trust.
+func TestChangedScopeFailsOpenRatherThanGuessing(t *testing.T) {
+	t.Parallel()
+
+	content := "package thing\n\nfunc Add(a, b int) int {\n\treturn a + b\n}\n"
+
+	t.Run("when the diff carries no hunk at all", func(t *testing.T) {
+		t.Parallel()
+
+		repository, _ := scripted(map[string]string{
+			"diff --no-ext-diff": "diff --git a/thing.go b/thing.go\nsimilarity index 100%\n",
+			"show":               content,
+		})
+
+		scope, err := repository.ChangedScopeOf("v0.7.0", []string{"thing.go"})
+		if err != nil {
+			t.Fatalf("reading the changed scope: %v", err)
+		}
+
+		if scope.Derived {
+			t.Fatal("a diff with no hunk produced a derived scope")
+		}
+
+		if scope.Ranges["thing.go"] != nil {
+			t.Fatalf("a failed-open scope carries ranges: %v", scope.Ranges)
+		}
+
+		// The reason is asserted, not just its absence. There are two ways to
+		// fail open here and they mean different things -- a diff nobody could
+		// parse, and a range that missed the file -- and a reader chasing a
+		// widened scope needs to know which one happened.
+		if !strings.Contains(scope.Reason, "no usable range") {
+			t.Fatalf("the reason names the wrong failure: %q", scope.Reason)
+		}
+	})
+
+	t.Run("when the hunk names lines the committed content does not have", func(t *testing.T) {
+		t.Parallel()
+
+		repository, _ := scripted(map[string]string{
+			"diff --no-ext-diff": "@@ -900 +900 @@\n-\tgone\n+\talso gone\n",
+			"show":               content,
+		})
+
+		scope, err := repository.ChangedScopeOf("v0.7.0", []string{"thing.go"})
+		if err != nil {
+			t.Fatalf("reading the changed scope: %v", err)
+		}
+
+		if scope.Derived {
+			t.Fatal("a range past the end of the file produced a derived scope")
+		}
+
+		if !strings.Contains(scope.Reason, "committed bytes") {
+			t.Fatalf("the reason does not say what went wrong: %q", scope.Reason)
+		}
+	})
+}
+
+// TestChangedFilesSurvivesAnEmptyRange is the docs-only commit: no Go source
+// moved, which is a scope of nothing rather than a failure.
+func TestChangedFilesSurvivesAnEmptyRange(t *testing.T) {
+	t.Parallel()
+
+	repository, _ := scripted(map[string]string{"diff --name-only": ""})
+
+	files, err := repository.ChangedFiles("v0.7.0", nil)
+	if err != nil {
+		t.Fatalf("listing the changed files: %v", err)
+	}
+
+	if len(files) != 0 {
+		t.Fatalf("files = %v, want none", files)
+	}
+}

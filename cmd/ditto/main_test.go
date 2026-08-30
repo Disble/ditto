@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"flag"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -123,4 +126,133 @@ func TestChangedIsASubcommand(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "ditto changed")
+}
+
+// TestChangedThresholdBounds pins the one arithmetic check in this command. A
+// mutation score is between 0 and 1, and a threshold outside that is a request
+// that can never be met or can never fail -- either way the gate stops meaning
+// anything, silently.
+func TestChangedThresholdBounds(t *testing.T) {
+	for _, threshold := range []string{"-0.1", "1.1", "2"} {
+		t.Run("refuses "+threshold, func(t *testing.T) {
+			err := changedCommand([]string{"--since", "HEAD", "--threshold", threshold}, &bytes.Buffer{})
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "between 0 and 1")
+		})
+	}
+
+	for _, threshold := range []string{"0", "0.5", "1"} {
+		t.Run("accepts "+threshold, func(t *testing.T) {
+			// It gets past the bounds check and fails on the repository instead,
+			// which is what says the number itself was allowed through.
+			err := changedCommand(
+				[]string{"--since", "HEAD", "--threshold", threshold, "--dry", "--cwd", t.TempDir()},
+				&bytes.Buffer{},
+			)
+
+			require.Error(t, err)
+			assert.NotContains(t, err.Error(), "between 0 and 1")
+		})
+	}
+}
+
+// TestStagedThresholdBounds is the same check on the subcommand that already had
+// it, so the two cannot drift apart unnoticed.
+func TestStagedThresholdBounds(t *testing.T) {
+	err := stagedCommand([]string{"--threshold", "1.5"}, &bytes.Buffer{})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "between 0 and 1")
+}
+
+// TestChangedDispatchPassesItsFlagsOn covers the argument slice itself. Passing
+// one too few drops the subcommand's first flag; one too many hands `changed`
+// its own name as a positional and flag.Parse stops there. Both leave --since
+// unset, and both look exactly like a user who forgot it.
+func TestChangedDispatchPassesItsFlagsOn(t *testing.T) {
+	err := command([]string{"changed", "--since", "HEAD", "--dry", "--cwd", t.TempDir()}, &bytes.Buffer{})
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "--since", "the flags did not reach the subcommand")
+}
+
+// TestChangedDryReportsTheScope covers what --dry is for: answering "what would
+// this cost" without paying for it. The per-file lines and the widened-scope
+// notice are the whole output, and neither had ever been exercised.
+func TestChangedDryReportsTheScope(t *testing.T) {
+	dir := fixtureRepository(t)
+	out := &bytes.Buffer{}
+
+	err := changedCommand([]string{"--since", "base", "--dry", "--cwd", dir}, out)
+
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "1 file(s) changed since base")
+	assert.Contains(t, out.String(), "added.go:")
+	// A derived scope says nothing about itself; only a widened one explains.
+	assert.NotContains(t, out.String(), "scope:")
+}
+
+func TestChangedDrySaysWhenThereIsNothingToDo(t *testing.T) {
+	dir := fixtureRepository(t)
+	out := &bytes.Buffer{}
+
+	// Its own base: a range from a commit to itself is empty by construction.
+	err := changedCommand([]string{"--since", "HEAD", "--dry", "--cwd", dir}, out)
+
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "nothing changed since HEAD is worth mutating")
+}
+
+// fixtureRepository is a repository with exactly one committed Go change in it,
+// tagged `base` before that change.
+func fixtureRepository(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+
+	gitInFixture(t, dir, "init")
+	gitInFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitInFixture(t, dir, "config", "user.name", "fixture")
+	writeInFixture(t, dir, "kept.go", "package fixture\n\nfunc Kept() int { return 1 }\n")
+	gitInFixture(t, dir, "add", "-A")
+	gitInFixture(t, dir, "commit", "-m", "base")
+	gitInFixture(t, dir, "tag", "base")
+
+	writeInFixture(t, dir, "added.go", "package fixture\n\nfunc Added(a, b int) bool { return a > b }\n")
+	gitInFixture(t, dir, "add", "-A")
+	gitInFixture(t, dir, "commit", "-m", "add")
+
+	return dir
+}
+
+// gitInFixture clears the git addressing this process inherited. A hook exports
+// GIT_DIR and friends as absolute paths, and a fixture that inherited them would
+// quietly operate on the real checkout instead.
+func gitInFixture(t *testing.T, dir string, args ...string) {
+	t.Helper()
+
+	command := exec.CommandContext(t.Context(), "git", args...)
+	command.Dir = dir
+
+	kept := []string{}
+
+	for _, variable := range os.Environ() {
+		name, _, _ := strings.Cut(variable, "=")
+		if !strings.HasPrefix(name, "GIT_") {
+			kept = append(kept, variable)
+		}
+	}
+
+	command.Env = kept
+
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
+	}
+}
+
+func writeInFixture(t *testing.T, dir, name, content string) {
+	t.Helper()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
 }
