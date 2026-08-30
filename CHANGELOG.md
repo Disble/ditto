@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-30
+
+### Added
+
+- **`-v` and `--version` alongside `ditto version`.** Nothing new is reported;
+  it is the spelling people actually type, and a tool that only answers the long
+  form makes them look it up to ask the simplest question it has.
+
+  Safe at this level rather than lucky: subcommand flags are parsed by their own
+  `FlagSet`, and Go's `flag` package does no prefix matching, so `ditto run -v`
+  never resolved to `-verbose` and still does not — it reports an undefined flag,
+  as it always did.
+
 ## [0.9.0] - 2026-08-30
 
 The release that makes ditto's own gate finish, by making it ask a question it
@@ -671,6 +684,7 @@ here, not yet built.
 - The `retract` block. It named published versions of the upstream module path,
   which do not exist under this one.
 
+[0.10.0]: https://github.com/Disble/ditto/releases/tag/v0.10.0
 [0.9.0]: https://github.com/Disble/ditto/releases/tag/v0.9.0
 [0.8.0]: https://github.com/Disble/ditto/releases/tag/v0.8.0
 [0.7.0]: https://github.com/Disble/ditto/releases/tag/v0.7.0

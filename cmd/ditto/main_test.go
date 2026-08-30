@@ -28,7 +28,10 @@ func TestVersion(t *testing.T) {
 		assert.Equal(t, "ditto (built from source; no released version recorded)", versionLine(""))
 	})
 
-	for _, argument := range []string{"--version", "-version", "version"} {
+	// -v as well as --version, because that is what people type. It is safe at
+	// this level: subcommand flags are parsed by their own FlagSet, and Go's flag
+	// package does no prefix matching, so `ditto run -v` was never a thing.
+	for _, argument := range []string{"--version", "-version", "-v", "version"} {
 		t.Run(argument+" reports the version and does not fail", func(t *testing.T) {
 			out := &bytes.Buffer{}
 

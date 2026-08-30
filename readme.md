@@ -86,7 +86,7 @@ a gate rather than a test:
 ```shell
 go install github.com/Disble/ditto/cmd/ditto@latest
 
-ditto version                             # which build is this?
+ditto version                             # which build is this? (also -v, --version)
 ditto run --threshold 0.8                 # mutate the repository
 ditto staged --dry                        # what would a staged change cost?
 ditto staged --threshold 0.8              # mutate only what it justifies
