@@ -86,6 +86,7 @@ a gate rather than a test:
 ```shell
 go install github.com/Disble/ditto/cmd/ditto@latest
 
+ditto version                             # which build is this?
 ditto run --threshold 0.8                 # mutate the repository
 ditto staged --dry                        # what would a staged change cost?
 ditto staged --threshold 0.8              # mutate only what it justifies
@@ -105,6 +106,26 @@ the file that moved them was never staged.
 Policy stays with you: `--threshold`, `--test-command`, and `--exclude-prefix`
 (repeatable) are yours to set, and Ditto has an opinion about none of them
 beyond its defaults.
+
+**Name the package that owns the change in `--test-command`.** This is the one
+default that will surprise you, so it is here rather than only in `-h`: the test
+command runs **once per mutant, sequentially**, so the default `./...` costs your
+whole suite times your mutant count. Reported from a repository whose suite takes
+27 seconds across 45 packages: a run that printed nothing for over ten minutes,
+twice, and was read as a hang. It was not stuck. It was paying that bill.
+
+```shell
+ditto staged --test-command "go test -count=1 -json ./internal/thepackage/"
+```
+
+Seconds instead. `--exclude-prefix` and a `--threshold` below 1.00 are the other
+two levers, and the sandbox strategy is not one — `--sandbox hardlink` buys back
+a fixed fifteen seconds on a two-thousand-file repository, and `--sandbox link`
+cannot work at all in a repository with a `go:embed` directive, because embed
+refuses an irregular file.
+
+Keep `-json`. It is what lets ditto tell a mutant that never compiled from one a
+test caught; without it, the first is counted as the second.
 
 ### When the index is not the whole story
 
@@ -208,6 +229,15 @@ stale in silence, and this cannot — if the report changes, the golden test fai
 
 ```text
 ┃ Releasing Ditto…
+┃ calc/calc.go — 7 mutants
+┃   calc/calc.go:9:12 → Arithmetic
+┃ baseline: the suite took 796ms on unmutated code, and every mutant runs it again.
+┃   calc/calc.go:12:11 → Arithmetic
+┃   calc/calc.go:16:41 → Arithmetic
+┃   calc/calc.go:4:41 → Comparison
+┃   calc/calc.go:8:8 → Comparison
+┃   calc/calc.go:4:40 → Comparison Invert
+┃   calc/calc.go:8:7 → Comparison Invert
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
 ┃ 🧬 Survivors
 ┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
@@ -314,6 +344,7 @@ The table below presents all available options.
 | `ForceColors`          | `false`                               | Forces colors in logs. This is useful when running the mutation tests in a CI environment, for example.                                                                                                                                                                        |
 | `WithChangedRanges`    | `nil`                                 | Restricts the release to named byte ranges of named files, keyed by repository-relative path with forward slashes. Every mutant costs a full run of the test command, so mutating a line a change never touched is charged at the same rate as one that matters. A file with no entry is not mutated at all; a file with an empty range list is mutated whole. Keep the ranges beside their file — a byte offset only means something against the file it was measured in, and one flat set makes every file answer to every range. |
 | `Gated`                | `false`                               | Runs a file's mutants from one compilation instead of one each: the file is instrumented so every mutant becomes a gate chosen at run time, the package is compiled once with `go test -c`, and each mutant is selected by environment variable. Starting the test command costs 750–950 ms per mutant regardless of what the suite does, and that fixed toll is the dominant cost of a run. Anything it cannot express that way keeps the path ditto has always taken, so no mutant is lost by turning it on. It stays opt-in because the gating rate is a property of the file — measured between 26% and 72% across real files — and a compilation paid for a quarter of the mutants is an option rather than a default. |
+| `ConfirmKills`         | `false`                               | Re-runs a mutant that died by assertion, once, and believes the second answer when it disagrees. The baseline check runs once per release, so it refuses a suite that is ALREADY red and cannot see one that goes red at mutant 37 — where a spurious failure becomes a kill no test earned, indistinguishable from a real one in the report. Only assertion kills are re-run: a mutant that never built already leaves the score on both sides, and a deadline is a clock ditto fired itself. A survivor is never re-run, because a flake manufactures failures and cannot make a mutant the tests caught look like it escaped. Off by default: it doubles the price of every assertion kill and buys nothing on a suite that does not flake. |
 | `WithSandboxStrategy` | `copy` | How each file reaches a sandbox: `copy`, `hardlink` or `link`. A sandbox is only a sandbox if what it holds is a copy: a symlink is a reference that `go:embed` refuses and that a write follows through to the original, and a hard link shares the inode so a write reaches it too. `link` is what every release before 0.5.0 used and stays reachable for measurement. Whatever the strategy, a **symlink already in the repository** is reproduced as the same link with its raw target, never followed — the tree ditto measures is the tree on disk. |
 
 ## Viruses

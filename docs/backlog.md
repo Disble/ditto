@@ -594,7 +594,15 @@ the staged path, and this repository's own gate does not.
 Raising the timeout is not on this list. The number would move and the question
 would not.
 
-## 22. A healthy run and a hang are byte-identical on stdout
+## 22. A healthy run and a hang are byte-identical on stdout — **closed 2026-08-30**
+
+Closed by a progress line per mutant. `Release` names each file and its mutant
+count before running any of them, and `internal/progresslaboratory` names each
+mutant BEFORE handing it over — after is too late to say which mutant a stall is
+inside. It is a decorator rather than a line in `Release` because `ditto run` has
+to say what `ditto.Release` says, and `testingtlaboratory` implements `TestAll`
+whether or not anything beneath it batches, so a line printed by the caller lands
+in a different order on the two paths.
 
 Reported by `autoreas-bridge` on 2026-08-30, and it cost two people an afternoon
 between them.
@@ -623,7 +631,16 @@ The fix is a progress line per mutant. It ends the failure mode outright rather
 than documenting it, and it makes the arithmetic available at the moment somebody
 needs it.
 
-## 23. The flag help says what a flag does, never what it costs
+## 23. The flag help says what a flag does, never what it costs — **closed 2026-08-30**
+
+Closed in the flag help, not only in the readme. `--test-command` now names the
+toll -- once per mutant, sequentially -- and what dropping `-json` costs.
+
+One thing was found only by running the binary, and no assertion on the constant
+could have seen it: `flag.PrintDefaults` takes the first backquoted word as the
+flag's VALUE NAME, so the line had been rendering as `-test-command -json`, which
+reads like a second flag. The test now renders the flag set instead of inspecting
+the string.
 
 `ditto staged -h` prints, for the flag at the centre of entry 22:
 
@@ -662,7 +679,13 @@ The readme's `staged` section currently says policy "stays with you" and
 `--test-command` is "yours to set", which is accurate and does not carry that
 delta.
 
-## 24. A run says nothing about what it is about to cost
+## 24. A run says nothing about what it is about to cost — **closed 2026-08-30**
+
+Closed by the cheaper shape this entry already argued for. The laboratory was
+timing the baseline and throwing the number away; it now says what the suite cost
+and that every mutant pays it again. Beside the mutant count `Release` prints,
+that is the bill -- and the total mutant count, which does not exist when the
+baseline finishes, is not needed to state it.
 
 Proposed by the same reporter, and it composes with entry 22 rather than
 duplicating it: a progress line says the run is advancing, a forecast says how
@@ -691,7 +714,12 @@ worse: the first file's count and the measured baseline are both in hand at the
 right moment, and a per-file line as each file starts says the same thing
 incrementally.
 
-## 25. There is no way to ask the binary its version
+## 25. There is no way to ask the binary its version — **closed 2026-08-30**
+
+Closed by `ditto version`, which also answers `--version` and `-version`. The
+number comes from `runtime/debug` rather than a constant, so there is no second
+place for it to go stale, and a binary built from a checkout says it has no
+released version instead of naming one.
 
 `cmd/ditto/main.go` dispatches `run`, `staged`, and `-h`/`--help`/`help`.
 Anything else prints usage to stderr and exits 1, so `ditto --version` reports
@@ -707,7 +735,11 @@ never compiled **is** counted as a kill. v0.7.0 excludes it from both sides of
 the score. Same question, opposite answers, and nothing the user can type tells
 them which one applies to them.
 
-## 26. `-gated` cannot be reached from `staged`
+## 26. `-gated` cannot be reached from `staged` — **closed 2026-08-30**
+
+Closed by registering the flag on `staged`. Entry 19 is untouched and still open
+on its own evidence: this was about a user being unable to make the choice, not
+about which choice this repository's own gate should make.
 
 `runCommand` registers `-gated`. `stagedCommand` does not, and `Options.Gated`
 defaults false, so every mutant of a staged run pays the fixed cost of starting
@@ -725,7 +757,13 @@ about whether to turn gating on for *this* repository's own gate, and is still
 open on its own evidence. This one is that a user of `ditto staged` cannot make
 the choice at all.
 
-## 27. A flake scores a false kill, and nothing re-runs it
+## 27. A flake scores a false kill, and nothing re-runs it — **closed 2026-08-30**
+
+Closed by `--confirm-kills`, opt-in on both subcommands. Only assertion kills are
+re-run, which is what keeps the cost arguable rather than obvious, and a survivor
+is never re-run at all: a flake manufactures failures, so a mutant that survives
+either run survived. A verdict that changes on the re-run is printed, because it
+is evidence about the suite rather than about the mutant.
 
 Reported by `autoreas-bridge`, who have one: roughly **1 run in 5** of their full
 suite fails on a cold run, package still unidentified. It is theirs to chase. The
