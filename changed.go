@@ -2,7 +2,6 @@ package ditto
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/Disble/ditto/internal/staged"
 )
@@ -77,34 +76,5 @@ func RunChanged(directory, baseRef string, excludePrefixes []string, options ...
 		return fmt.Errorf("checking the checkout: %w", err)
 	}
 
-	sandbox, err := repository.Materialize()
-	if err != nil {
-		return fmt.Errorf("materialising the committed content: %w", err)
-	}
-	defer sandbox.Close()
-
-	config, err := repository.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("reading the repository configuration: %w", err)
-	}
-
-	if notice := plan.ScopeNotice(); notice != "" {
-		fmt.Fprintln(os.Stdout, notice)
-	}
-
-	copied, err := repository.CopyGenerated(sandbox, config.Generated)
-	if err != nil {
-		return fmt.Errorf("copying generated paths: %w", err)
-	}
-
-	for _, name := range copied {
-		fmt.Fprintf(os.Stdout, "ditto: %s is generated and untracked; copied from the working tree.\n", name)
-	}
-
-	scoped := append([]Option{
-		WithRepositoryRoot(sandbox.Root),
-		WithChangedRanges(plan.Ranges),
-	}, options...)
-
-	return Run(scoped...)
+	return runInSandbox(directory, plan, options)
 }

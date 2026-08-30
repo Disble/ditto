@@ -1,13 +1,11 @@
 package ditto_test
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Disble/ditto"
+	"github.com/Disble/ditto/internal/dittotesting"
 )
 
 // These exercise the answers PlanChanged and RunChanged give when something is
@@ -18,50 +16,12 @@ import (
 // says, and a fake that agrees with my reading of git proves my reading rather
 // than the behaviour.
 
-func repository(t *testing.T) string {
-	t.Helper()
-
-	dir := t.TempDir()
-
-	run(t, dir, "init")
-	run(t, dir, "config", "user.email", "fixture@example.com")
-	run(t, dir, "config", "user.name", "fixture")
-	write(t, dir, "kept.go", "package fixture\n\nfunc Kept() int { return 1 }\n")
-	run(t, dir, "add", "-A")
-	run(t, dir, "commit", "-m", "base")
-	run(t, dir, "tag", "base")
-
-	return dir
-}
-
-func run(t *testing.T, dir string, args ...string) {
-	t.Helper()
-
-	command := exec.CommandContext(t.Context(), "git", args...)
-	command.Dir = dir
-	// Removed rather than blanked: git rejects an empty GIT_DIR outright, and
-	// an inherited one would point the fixture at the real checkout.
-	command.Env = withoutGitEnvironment(os.Environ())
-
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
-	}
-}
-
-func write(t *testing.T, dir, name, content string) {
-	t.Helper()
-
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
-		t.Fatalf("writing %s: %v", name, err)
-	}
-}
-
 func TestPlanChangedReadsACommittedChange(t *testing.T) {
-	dir := repository(t)
+	dir := dittotesting.GitRepository(t)
 
-	write(t, dir, "added.go", "package fixture\n\nfunc Added(a, b int) bool { return a > b }\n")
-	run(t, dir, "add", "-A")
-	run(t, dir, "commit", "-m", "add")
+	dittotesting.WriteFile(t, dir, "added.go", "package fixture\n\nfunc Added(a, b int) bool { return a > b }\n")
+	dittotesting.Git(t, dir, "add", "-A")
+	dittotesting.Git(t, dir, "commit", "-m", "add")
 
 	plan, err := ditto.PlanChanged(dir, "base", nil)
 	if err != nil {
@@ -85,11 +45,11 @@ func TestPlanChangedReadsACommittedChange(t *testing.T) {
 // and saying so is what lets a gate skip honestly rather than report a green it
 // did not earn.
 func TestPlanChangedIsEmptyWhenNoGoSourceMoved(t *testing.T) {
-	dir := repository(t)
+	dir := dittotesting.GitRepository(t)
 
-	write(t, dir, "readme.md", "# fixture\n")
-	run(t, dir, "add", "-A")
-	run(t, dir, "commit", "-m", "docs")
+	dittotesting.WriteFile(t, dir, "readme.md", "# fixture\n")
+	dittotesting.Git(t, dir, "add", "-A")
+	dittotesting.Git(t, dir, "commit", "-m", "docs")
 
 	plan, err := ditto.PlanChanged(dir, "base", nil)
 	if err != nil {
@@ -102,15 +62,11 @@ func TestPlanChangedIsEmptyWhenNoGoSourceMoved(t *testing.T) {
 }
 
 func TestPlanChangedExcludesByPrefix(t *testing.T) {
-	dir := repository(t)
+	dir := dittotesting.GitRepository(t)
 
-	if err := os.Mkdir(filepath.Join(dir, "tools"), 0o750); err != nil {
-		t.Fatalf("creating tools: %v", err)
-	}
-
-	write(t, dir, "tools/tool.go", "package tools\n\nfunc Tool(a, b int) bool { return a > b }\n")
-	run(t, dir, "add", "-A")
-	run(t, dir, "commit", "-m", "tool")
+	dittotesting.WriteFile(t, dir, "tools/tool.go", "package tools\n\nfunc Tool(a, b int) bool { return a > b }\n")
+	dittotesting.Git(t, dir, "add", "-A")
+	dittotesting.Git(t, dir, "commit", "-m", "tool")
 
 	plan, err := ditto.PlanChanged(dir, "base", []string{"tools/"})
 	if err != nil {
@@ -126,7 +82,7 @@ func TestPlanChangedExcludesByPrefix(t *testing.T) {
 // the same exit code and opposite meanings: one is a change with nothing in it,
 // the other is a question git could not answer.
 func TestPlanChangedRefusesAnUnknownBase(t *testing.T) {
-	_, err := ditto.PlanChanged(repository(t), "no-such-ref", nil)
+	_, err := ditto.PlanChanged(dittotesting.GitRepository(t), "no-such-ref", nil)
 	if err == nil {
 		t.Fatal("an unknown base was accepted")
 	}
@@ -146,12 +102,12 @@ func TestPlanChangedRefusesSomewhereThatIsNotARepository(t *testing.T) {
 // reusing the index-backed sandbox: a range scope names bytes of HEAD, and those
 // are the same bytes only while nothing is modified or staged.
 func TestRunChangedRefusesADirtyCheckout(t *testing.T) {
-	dir := repository(t)
+	dir := dittotesting.GitRepository(t)
 
-	write(t, dir, "added.go", "package fixture\n\nfunc Added(a, b int) bool { return a > b }\n")
-	run(t, dir, "add", "-A")
-	run(t, dir, "commit", "-m", "add")
-	write(t, dir, "kept.go", "package fixture\n\nfunc Kept() int { return 2 }\n")
+	dittotesting.WriteFile(t, dir, "added.go", "package fixture\n\nfunc Added(a, b int) bool { return a > b }\n")
+	dittotesting.Git(t, dir, "add", "-A")
+	dittotesting.Git(t, dir, "commit", "-m", "add")
+	dittotesting.WriteFile(t, dir, "kept.go", "package fixture\n\nfunc Kept() int { return 2 }\n")
 
 	err := ditto.RunChanged(dir, "base", nil)
 	if err == nil {
@@ -166,11 +122,11 @@ func TestRunChangedRefusesADirtyCheckout(t *testing.T) {
 // Nothing to mutate is nothing to do, and it is not an error. A gate that
 // treated it as one would fail every docs-only commit.
 func TestRunChangedDoesNothingWhenNothingChanged(t *testing.T) {
-	dir := repository(t)
+	dir := dittotesting.GitRepository(t)
 
-	write(t, dir, "readme.md", "# fixture\n")
-	run(t, dir, "add", "-A")
-	run(t, dir, "commit", "-m", "docs")
+	dittotesting.WriteFile(t, dir, "readme.md", "# fixture\n")
+	dittotesting.Git(t, dir, "add", "-A")
+	dittotesting.Git(t, dir, "commit", "-m", "docs")
 
 	if err := ditto.RunChanged(dir, "base", nil); err != nil {
 		t.Fatalf("a docs-only commit was reported as a failure: %v", err)
@@ -178,7 +134,7 @@ func TestRunChangedDoesNothingWhenNothingChanged(t *testing.T) {
 }
 
 func TestRunChangedRefusesAnUnknownBase(t *testing.T) {
-	if err := ditto.RunChanged(repository(t), "no-such-ref", nil); err == nil {
+	if err := ditto.RunChanged(dittotesting.GitRepository(t), "no-such-ref", nil); err == nil {
 		t.Fatal("an unknown base was accepted")
 	}
 }
