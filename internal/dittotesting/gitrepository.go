@@ -56,7 +56,8 @@ func GitRepositoryWithAChange(t *testing.T) string {
 func Git(t *testing.T, dir string, args ...string) {
 	t.Helper()
 
-	command := exec.CommandContext(t.Context(), "git", args...)
+	//nolint:gosec // the arguments are this package's own literals, and the binary is resolved above
+	command := exec.CommandContext(t.Context(), gitBinary(t), args...)
 	command.Dir = dir
 
 	kept := make([]string, 0, len(os.Environ()))
@@ -73,6 +74,25 @@ func Git(t *testing.T, dir string, args ...string) {
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
 	}
+}
+
+// gitBinary resolves git once, to an absolute path, instead of naming it and
+// letting the operating system search.
+//
+// `exec.Command("git", …)` reads PATH at every call, so a directory an attacker
+// can write to — or prepend — decides which git runs. That is SonarQube's rule
+// S4036, and internal/gobuildrunner already resolves the Go toolchain the same
+// way for the same reason: something ambient deciding what a subprocess really
+// is.
+func gitBinary(t *testing.T) string {
+	t.Helper()
+
+	found, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatalf("no git on PATH: %v", err)
+	}
+
+	return found
 }
 
 // WriteFile puts one file into a fixture, creating nothing else.
