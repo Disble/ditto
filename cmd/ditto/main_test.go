@@ -101,3 +101,26 @@ func TestTestCommandHelpRendersItsValueName(t *testing.T) {
 	assert.NotContains(t, rendered.String(), "-test-command -json")
 	assert.NotContains(t, rendered.String(), "-test-command ./...")
 }
+
+// TestChangedRefusesToGuessABase covers the one decision `changed` deliberately
+// does not make for you. There is no default that is right on a CI checkout, in
+// a working tree and on a branch at once, and a base guessed wrong is either a
+// bill nobody asked for or a scope of nothing reported as success.
+func TestChangedRefusesToGuessABase(t *testing.T) {
+	err := changedCommand([]string{"--dry"}, &bytes.Buffer{})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--since")
+}
+
+// TestChangedIsASubcommand keeps the dispatch honest: an unknown subcommand
+// prints usage and fails, so a `changed` that was never wired would look exactly
+// like a typo.
+func TestChangedIsASubcommand(t *testing.T) {
+	out := &bytes.Buffer{}
+
+	err := command([]string{"--help"}, out)
+
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "ditto changed")
+}
