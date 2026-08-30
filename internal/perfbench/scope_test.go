@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/dittotesting/fakelogger"
 	"github.com/Disble/ditto/internal/dittotesting/fakereporter"
 	"github.com/Disble/ditto/internal/fsrepository"
 	"github.com/Disble/ditto/internal/future"
@@ -37,7 +38,7 @@ func addressesWithScope(t *testing.T, root string, ranges map[string][]gosourcef
 
 	laboratory := &addressCollectingLaboratory{}
 
-	ditto.New(scopedrepository.New(ranges, fsrepository.New(root)), laboratory, fakereporter.New()).
+	ditto.New(fakelogger.New(), scopedrepository.New(ranges, fsrepository.New(root)), laboratory, fakereporter.New()).
 		Release(defaultViruses()...)
 
 	sort.Strings(laboratory.seen)

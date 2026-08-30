@@ -2,7 +2,9 @@ package laboratory
 
 import (
 	"sync"
+	"time"
 
+	"github.com/Disble/ditto/internal/color"
 	"github.com/Disble/ditto/internal/ditto"
 	"github.com/Disble/ditto/internal/future"
 	"github.com/Disble/ditto/internal/gomutatedfile"
@@ -31,6 +33,7 @@ type TemporaryDirectory interface {
 // any instant is therefore the same as when each mutant built its own, which
 // matters because that number is also what an interrupted run leaves behind.
 type Laboratory struct {
+	logger             ditto.Logger
 	testRunner         TestRunner
 	temporaryDirectory TemporaryDirectory
 
@@ -40,8 +43,9 @@ type Laboratory struct {
 	baseline sync.Once
 }
 
-func New(testRunner TestRunner, temporaryDirectory TemporaryDirectory) *Laboratory {
+func New(logger ditto.Logger, testRunner TestRunner, temporaryDirectory TemporaryDirectory) *Laboratory {
 	return &Laboratory{
+		logger:             logger,
 		testRunner:         testRunner,
 		temporaryDirectory: temporaryDirectory,
 	}
@@ -84,7 +88,10 @@ func (l *Laboratory) verifyBaseline(sandbox ditto.TemporaryRepository) {
 	l.baseline.Do(func() {
 		// Ok means the command failed. For a mutant that is a kill; with nothing
 		// mutated it is a suite that was already red.
+		started := time.Now()
 		res := l.testRunner.Test(sandbox)
+		elapsed := time.Since(started)
+
 		if res.IsOk() {
 			// The command's own output travels with the refusal. Without it the
 			// reader is told a suite is red and left to guess which of a hundred
@@ -92,6 +99,17 @@ func (l *Laboratory) verifyBaseline(sandbox ditto.TemporaryRepository) {
 			panic(ditto.NewRefusalError("ditto: the test command fails on unmutated code, so every mutant would be scored " +
 				"killed; refusing to score against a red baseline\n\n" + verdict.Text(result.Output(res))))
 		}
+
+		// This run was already paid for and the clock above already measured it;
+		// throwing the number away was the waste. It is the per-mutant price of
+		// the test command, and printed beside the mutant count the release
+		// announces it is the whole bill — which is what nobody had when a run
+		// advancing normally was reported as a hang.
+		l.logger.Logf(
+			"%s baseline: the suite took %s on unmutated code, and every mutant runs it again.",
+			color.Yellow("┃"),
+			elapsed.Round(time.Millisecond),
+		)
 	})
 }
 

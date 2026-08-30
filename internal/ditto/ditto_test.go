@@ -6,6 +6,7 @@ import (
 	"github.com/Disble/ditto/internal/ditto"
 	"github.com/Disble/ditto/internal/dittotesting"
 	"github.com/Disble/ditto/internal/dittotesting/fakelaboratory"
+	"github.com/Disble/ditto/internal/dittotesting/fakelogger"
 	"github.com/Disble/ditto/internal/dittotesting/fakereporter"
 	"github.com/Disble/ditto/internal/dittotesting/fakerepository"
 	"github.com/Disble/ditto/internal/gomutatedfile"
@@ -29,6 +30,7 @@ func TestDitto_nothing_to_test(t *testing.T) {
 	t.Run("no files", func(t *testing.T) {
 		reporter := fakereporter.New()
 		ditto.New(
+			fakelogger.New(),
 			fakerepository.New(fakerepository.FS{}),
 			fakelaboratory.New(),
 			reporter,
@@ -44,6 +46,7 @@ func TestDitto_nothing_to_test(t *testing.T) {
 	t.Run("no viruses yields failed result", func(t *testing.T) {
 		reporter := fakereporter.New()
 		ditto.New(
+			fakelogger.New(),
 			fakerepository.New(fakerepository.FS{"source0.go": source0}),
 			fakelaboratory.New(),
 			reporter,
@@ -59,6 +62,7 @@ func TestDitto_nothing_to_test(t *testing.T) {
 	t.Run("one file, one virus and no infections yields failed result", func(t *testing.T) {
 		reporter := fakereporter.New()
 		ditto.New(
+			fakelogger.New(),
 			fakerepository.New(fakerepository.FS{"source1.go": source1}),
 			fakelaboratory.New(),
 			reporter,
@@ -141,6 +145,7 @@ func TestDitto_with_mutations(t *testing.T) {
 		reporter := fakereporter.New()
 		repository := fakerepository.New(fakerepository.FS{"source2.go": source2})
 		ditto.New(
+			fakelogger.New(),
 			repository,
 			fakelaboratory.New(
 				fakelaboratory.NewResult(
@@ -195,6 +200,7 @@ func TestDitto_with_mutations(t *testing.T) {
 					reporter := fakereporter.New()
 					repository := fakerepository.New(fakerepository.FS{"source3.go": source3})
 					ditto.New(
+						fakelogger.New(),
 						repository,
 						fakelaboratory.New(
 							fakelaboratory.NewResult(
@@ -254,6 +260,7 @@ func TestDitto_with_mutations(t *testing.T) {
 					reporter := fakereporter.New()
 					repository := fakerepository.New(fakerepository.FS{"source2.go": source2})
 					ditto.New(
+						fakelogger.New(),
 						repository,
 						fakelaboratory.New(
 							fakelaboratory.NewResult(
@@ -319,6 +326,7 @@ func TestDitto_with_mutations(t *testing.T) {
 						"source4.go": source4,
 					})
 					ditto.New(
+						fakelogger.New(),
 						repository,
 						fakelaboratory.New(
 							fakelaboratory.NewResult(

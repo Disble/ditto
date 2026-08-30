@@ -62,7 +62,7 @@ func TestReleaseGolden(t *testing.T) {
 		t.Fatalf("running the release: %v\n%s", err, output)
 	}
 
-	got := strings.ReplaceAll(string(output), "\r\n", "\n")
+	got := withoutClocks(strings.ReplaceAll(string(output), "\r\n", "\n"))
 	golden := filepath.Join(moduleRoot, "testdata", "golden", "release.txt")
 
 	if os.Getenv("DITTO_GOLDEN_UPDATE") == "1" {
@@ -84,7 +84,7 @@ func TestReleaseGolden(t *testing.T) {
 	// the only thing it is for.
 	gatedOutput := releaseOutput(t, project, binary, true, false)
 
-	if got := withoutGateCount(gatedOutput); got != want {
+	if got := withoutRunShape(withoutGateCount(gatedOutput)); got != withoutRunShape(want) {
 		t.Fatalf("the gated release said something different.\n--- want ---\n%s\n--- got ---\n%s", want, got)
 	}
 
@@ -154,6 +154,51 @@ func gateCount(t *testing.T, output string) int {
 	}
 
 	return count
+}
+
+// baselineDuration is the one number in a release that is a clock rather than a
+// count, so it is the one thing a byte-for-byte golden cannot hold.
+//
+// The LINE is pinned and only the duration is replaced: the sentence is the
+// feature -- a run that says what it is about to cost -- and dropping the line
+// entirely would let it disappear without the golden noticing.
+var baselineDuration = regexp.MustCompile(`baseline: the suite took [^ ]+ on unmutated code`)
+
+// withoutClocks replaces the duration in the baseline line with a placeholder,
+// so everything else can be compared against the golden byte for byte.
+func withoutClocks(output string) string {
+	return baselineDuration.ReplaceAllString(output, "baseline: the suite took <duration> on unmutated code")
+}
+
+// runShape matches the lines that say HOW a release ran rather than what it
+// found: the per-mutant progress lines, and the baseline announcement.
+//
+// Both are genuinely path-dependent and neither is a verdict. A gated file is
+// compiled once and its mutants selected at run time, so its progress cannot
+// interleave with execution the way the ordinary path's does; and a file whose
+// mutants all gate never reaches the laboratory that runs the baseline, because
+// the gated path reads an unselected run it has already paid for instead.
+var runShape = regexp.MustCompile(`^┃ {3}.+ → |^┃ baseline: `)
+
+// withoutRunShape drops those lines, so the two paths can still be held to
+// identical output about what they FOUND — which is the whole point of the
+// comparison: a mutation tester that changed its verdicts to go faster would
+// have broken the only thing it is for.
+//
+// The golden itself keeps them, pinned for the ordinary path, so progress cannot
+// quietly disappear again.
+func withoutRunShape(output string) string {
+	kept := []string{}
+
+	for line := range strings.SplitSeq(output, "\n") {
+		if runShape.MatchString(line) {
+			continue
+		}
+
+		kept = append(kept, line)
+	}
+
+	return strings.Join(kept, "\n")
 }
 
 // withoutGateCount removes the one line a gated run adds, so everything else can
@@ -349,7 +394,7 @@ func TestRunSaysWhatReleaseSays(t *testing.T) {
 		t.Fatalf("running the command: %v\n%s", err, output)
 	}
 
-	got := strings.ReplaceAll(string(output), "\r\n", "\n")
+	got := withoutClocks(strings.ReplaceAll(string(output), "\r\n", "\n"))
 	want := strings.TrimSuffix(readFile(t, filepath.Join(moduleRoot, "testdata", "golden", "release.txt")), "PASS\n")
 
 	if got != want {

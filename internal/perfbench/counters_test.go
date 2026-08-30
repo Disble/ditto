@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/dittotesting/fakelogger"
 	"github.com/Disble/ditto/internal/dittotesting/fakereporter"
 	"github.com/Disble/ditto/internal/fsrepository"
 	"github.com/Disble/ditto/internal/fstemporarydir"
@@ -191,7 +192,7 @@ func TestCounterSandboxesBuiltPerRelease(t *testing.T) {
 
 	t.Cleanup(func() { _ = temporaryDir.RemoveAll() })
 
-	ditto.New(repository, laboratory.New(&silentRunner{}, temporaryDir), fakereporter.New()).
+	ditto.New(fakelogger.New(), repository, laboratory.New(fakelogger.New(), &silentRunner{}, temporaryDir), fakereporter.New()).
 		Release(defaultViruses()...)
 
 	// One sandbox serves the whole run. This used to equal the mutant count,
@@ -207,7 +208,7 @@ func releaseWithScope(t *testing.T, root string, ranges map[string][]gosourcefil
 	laboratory := &countingLaboratory{}
 	repository := scopedrepository.New(ranges, fsrepository.New(root))
 
-	ditto.New(repository, laboratory, fakereporter.New()).Release(defaultViruses()...)
+	ditto.New(fakelogger.New(), repository, laboratory, fakereporter.New()).Release(defaultViruses()...)
 
 	return laboratory.calls
 }
@@ -259,7 +260,7 @@ func TestCounterSourceParsesPerRelease(t *testing.T) {
 	}
 
 	root := writeFixtureRepository(t)
-	ditto.New(fsrepository.New(root), &countingLaboratory{}, fakereporter.New()).Release(viri...)
+	ditto.New(fakelogger.New(), fsrepository.New(root), &countingLaboratory{}, fakereporter.New()).Release(viri...)
 
 	// One parse per source file is the floor: the tree does not depend on which
 	// mutator is asking for it. Anything larger means the file is being
@@ -278,7 +279,7 @@ func TestCounterMutantsAndLaboratoryRunsPerRelease(t *testing.T) {
 	laboratory := &countingLaboratory{}
 	reporter := fakereporter.New()
 
-	ditto.New(fsrepository.New(root), laboratory, reporter).Release(defaultViruses()...)
+	ditto.New(fakelogger.New(), fsrepository.New(root), laboratory, reporter).Release(defaultViruses()...)
 
 	// One laboratory run is one execution of the test command, which is the
 	// dominant cost of any run. This is the number a native staged scope has
@@ -320,7 +321,7 @@ func TestCounterTestCommandInvocationsPerRelease(t *testing.T) {
 
 	t.Cleanup(func() { _ = temporaryDir.RemoveAll() })
 
-	ditto.New(fsrepository.New(root), laboratory.New(runner, temporaryDir), fakereporter.New()).
+	ditto.New(fakelogger.New(), fsrepository.New(root), laboratory.New(fakelogger.New(), runner, temporaryDir), fakereporter.New()).
 		Release(defaultViruses()...)
 
 	assertCounter(t, "testCommandInvocationsPerReleaseWholeFixture", runner.calls)

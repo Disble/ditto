@@ -31,6 +31,7 @@ import (
 	"testing"
 
 	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/dittotesting/fakelogger"
 	"github.com/Disble/ditto/internal/dittotesting/fakereporter"
 	"github.com/Disble/ditto/internal/fsrepository"
 	"github.com/Disble/ditto/internal/ignoredrepository"
@@ -73,7 +74,7 @@ func TestCounterMutantsPerReleaseOnThisRepository(t *testing.T) {
 	laboratory := &countingLaboratory{}
 	repository := ignoredrepository.New(gateExclusions(t), fsrepository.New(root))
 
-	ditto.New(repository, laboratory, fakereporter.New()).Release(defaultViruses()...)
+	ditto.New(fakelogger.New(), repository, laboratory, fakereporter.New()).Release(defaultViruses()...)
 
 	// H3: counting is not running. A counter that pays the cost it measures is
 	// not a counter, and one that writes into the tree is the defect AGENTS.md
