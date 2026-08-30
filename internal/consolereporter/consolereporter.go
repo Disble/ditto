@@ -17,6 +17,13 @@ type ConsoleReporter struct {
 	calculator       ditto.ScoreCalculator
 	minimumThreshold float32
 	diagnostics      []*ditto.Diagnostic
+
+	// total is what the last Summarize scored, after the mutants that never
+	// compiled were removed from both sides. Zero and "below threshold" are
+	// different answers -- a scope with nothing mutable in it is not a suite
+	// that failed -- and the score alone cannot tell them apart, because the
+	// calculator reports -1 for both an empty run and nothing else.
+	total int
 }
 
 func New(
@@ -33,6 +40,11 @@ func New(
 		diagnostics:      []*ditto.Diagnostic{},
 	}
 }
+
+// Total is how many mutants the last Summarize scored. It is read through an
+// optional interface, the way the temporary directory's RemoveAll and the gated
+// laboratory's counters are, so no reporter is forced to answer.
+func (r *ConsoleReporter) Total() int { return r.total }
 
 func (r *ConsoleReporter) AddDiagnostic(diagnostic *ditto.Diagnostic) {
 	r.diagnostics = append(r.diagnostics, diagnostic)
@@ -64,6 +76,7 @@ func (r *ConsoleReporter) Summarize() result.Result[any] {
 	}
 
 	total := killed + survived
+	r.total = total
 
 	// Addresses first, diffs after. Survivors are the only part of this report
 	// anybody acts on, and printing them after the diffs turned the report into

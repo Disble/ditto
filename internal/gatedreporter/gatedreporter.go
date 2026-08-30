@@ -66,3 +66,18 @@ func count(gated int) string {
 
 	return strconv.Itoa(gated)
 }
+
+// Total forwards the count the reporter beneath scored.
+//
+// A decorator that drops a capability is refused by nothing -- backlog entry 12,
+// and the reason this is written twice rather than assumed once. Without it the
+// count is unreadable exactly when the stack is deepest, which is the gated run
+// that found the problem in the first place.
+func (r *GatedReporter) Total() int {
+	counted, ok := r.delegate.(interface{ Total() int })
+	if !ok {
+		return -1
+	}
+
+	return counted.Total()
+}

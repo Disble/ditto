@@ -147,3 +147,30 @@ func TestRunChangedRefusesSomewhereThatIsNotARepository(t *testing.T) {
 		t.Fatal("a directory outside any repository was accepted")
 	}
 }
+
+// A change can legitimately contain no mutable expression — a new switch case, a
+// comment, a rename. Failing a gate for that is failing a change for being
+// correct, and it happened on ditto's own gate the day after it went green:
+// one added switch case, a scope of one file, zero mutants, and a red run that
+// had found nothing wrong with anything.
+func TestRunChangedAcceptsAChangeWithNothingMutableInIt(t *testing.T) {
+	dir := dittotesting.GitRepository(t)
+
+	dittotesting.WriteFile(t, dir, "plain.go", "package fixture\n\n// Plain does nothing an operator could be flipped in.\nfunc Plain() {}\n")
+	dittotesting.Git(t, dir, "add", "-A")
+	dittotesting.Git(t, dir, "commit", "-m", "plain")
+
+	// Both stacks. Gated is the one CI builds, and it is the one where the count
+	// was unreadable: the gated reporter wraps the console reporter, and a
+	// decorator that drops a capability is refused by nothing.
+	for name, options := range map[string][]ditto.Option{
+		"plain": nil,
+		"gated": {ditto.Gated()},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := ditto.RunChanged(dir, "base", nil, options...); err != nil {
+				t.Fatalf("a change with nothing mutable in it was reported as a failure: %v", err)
+			}
+		})
+	}
+}

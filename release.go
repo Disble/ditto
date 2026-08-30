@@ -143,10 +143,34 @@ func Run(options ...Option) error {
 	}
 
 	if !rel.summarize().IsOk() {
+		// A scope with nothing mutable in it is not a suite that failed, and the
+		// score cannot tell the two apart: the calculator reports -1 for an
+		// empty run, which is below every threshold. Measured on ditto's own
+		// gate, where adding one `switch` case -- an expression no virus can
+		// mutate -- produced a scope of one file, zero mutants and a failing
+		// release that had found nothing wrong with anything.
+		if rel.scored() == 0 {
+			return NoMutantsError{}
+		}
+
 		return ScoreBelowThresholdError{Minimum: rel.opts.MinimumThreshold}
 	}
 
 	return nil
+}
+
+// NoMutantsError reports a run whose scope produced nothing to judge.
+//
+// It is deliberately still an error for Run and RunStaged: a repository or an
+// index that yields no mutants is a scope somebody configured wrong, and the
+// documented refusal for it stays. RunChanged treats it as nothing to do,
+// because a change CAN legitimately contain no mutable expression -- a new
+// switch case, a comment, a rename -- and failing a gate for that is failing it
+// for being correct.
+type NoMutantsError struct{}
+
+func (NoMutantsError) Error() string {
+	return "ditto: the scope produced no mutants, so there was nothing to score"
 }
 
 // ScoreBelowThresholdError reports a run that finished and did not reach its bar.
@@ -266,6 +290,18 @@ func (r *release) startWithoutPanicking() error {
 
 func (r *release) summarize() result.Result[any] {
 	return r.reporter.Summarize()
+}
+
+// scored is how many mutants the report counted, and -1 when the reporter cannot
+// say. Read through an optional interface, so a decorator that does not forward
+// it leaves the answer unknown rather than wrong.
+func (r *release) scored() int {
+	counted, ok := r.reporter.(interface{ Total() int })
+	if !ok {
+		return -1
+	}
+
+	return counted.Total()
 }
 
 // reclaim removes what a run left behind.
