@@ -206,3 +206,26 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: Whether the module-scope path actually lowers the gate's wall clock on this repository. That is the next measurement, and the only one that can say the added mutants were bought back.
 - Next falsifiable step: Run the gate's own scope through the module path from a disposable copy and compare driver starts and wall time against the ordinary path.
 - Artifacts: `perf/baseline.json`, `internal/perfbench/repository_test.go`.
+
+## 2026-09-18 — 009 — The change landed as four work units
+
+- Status: advance
+- Revision: `5f65e3d` plus four commits on `perf/module-scope-core`
+- Model: `gpt-5.6-sol`
+- Question: Is the work recorded in reviewable units, each one green on the repository's own gate?
+- Prior hypothesis: One unit per claim — the measurement, the runner, the admission, the record — so a reviewer can accept or reject a claim without carrying the others.
+- Intervention: Four commits, each passed through `.githooks/pre-commit` (golangci-lint, the suite, and the counters):
+  - `5d58801` `test(perfbench): measure what one module-scope build replaces` — the experiment note, the tagged experiment, and the learning-log line
+  - `3d35fd5` `feat(gobuildrunner): run the complete module scope from one compilation` — the runner and its two internal test files
+  - `8a3c6eb` `feat(gated): replace only the configured scope, and say when it does not` — admission, fallback, the golden fixture, and the moved counter
+  - `360f794` `docs: keep an append-only record of the core-performance request` — this file
+- Control: The gate is the repository's own, and it refused the work three times before any of this landed: once for nine lint findings across the new runner and the two cyclomatic-complexity overages, and twice more for the counter and a missing import. Every refusal is recorded rather than hidden by a suppression, and the only two suppressions added name `go list -json`'s own field names, which is the same reason `internal/verdict` already gives for its event struct.
+- Exact evidence:
+  - each commit's hook run: `DONE 497 tests, 10 skipped`, counters green
+  - `perf/baseline.json` at 813 with the +24 attributed by file
+- Wall-clock observation: About 60 s of suite per commit through the hook, cached where nothing changed. Reported, not gated.
+- Verdict: The change is committed in reviewable units, each independently green.
+- What changed: The working tree is empty except for `odd/`, this session's own task tracker, which is deliberately not part of ditto's history: it is an el Gentleman convention, not a ditto one, and the durable record here is this file plus `docs/experiments/`.
+- What remains unknown: Everything entry 008 leaves open — the CLI end-to-end measurement, verdict-reason fidelity on the module path, and whether the module path lowers this repository's own gate time enough to buy back the 24 mutants it added.
+- Next falsifiable step: Run the release end-to-end from a disposable copy through the shipped binary, and check whether a killed mutant on the module path still carries a reason other than `Unknown`.
+- Artifacts: `git log 5f65e3d..perf/module-scope-core`.
