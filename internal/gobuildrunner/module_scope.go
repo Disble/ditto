@@ -39,13 +39,21 @@ type ModuleScopeRunner struct {
 	selections      int
 	packageRuns     int
 	converterStarts int
+	skippedPackages int
+	scopedDir       string
 }
 
 type modulePackage struct {
-	importPath string
-	directory  string
-	binary     string
-	hasTests   bool
+	importPath  string
+	directory   string
+	relativeDir string
+	binary      string
+	hasTests    bool
+
+	// observes is the relative directories whose code is compiled into this
+	// package's test binary. A mutation outside it cannot be referred to by
+	// anything in the binary, so running it can only cost time.
+	observes map[string]bool
 }
 
 // The field names are Go's own, capitalised, which is what `go list -json`
@@ -57,6 +65,7 @@ type goListPackage struct {
 	Dir          string   `json:"Dir"`          //nolint:tagliatelle // go list -json emits these names
 	TestGoFiles  []string `json:"TestGoFiles"`  //nolint:tagliatelle // go list -json emits these names
 	XTestGoFiles []string `json:"XTestGoFiles"` //nolint:tagliatelle // go list -json emits these names
+	Deps         []string `json:"Deps"`         //nolint:tagliatelle // go list -json emits these names
 }
 
 // errBinaryNameCollision is what a module scope reports when two packages would
@@ -95,6 +104,22 @@ func (r *ModuleScopeRunner) PackageRuns() int { return r.packageRuns }
 // stream internal/verdict reads a reason from. A green selection starts none,
 // because a reason is only ever asked of a kill.
 func (r *ModuleScopeRunner) ConverterStarts() int { return r.converterStarts }
+
+// SkippedPackages counts package test binaries not started because the mutated
+// package is not in what they compile. It is the counter the scoping change is
+// judged on, and it says nothing unless ScopeTo was called.
+func (r *ModuleScopeRunner) SkippedPackages() int { return r.skippedPackages }
+
+// ScopeTo declares the repository-relative directory of the package whose
+// mutation this batch selects, so only the test binaries that can observe it
+// are started.
+//
+// It is optional on purpose. A runner with no scope runs every package, which is
+// what this did before the closure was measured, so a caller that never declares
+// one loses nothing but time.
+func (r *ModuleScopeRunner) ScopeTo(directory string) {
+	r.scopedDir = path.Clean(filepath.ToSlash(directory))
+}
 
 // Built is true only after discovery, layout validation, compilation, and every
 // expected test-binary check has succeeded.
@@ -167,7 +192,13 @@ func (r *ModuleScopeRunner) discover(root string) error {
 	}
 
 	r.toolchainStarts++
-	command := exec.Command(r.toolchain, "list", "-json", "./...") //nolint:noctx,gosec // resolved to an absolute path in goToolchain
+
+	// -deps and -test are what make the observability closure available: a test
+	// main package's Deps are exactly what its binary compiles in, test imports
+	// included. A closure built from Imports alone would be too narrow, because a
+	// package's external test file is a separate package that imports the
+	// subject.
+	command := exec.Command(r.toolchain, "list", "-deps", "-test", "-json", "./...") //nolint:noctx,gosec // resolved to an absolute path in goToolchain
 	command.Dir = root
 	command.Env = environment(r.mutant)
 
@@ -178,38 +209,38 @@ func (r *ModuleScopeRunner) discover(root string) error {
 
 	decoder := json.NewDecoder(strings.NewReader(string(output)))
 
-	var packages []modulePackage
+	byImportPath, depsByPackage, err := decodeLayout(root, decoder)
+	if err != nil {
+		return err
+	}
+
+	packages := make([]modulePackage, 0, len(byImportPath))
 
 	seenBinaries := make(map[string]string)
 
-	for decoder.More() {
-		var listed goListPackage
-		if err := decoder.Decode(&listed); err != nil {
-			return fmt.Errorf("ditto: decode module package layout: %w", err)
+	for importPath, pkg := range byImportPath {
+		// A package's own test binary compiles the package, so it observes itself
+		// whatever the toolchain reports about its dependencies.
+		pkg.observes = map[string]bool{pkg.relativeDir: true}
+
+		for _, dep := range depsByPackage[importPath] {
+			observed, known := byImportPath[depWithoutVariant(dep)]
+			if known && observed.relativeDir != "" {
+				pkg.observes[observed.relativeDir] = true
+			}
 		}
 
-		hasTests := len(listed.TestGoFiles)+len(listed.XTestGoFiles) > 0
-
-		pkg := modulePackage{
-			importPath: listed.ImportPath,
-			directory:  listed.Dir,
-			hasTests:   hasTests,
-		}
-		if hasTests {
-			name := moduleTestBinaryName(listed.ImportPath, runtime.GOOS)
+		if pkg.hasTests {
+			name := moduleTestBinaryName(importPath, runtime.GOOS)
 			if other, exists := seenBinaries[name]; exists {
-				return fmt.Errorf("%w: %s and %s both produce %s", errBinaryNameCollision, other, listed.ImportPath, name)
+				return fmt.Errorf("%w: %s and %s both produce %s", errBinaryNameCollision, other, importPath, name)
 			}
 
-			seenBinaries[name] = listed.ImportPath
+			seenBinaries[name] = importPath
 			pkg.binary = filepath.Join(r.output, name)
 		}
 
 		packages = append(packages, pkg)
-	}
-
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return fmt.Errorf("ditto: decode module package layout: %w", err)
 	}
 
 	sort.Slice(packages, func(i, j int) bool {
@@ -220,13 +251,80 @@ func (r *ModuleScopeRunner) discover(root string) error {
 	return nil
 }
 
+// decodeLayout reads one `go list` stream into the module's own packages and
+// what each test main compiles in.
+//
+// Only packages inside the module are kept. With -deps the stream also carries
+// the standard library and every other dependency, and none of those is part of
+// the configured `./...` scope or a candidate for a test binary of it.
+func decodeLayout(root string, decoder *json.Decoder) (map[string]modulePackage, map[string][]string, error) {
+	byImportPath := make(map[string]modulePackage)
+	depsByPackage := make(map[string][]string)
+
+	for decoder.More() {
+		var listed goListPackage
+		if err := decoder.Decode(&listed); err != nil {
+			return nil, nil, fmt.Errorf("ditto: decode module package layout: %w", err)
+		}
+
+		// A test variant is reported as `pkg [pkg.test]`. It is the same
+		// directory seen a second time, so it is skipped rather than counted.
+		if strings.Contains(listed.ImportPath, " [") {
+			continue
+		}
+
+		if before, ok := strings.CutSuffix(listed.ImportPath, ".test"); ok {
+			depsByPackage[before] = listed.Deps
+
+			continue
+		}
+
+		relative, relErr := filepath.Rel(root, listed.Dir)
+		if listed.Dir == "" || relErr != nil || strings.HasPrefix(filepath.ToSlash(relative), "..") {
+			continue
+		}
+
+		byImportPath[listed.ImportPath] = modulePackage{
+			importPath:  listed.ImportPath,
+			directory:   listed.Dir,
+			relativeDir: path.Clean(filepath.ToSlash(relative)),
+			hasTests:    len(listed.TestGoFiles)+len(listed.XTestGoFiles) > 0,
+		}
+	}
+
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, nil, fmt.Errorf("ditto: decode module package layout: %w", err)
+	}
+
+	return byImportPath, depsByPackage, nil
+}
+
+// depWithoutVariant strips the ` [pkg.test]` suffix go list -test puts on the
+// test-built variant of a package, so a name in a closure matches the package it
+// names rather than the form it arrived in.
+func depWithoutVariant(importPath string) string {
+	if before, _, ok := strings.Cut(importPath, " ["); ok {
+		return before
+	}
+
+	return importPath
+}
+
 func (r *ModuleScopeRunner) run() result.Result[string] {
+	filtering := r.scopedDir != "" && r.anyObservers()
+
 	var output strings.Builder
 
 	failed := false
 
 	for _, pkg := range r.packages {
 		if !pkg.hasTests {
+			continue
+		}
+
+		if filtering && !pkg.observes[r.scopedDir] {
+			r.skippedPackages++
+
 			continue
 		}
 
@@ -250,6 +348,23 @@ func (r *ModuleScopeRunner) run() result.Result[string] {
 	}
 
 	return result.Err[string](output.String())
+}
+
+// anyObservers reports whether any test binary claims to observe the declared
+// scope.
+//
+// It is the fail-open rule. The closure is a saving and never a licence to run
+// less than the caller asked for, so a declared scope that nothing resolves — a
+// discovery that returned no dependencies, a layout this cannot read — runs
+// every package instead of none.
+func (r *ModuleScopeRunner) anyObservers() bool {
+	for _, pkg := range r.packages {
+		if pkg.hasTests && pkg.observes[r.scopedDir] {
+			return true
+		}
+	}
+
+	return false
 }
 
 // runPackage starts one package's test binary from that package's own directory,

@@ -206,3 +206,55 @@ func TestModuleScopeRunnerStartsNoConverterForAGreenSelection(t *testing.T) {
 	assert.False(t, outcome.IsOk(), "the unselected baseline is green")
 	assert.Equal(t, 0, runner.ConverterStarts(), "a green selection needs no reason, so it pays for no conversion")
 }
+
+// TestModuleScopeRunnerScopesToTheObservablePackages is the guard for
+// docs/experiments/dependency-closure.md.
+//
+// A package test binary compiles its own package plus the transitive closure of
+// what it imports, so a binary without the mutated package in that closure holds
+// no code that can refer to anything the mutation changed. Running it can only
+// cost time.
+//
+// This is not the package-only defect returning. That one ran the mutated
+// package and nothing else, so a mutant only a dependent package could kill
+// survived; this runs it plus everything that can reach it.
+func TestModuleScopeRunnerScopesToTheObservablePackages(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs the Go toolchain")
+	}
+
+	root := moduleFixture(t, map[string]string{
+		"base/base.go": "package base\n\nfunc Covered(value, threshold int) bool { return value > threshold }\n",
+		"mid/mid.go":   "package mid\n\nimport \"fixture/base\"\n\nfunc Reached(value, threshold int) bool { return base.Covered(value, threshold) }\n",
+		// top reaches base through mid without ever naming it, which is the case
+		// a closure built from direct imports alone would miss.
+		"top/top.go": "package top\n\nimport \"fixture/mid\"\n\nfunc Through(value, threshold int) bool { return mid.Reached(value, threshold) }\n",
+		// island imports nothing local and cannot observe anything outside itself.
+		"island/island.go":      "package island\n\nfunc Value() int { return 1 }\n",
+		"base/base_test.go":     "package base\n\nimport (\n\t\"os\"\n\t\"testing\"\n)\n\nfunc TestOwn(t *testing.T) {\n\tif os.Getenv(\"DITTO_MUTANT\") == \"1\" {\n\t\tt.Fatal(\"base killed it\")\n\t}\n}\n",
+		"mid/mid_test.go":       "package mid\n\nimport (\n\t\"os\"\n\t\"testing\"\n)\n\nfunc TestDependent(t *testing.T) {\n\tif os.Getenv(\"DITTO_MUTANT\") == \"2\" {\n\t\tt.Fatal(\"only this dependent package kills the sentinel\")\n\t}\n}\n",
+		"top/top_test.go":       "package top\n\nimport \"testing\"\n\nfunc TestThroughTheChain(t *testing.T) {}\n",
+		"island/island_test.go": "package island\n\nimport \"testing\"\n\nfunc TestIsland(t *testing.T) {}\n",
+	})
+	runner := NewModuleScope()
+	sandbox := fakerepository.NewTemporaryAt(root)
+
+	if baseline := runner.Test(sandbox); baseline.IsOk() {
+		t.Fatalf("the baseline was red: %s", result.Output(baseline))
+	}
+
+	assert.Equal(t, 4, runner.PackageRuns(), "unscoped, every package with tests runs once for the baseline")
+
+	runner.ScopeTo("base")
+
+	before := runner.PackageRuns()
+
+	runner.Select(2)
+
+	outcome := runner.Test(sandbox)
+	require.True(t, outcome.IsOk(), "the sentinel must still be killed")
+
+	assert.Equal(t, 3, runner.PackageRuns()-before,
+		"only base, mid and top can observe a mutation in base; island must not run")
+	assert.Equal(t, verdict.Assertion, verdict.ReasonOf(result.Output(outcome)))
+}

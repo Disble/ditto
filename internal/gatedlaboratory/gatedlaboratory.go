@@ -35,6 +35,17 @@ type Runner interface {
 	Test(repository ditto.TemporaryRepository) result.Result[string]
 }
 
+// scopedRunner is a runner that can be told which package's mutation it is
+// answering.
+//
+// It is optional, the way the temporary directory's RemoveAll and the
+// laboratory's Total are: a runner that cannot be scoped keeps running every
+// package, which is what this did before the closure was measured. A decorator
+// or a runner that dropped it would cost time and never a verdict.
+type scopedRunner interface {
+	ScopeTo(directory string)
+}
+
 // GatedLaboratory instruments a file once, compiles once, and selects a mutant
 // per run. Anything it cannot gate goes to the laboratory it delegates to, which
 // is the path ditto has always taken.
@@ -121,6 +132,15 @@ func (l *GatedLaboratory) TestAll(
 	sandbox.Overwrite(files[0].Path(), planned.Instrumented)
 
 	runner := l.newRunner(packageOf(files[0].Path()))
+
+	// Told which package the mutation is in, so a runner that can work out which
+	// test binaries may observe it starts only those. A package test binary
+	// compiles its own package plus the transitive closure of what it imports,
+	// so one without this package in that closure holds no code that can refer
+	// to anything the mutation changed. docs/experiments/dependency-closure.md.
+	if scoped, ok := runner.(scopedRunner); ok {
+		scoped.ScopeTo(packageOf(files[0].Path()))
+	}
 
 	// The first run is what compiles. A package that does not build has to be
 	// survivable rather than fatal: under one shared compilation a single bad

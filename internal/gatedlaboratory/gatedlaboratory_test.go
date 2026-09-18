@@ -229,3 +229,35 @@ func (s *fakeSandbox) Overwrite(filePath string, data []byte) {
 
 	s.written[filePath] = string(data)
 }
+
+// TestGatedLaboratoryDeclaresTheMutatedPackage holds the wiring for
+// docs/experiments/dependency-closure.md: a runner that can be scoped must be
+// told which package the mutation is in, or it starts every package in the
+// module for every mutant.
+//
+// The value is the mutated file's own directory, taken from the same helper the
+// package-scope runner uses, so the two cannot drift apart about what a
+// package's identity is.
+func TestGatedLaboratoryDeclaresTheMutatedPackage(t *testing.T) {
+	t.Parallel()
+
+	runner := &scopingRunner{built: true}
+	lab := gatedlaboratory.NewWithRunner(&countingLaboratory{}, fakeTemporary{}, runner)
+
+	lab.TestAll(fakeRepository{}, mutantsOf(
+		strings.Replace(source, "a > b", "a >= b", 1),
+	))
+
+	assert.Equal(t, []string{"./calc"}, runner.scoped,
+		"the runner must be told the mutated package before it runs anything")
+}
+
+// scopingRunner is a runner that can be scoped, which is what the module-scope
+// runner is; fakeRunner stands in for the package-scope one, which cannot.
+type scopingRunner struct {
+	fakeRunner
+
+	scoped []string
+}
+
+func (r *scopingRunner) ScopeTo(directory string) { r.scoped = append(r.scoped, directory) }
