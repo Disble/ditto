@@ -383,3 +383,23 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: which candidate it is. The obvious story — that instrumenting a package everything imports forces a wider rebuild — is a conjecture with no measurement behind it, and the repository's own rule is that a cause offered in passing still needs a kill criterion.
 - Next falsifiable step: separate the phases. Time the compile, the baseline selection and the mutant selections independently on both fixtures, and read `SkippedPackages` to confirm the closure engaged on the tail fixture at all. If the closure did not engage there, entries 013 and 014 need re-reading.
 - Artifacts: `docs/experiments/chain-shaped-module.md`.
+
+## 2026-09-18 — 017 — The closure engaged, and the time still went the other way
+
+- Status: correction
+- Revision: `133e040`
+- Model: `gpt-5.6-sol`
+- Question: Did the closure silently fail to engage on the tail fixture, which would make entry 016 a harness defect rather than a result?
+- Prior hypothesis: the comfortable reading of entry 016 was that the closure never applied, and the refutation was therefore an artifact.
+- Intervention: None to the product. A disposable copy of the tree was patched to print the runner's own counters, and both chain fixtures were re-run through that binary.
+- Control: The same fixtures and the same mutants as entry 016, which had already produced identical verdicts and `6 of 6 mutants ran from one compilation`.
+- Exact evidence:
+  - `chain-head`: packageRuns 16 at the second kill — 2 selections × 8 observers — skipped 0, compilations 1
+  - `chain-tail`: packageRuns 2 at the second kill — 2 selections × 1 observer — skipped 14, compilations 1
+  - both fixtures: 6 total, 2 killed, and `6 of 6 mutants ran from one compilation`
+- Wall-clock observation: The tail fixture started **eight times fewer** package binaries and skipped fourteen, and was still about 1.9 s slower. The closure's engagement is therefore confirmed and the refutation of entry 016 stands.
+- Verdict: The comfortable explanation is dead. It is not the number of package executions that costs the tail fixture its time.
+- What changed: The refutation is now a measured result rather than a suspicious one, and the remaining candidates are narrowed to what the two fixtures do not separate: the one compile both pay, the sandbox, instrumenting a file that eight packages import against one that none does, and the two converters both runs start.
+- What remains unknown: Which candidate it is. The obvious one — that instrumenting the package everything imports forces a wider rebuild — now has a kill criterion rather than a story: time the compile phase alone on both fixtures, and if the two are within noise, it is dead too.
+- Next falsifiable step: Run that phase split. It is the cheapest remaining experiment and it either names the cause or eliminates the last obvious one.
+- Artifacts: `docs/experiments/chain-shaped-module.md`.
