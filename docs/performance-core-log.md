@@ -295,3 +295,25 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: The exact crossover, which is derived rather than measured; whether the per-start cost is stable across larger test binaries; and this repository's own tree, which has far more than sixteen test packages.
 - Next falsifiable step: Run only the packages whose test binaries can observe the mutated package, derived from the Go import graph, and measure package executions per selection against the same two fixtures. A package that cannot transitively import the mutated package cannot observe the mutation, so that reduction is provable rather than heuristic — and the cross-package sentinel from `module-scope-runner.md` is the guard that the closure is not too narrow.
 - Artifacts: `docs/experiments/gated-through-the-binary.md`, `docs/experiments/module-scope-runner.md`.
+
+## 2026-09-18 — 013 — The observability closure divides the package factor
+
+- Status: advance
+- Revision: `2deb438`
+- Model: `gpt-5.6-sol`
+- Question: Can the `selections × packages` factor be divided by running only the package test binaries whose dependency closure contains the mutated package?
+- Prior hypothesis: a binary without the mutated package in its closure contains no code that can refer to the mutation, so the reduction is provable and should cost `selections × |observers(P)|` instead of `selections × N`.
+- Intervention: None to the product. The experiment implements the restriction by hand so the number precedes the design, and runs it against the same fixture as the unrestricted mode.
+- Control: The shipped `ModuleScopeRunner` started 35 package binaries over the same fixture and the same five runs, matching the experiment's unrestricted count exactly — without that, the numbers would describe the harness. A per-selection execution log written by the packages themselves makes "the island did not run" observed rather than inferred.
+- Exact evidence:
+  - closure of a mutation in `base`: `base`, `mid`, `top` — three of seven packages; the four islands excluded
+  - `top` is in the closure although it never names `base`, reaching it through `mid`
+  - unrestricted: 35 executions, verdicts `killed, killed, killed, survived`
+  - restricted: 15 executions, identical verdicts, sentinel still killed
+  - 20 of 35 executions removed, a 57% reduction
+- Wall-clock observation: Not measured; this question is about an exact counter.
+- Verdict: All three hypotheses corroborated. The reduction is provable rather than heuristic and it is not the defect that was just fixed: that one ran the mutated package and nothing else, this one runs it plus everything that can reach it.
+- What changed: The next core change is selected and its ceiling is known before any production code changes shape.
+- What remains unknown: The cost of computing the closure, which is one `go list` per release rather than per mutant and is paid on top of the discovery already done; whether the reduction reproduces through the shipped binary; and a repository whose packages form a single chain, where the closure is every package and the factor does not divide.
+- Next falsifiable step: Implement `ScopeTo` on the module runner behind an optional interface, compute the closure from `go list -deps -test -json ./...`, and fall back to the full scope whenever the mutated package cannot be resolved — then re-measure the ten-package fixture that showed the cliff.
+- Artifacts: `docs/experiments/dependency-closure.md`, `internal/perfbench/closure_experiment_test.go`.
