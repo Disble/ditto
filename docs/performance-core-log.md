@@ -362,3 +362,24 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: Unchanged in kind and now stated without the sampling caveat. This fixture is still the best case for the closure — every package independent, so a mutation is observed by one package of ten — and a chain-shaped repository will get less while a single chain gets nothing. The closure's own `go list` cost is still unmeasured.
 - Next falsifiable step: Measure the closure's own cost against the executions it removes on a chain-shaped repository, which is the one shape where the factor does not divide.
 - Artifacts: `docs/performance-core-log.md`.
+
+## 2026-09-18 — 016 — On a chain, the prediction was refuted and the shape did not behave as argued
+
+- Status: correction
+- Revision: `5f947d9`
+- Model: `gpt-5.6-sol`
+- Question: What does the closure do on a chain, the one shape where entry 014 admitted the factor might not divide?
+- Prior hypothesis: a mutation at the chain's head is observed by every package so the closure removes nothing, and the fixture would land near the pre-closure worst case; a mutation at the tip is observed by one package and would land near the favourable ratio.
+- Intervention: None to the product. Two eight-package chain modules from one generator, differing only in which package holds the mutable comparison sites.
+- Control: One discarded warm-up per fixture, three rotated rounds, and the observer counts read from `go list -deps -test` — the same source the runner itself uses, so the prediction and the implementation cannot disagree about what a closure is.
+- Exact evidence:
+  - observers: **8 of 8** for a mutation in `pkg0`, **1 of 8** for one in `pkg7` — both exactly as predicted
+  - chain-head: 0.3492, 0.3528, 0.3597
+  - chain-tail: 0.5408, 0.5623, 0.5536
+  - every round in both fixtures: 6 total, 2 killed, 4 survived, `6 of 6 mutants ran from one compilation`
+- Wall-clock observation: the fixture where the closure removes nothing is about 1.5× **faster** than the one where it removes seven of eight. Each fixture's three ratios sit inside a band narrower than 3%.
+- Verdict: H1 and H2 corroborated, **H3 refuted in the reversed direction**. The prediction that the head fixture would be the slow one is dead.
+- What changed: the claim that the closure is what decides these two numbers is now in doubt. Something else is deciding them, and the note names its candidates without choosing: the compile, the sandbox, the instrumentation of a file eight packages import against a file none does, and the converter.
+- What remains unknown: which candidate it is. The obvious story — that instrumenting a package everything imports forces a wider rebuild — is a conjecture with no measurement behind it, and the repository's own rule is that a cause offered in passing still needs a kill criterion.
+- Next falsifiable step: separate the phases. Time the compile, the baseline selection and the mutant selections independently on both fixtures, and read `SkippedPackages` to confirm the closure engaged on the tail fixture at all. If the closure did not engage there, entries 013 and 014 need re-reading.
+- Artifacts: `docs/experiments/chain-shaped-module.md`.
