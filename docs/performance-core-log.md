@@ -341,3 +341,24 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: This fixture is the best case for the closure — every package independent, so a mutation is observed by one package of ten. A repository whose packages form a chain gets less, and a single chain gets nothing. The closure's own cost is still unmeasured. And the ten-package ratio was taken once per mode rather than across rotated rounds.
 - Next falsifiable step: Re-run the ten-package comparison across rotated rounds, and measure the closure's own `go list` cost against the executions it removes on a repository whose layout is a chain rather than a fan.
 - Artifacts: `internal/gobuildrunner/module_scope.go`, `internal/gatedlaboratory/gatedlaboratory.go`, `perf/baseline.json`.
+
+## 2026-09-18 — 015 — The ten-package ratio survives rotated rounds
+
+- Status: advance
+- Revision: `c4c2d25`
+- Model: `gpt-5.6-sol`
+- Question: Was the 0.3995 of entry 014 a measurement or a single favourable pair?
+- Prior hypothesis: the ratio from entry 014 was taken once per mode, which is not a measurement by this repository's standard and is not a claim it is entitled to make.
+- Intervention: None to the product. The same binary and the same ten-package fixture, one discarded warm-up and then three measured rounds with the mode order rotated, each ratio computed within its own round.
+- Control: The warm-up ran each mode once so the toolchain and file caches were warm for every recorded round; round 2 ran the gated mode first, so the result is not one mode being favoured by position.
+- Exact evidence:
+  - round 1, order A B: ordinary 63,619 ms, gated 25,546 ms, ratio **0.4015**
+  - round 2, order B A: gated 25,454 ms, ordinary 63,560 ms, ratio **0.4005**
+  - round 3, order A B: ordinary 63,414 ms, gated 25,618 ms, ratio **0.4040**
+  - identical verdicts in every round: 40 total, 20 killed, 20 survived; `40 of 40 mutants ran from one compilation`
+- Wall-clock observation: the three ratios span 0.4005 to 0.4040, a spread of 0.9%. The single pair from entry 014, 0.3995, sat inside that band, which is the useful part of this entry: the earlier number was not lucky, it was a small sample of a stable one.
+- Verdict: The number stands and is now a measurement rather than an observation. Entry 014's caveat is closed rather than carried forward.
+- What changed: The ten-package gain is 2.49-2.50× with the guarantee the repository asks for.
+- What remains unknown: Unchanged in kind and now stated without the sampling caveat. This fixture is still the best case for the closure — every package independent, so a mutation is observed by one package of ten — and a chain-shaped repository will get less while a single chain gets nothing. The closure's own `go list` cost is still unmeasured.
+- Next falsifiable step: Measure the closure's own cost against the executions it removes on a chain-shaped repository, which is the one shape where the factor does not divide.
+- Artifacts: `docs/performance-core-log.md`.
