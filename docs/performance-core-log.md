@@ -403,3 +403,24 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: Which candidate it is. The obvious one — that instrumenting the package everything imports forces a wider rebuild — now has a kill criterion rather than a story: time the compile phase alone on both fixtures, and if the two are within noise, it is dead too.
 - Next falsifiable step: Run that phase split. It is the cheapest remaining experiment and it either names the cause or eliminates the last obvious one.
 - Artifacts: `docs/experiments/chain-shaped-module.md`.
+
+## 2026-09-18 — 018 — The compile is charged per source file, and that was the whole gap
+
+- Status: advance
+- Revision: `828223c`
+- Model: `gpt-5.6-sol`
+- Question: Which of the four remaining candidates costs the tail fixture its 1.9 seconds?
+- Prior hypothesis: the compile was the obvious one — that instrumenting `pkg0`, which eight packages import, forces a wider rebuild than instrumenting `pkg7`, which none does — and it carried an explicit kill criterion.
+- Intervention: None to the product. A disposable copy was patched to time discovery, the module compile and the selections separately, and to print the runner's counters on every call.
+- Control: The same fixtures and the same mutants as entries 016 and 017, which had already produced identical verdicts and `6 of 6 mutants ran from one compilation`. The head fixture's instrumented phases reconcile with its wall clock: 169 + 1,651 + 1,902 = 3,722 ms against 3,828 measured.
+- Exact evidence:
+  - `chain-head`: one runner, discover 169 ms, build 1,651 ms, run 1,902 ms, 56 package runs, wall 3,828 ms
+  - `chain-tail`: **two runners** — the first unscoped at discover 141 / build 1,676 / 24 package runs, the second scoped at discover 155 / build 1,580 / 5 package runs and 35 skips — wall 5,718 ms
+  - mutant distribution: head `pkg0/pkg0.go — 6 mutants`; tail `pkg0/pkg0.go — 2 mutants` and `pkg7/pkg7.go — 4 mutants`
+  - compile measured outside the product: 1,306 ms head against 1,347 ms tail
+- Wall-clock observation: The tail fixture paid a second module-wide compile of 1,580 ms. That, and not the package executions, is the 1.9 second gap.
+- Verdict: The cause is measured. `ditto.Release` batches per source file and each batch builds its own `GatedLaboratory` runner, so **the module-wide compilation is charged once per source file that has mutants, not once per release**. The wider-rebuild conjecture is refuted by both the in-product and out-of-product compiles.
+- What changed: The next lever is named with its price. Sharing one compile across batches would remove a 1,580 ms charge on a fixture with two mutable files, and proportionally more on a repository with many.
+- What remains unknown: The cost of sharing a compile is not measured because nothing shares one yet. And entries 014/015 need re-reading rather than correcting: the ten-package fixture has mutants in every package, so it paid **ten** compiles and still reached 0.3995 — a lower bound on what sharing one would give, with the size of the gap left as arithmetic rather than claimed as measurement.
+- Next falsifiable step: Share one compilation across the source-file batches of a single release and measure compilations per release, which is the counter that says whether it happened, against the same two fixtures and the ten-package one.
+- Artifacts: `docs/experiments/chain-shaped-module.md`.
