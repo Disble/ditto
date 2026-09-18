@@ -1,0 +1,208 @@
+# Ditto core performance log
+
+Append-only scientific record for the core-performance work requested on 2026-09-18.
+
+This file exists so a later session or a different model can continue from evidence rather than reconstructing intent. It records advances, regressions, refuted assumptions, unresolved questions, and the exact observation that changed each decision.
+
+## Record contract
+
+- Append new entries at the bottom; never rewrite an earlier entry to make the history look cleaner.
+- Bind every entry to a date, source revision, and model when known.
+- Separate observation, hypothesis, intervention, and conclusion.
+- Exact counters decide performance contracts. Wall clock is reported, never used alone as a gate.
+- A regression or refuted hypothesis is a result and remains in the record.
+- No conclusion is promoted to production until its control has run and its failure path has been observed.
+- The repository file is canonical. Engram mirrors it for cross-session recall under topic key `ditto/performance-core-log`.
+
+## Entry template
+
+```markdown
+## YYYY-MM-DD — NNN — short title
+
+- Status: advance | regression | correction | blocked | decision
+- Revision:
+- Model:
+- Question:
+- Prior hypothesis:
+- Intervention:
+- Control:
+- Exact evidence:
+- Wall-clock observation:
+- Verdict:
+- What changed:
+- What remains unknown:
+- Next falsifiable step:
+- Artifacts:
+```
+
+## 2026-09-18 — 001 — Preserve the incumbent baseline
+
+- Status: advance
+- Revision: `5f65e3d3c4201689b81b707533b18aa42364ea8b`
+- Model: `gpt-5.6-sol`
+- Question: What does the current core cost before any architectural change?
+- Prior hypothesis: Repeated test-command execution, not parsing or sandbox construction, is the dominant removable cost.
+- Intervention: None; this entry records the incumbent before improvement.
+- Control: A complete `.git`-free disposable copy reproduced `go test ./internal/perfbench/` with exit code 0. Source and copied `perf/baseline.json` shared SHA-256 `c470245e542046aac1e486482a9338d002314573ff0393e6f5749de442e1a23d`.
+- Exact evidence:
+  - source parses with three viruses: 4
+  - AST walks with three viruses: 12
+  - laboratory runs over the whole fixture: 48
+  - test-command invocations over the whole fixture: 49
+  - files linked per sandbox: 6
+  - sandboxes built per sequential release: 1
+  - laboratory runs for one changed function: 4
+  - laboratory runs for one changed function in each of two files: 8
+  - mutants in a full release over this repository: 789
+- Wall-clock observation: The baseline gate completed in 0.518 s; this is environmental evidence, not a contract.
+- Verdict: Baseline reproduced. The architecture should target repeated command/driver starts; parsing and sandbox creation are already small.
+- What changed: Nothing in production.
+- What remains unknown: The faithful cost of replacing package-only gating with complete module-scope execution.
+- Next falsifiable step: Compare ordinary, package-only, and module-scope execution over the same controlled mutant population.
+- Artifacts: `perf/baseline.json`, `internal/perfbench/`, `docs/experiments/module-scope-runner.md`.
+
+## 2026-09-18 — 002 — Package-only gating asks the wrong question
+
+- Status: correction
+- Revision: `5f65e3d3c4201689b81b707533b18aa42364ea8b` plus the uncommitted experiment harness
+- Model: `gpt-5.6-sol`
+- Question: Can the current package-only gated architecture stand in for the configured default `go test -count=1 ./...` scope?
+- Prior hypothesis: Compiling and running only the mutated package might preserve the default verdict while removing repeated Go driver starts.
+- Intervention: A four-package disposable module placed one sentinel mutation in `pkg0` that only a dependent-package test in `pkg1` could kill.
+- Control: Ordinary `./...` execution had to produce twelve mutants, thirteen Go driver starts, 52 package-test executions, six killed, and six survived. The package-only mode had to expose the sentinel disagreement rather than accidentally agree.
+- Exact evidence:
+  - ordinary A: 13 Go driver starts, 52 package-test executions, 6 killed, 6 survived
+  - package-only B: 1 Go driver start, 13 package-test executions, 5 killed, 7 survived
+  - module-scope C: 1 Go driver start, 52 package-test executions, 6 killed, 6 survived
+  - sentinel `pkg0/values.go:4:16`: A/C killed; B survived
+  - every other ordered verdict and address agreed
+- Wall-clock observation: Package-only was fastest because it skipped required work; that number is invalid as evidence for configured-scope performance.
+- Verdict: The package-only architecture is not scope-equivalent. Its speed partly comes from omitting tests the user configured.
+- What changed: The proposal moved from “make the package runner faster” to “make the configured test scope a first-class execution plan.” No production code changed.
+- What remains unknown: How production should discover package binaries, handle duplicate package names, and retain verdict-reason fidelity without reintroducing one `go test` invocation per mutant.
+- Next falsifiable step: Measure a complete module-scope prebuilt runner with all package binaries executed for every selector.
+- Artifacts: `docs/experiments/module-scope-runner.md`, `internal/perfbench/module_scope_experiment_test.go`.
+
+## 2026-09-18 — 003 — Module-scope execution removes the driver toll
+
+- Status: advance
+- Revision: `5f65e3d3c4201689b81b707533b18aa42364ea8b` plus the uncommitted experiment harness
+- Model: `gpt-5.6-sol`
+- Question: Can one module-scope build preserve all configured package executions and verdicts while significantly reducing Go driver starts?
+- Prior hypothesis: Module-scope C would match ordinary A exactly, execute all 52 package tests, reduce driver starts from 13 to 1, and keep C/A wall time at or below 0.25 in every measured round.
+- Intervention: Instrument the twelve real comparison mutants once, compile four uniquely named package test binaries in one driver start, then run every binary for selector zero and every mutant selector.
+- Control: A permanent refusal test supplied 52 executions against an intentionally wrong expectation of 51 and produced `C module-scope package-test executions = 52, want exactly 51`. Per-selection guards required +4 package executions in A/C and +1 in B, including after killed mutants.
+- Exact evidence:
+  - all three measured rounds: A = 13 driver starts / 52 package tests
+  - all three measured rounds: B = 1 / 13
+  - all three measured rounds: C = 1 / 52
+  - A and C ordered addresses and verdicts: identical
+  - driver-start reduction: 12 of 13, or 92.3%
+- Wall-clock observation:
+  - round 1: A 11.4070712 s, C 2.2254465 s, C/A 0.1951
+  - round 2: A 9.6900866 s, C 1.9315122 s, C/A 0.1993
+  - round 3: A 10.2873751 s, C 1.8605086 s, C/A 0.1809
+- Verdict: All three pre-registered hypotheses were corroborated. The light fixture ran 5.0–5.5 times faster without narrowing scope.
+- What changed: The evidence selects module-scope execution as the production direction.
+- What remains unknown: Real-repository gain; one-time package discovery cost; custom commands; duplicate package names; packages without tests; Windows output naming; verdict-reason fidelity; and globally unique selectors across multiple source files.
+- Next falsifiable step: Agree on the production contract. Recommended first slice: optimize only the exact default Go module scope and preserve custom commands through ordinary fallback.
+- Artifacts: `docs/experiments/module-scope-runner.md`, `internal/perfbench/module_scope_experiment_test.go`, `docs/learning-log.md`.
+
+## 2026-09-18 — 004 — Production contract remains open
+
+- Status: decision
+- Revision: working tree based on `5f65e3d3c4201689b81b707533b18aa42364ea8b`
+- Model: `gpt-5.6-sol`
+- Question: Which command forms may use the new module-scope execution plan?
+- Prior hypothesis: Restricting optimization to the default Go `./...` scope and falling back for custom commands is the smallest scope-faithful production contract.
+- Intervention: None; production implementation is intentionally paused for contract review.
+- Control: Not applicable until the contract selects a behavior.
+- Exact evidence: The measured architecture covers one source-file batch, twelve comparison mutants, four uniquely named packages, and the default module scope. It does not cover arbitrary commands.
+- Wall-clock observation: No production timing exists yet.
+- Verdict: Open. No production core files have been modified.
+- What changed: A dedicated append-only continuity record now exists before implementation begins.
+- What remains unknown: Whether custom commands must be optimized now or retain the ordinary path.
+- Next falsifiable step: Select the command contract, then write behavior-first RED tests for scope fidelity and fallback before implementing the runner.
+- Artifacts: `odd/tasks/module-scope-core.md`, `docs/performance-core-log.md`.
+
+## 2026-09-18 — 005 — Safe `Gated()` contract accepted
+
+- Status: decision
+- Revision: working tree based on `5f65e3d3c4201689b81b707533b18aa42364ea8b`
+- Model: `gpt-5.6-sol`
+- Question: Which command forms may enter module-scope execution?
+- Prior hypothesis: Optimizing only the exact default Go module scope, with ordinary fallback for custom commands, is the smallest scope-faithful contract.
+- Intervention: The user accepted the recommended contract.
+- Control: Production behavior must be written first as failing tests: default `./...` is eligible; custom commands, unsupported flags, duplicate names, missing binaries, and build/layout failures take the ordinary path.
+- Exact evidence: The accepted contract is bounded by the measured population in entry 003; no broader command support is inferred from it.
+- Wall-clock observation: None; this is a contract decision, not a measurement.
+- Verdict: Proceed with production implementation behind `Gated()` using default-scope admission and fail-closed ordinary fallback.
+- What changed: Production implementation is now authorized within this boundary.
+- What remains unknown: Production counters, verdict-reason fidelity, Windows behavior, and real-repository gain.
+- Next falsifiable step: Write RED tests for the module runner and fallback boundary before changing production behavior.
+- Artifacts: `docs/performance-core-log.md`, `odd/tasks/module-scope-core.md`.
+
+## 2026-09-18 — 006 — Production module runner passes its boundary
+
+- Status: advance
+- Revision: working tree based on `5f65e3d3c4201689b81b707533b18aa42364ea8b`
+- Model: `gpt-5.6-sol` with delegated writer and independent verifier
+- Question: Can a production runner represent the complete default `./...` scope, fail closed when it cannot, and preserve every package execution after a failure?
+- Prior hypothesis: Structured Go package discovery plus one module build can replace per-mutant driver starts without narrowing scope.
+- Intervention: Added `ModuleScopeRunner` in `internal/gobuildrunner`, with structured `go list -json ./...` discovery, one `go test -c -o <directory> ./...` compilation, deterministic package order, and all-package execution per selector.
+- Control: Behavior-first tests cover the cross-package sentinel, duplicate binary names, packages without tests, discovery/build diagnostics, successful build with a missing expected binary, red baseline continuation, and POSIX/Windows binary naming. Manual mutations removed layout rejection and continuation after failure; each owning test failed.
+- Exact evidence:
+  - sentinel: discoveries 1, Go tool starts 2, compilations 1, selections 2, package runs 4
+  - duplicate output name: discoveries 1, starts 1, compilations 0, selections 1, package runs 0
+  - missing expected binary: discoveries 1, compilations 1, package runs 0
+  - red baseline order: `alpha:0`, then `omega:0`; later packages still ran
+  - independent `go test`, focused tests, short tests, and `go vet` all exited 0 from `.git`-free disposable copies
+- Wall-clock observation: Not measured in this slice; the runner boundary was evaluated by exact work counters and behavior.
+- Verdict: The module runner boundary passed independent verification. Actual Windows process execution remains owned by the existing Windows CI matrix; pure naming is covered locally.
+- What changed: Production code now has a complete-scope runner, but `Gated()` does not use it yet.
+- What remains unknown: Admission of only the default command, decorator/fallback compatibility, verdict-reason behavior through the release stack, and end-to-end performance.
+- Next falsifiable step: Wire safe-default command admission into `Gated()` with custom-command fallback and exact gated/fallback counters.
+- Artifacts: `internal/gobuildrunner/module_scope.go`, `internal/gobuildrunner/module_scope_test.go`, `internal/gobuildrunner/module_scope_failures_test.go`.
+
+## 2026-09-18 — 007 — `Gated()` admits only the scope it can answer
+
+- Status: advance
+- Revision: working tree based on `5f65e3d3c4201689b81b707533b18aa42364ea8b`
+- Model: `gpt-5.6-sol`
+- Question: Can `Gated()` replace the configured test command without ever answering a smaller question than the caller asked?
+- Prior hypothesis: Admitting only the default Go module scope, and delegating everything else to the ordinary configured path, removes no capability while removing the measured toll where it is payable.
+- Intervention: Added an unexported `commandScope` to `Options`, classified by a pure `scopeOf` helper that accepts only `go test -count=1 ./...` and its built-in `-json` equivalent in either flag order. `assemble` now selects `NewModuleScope` for an admitted scope and `NewDisabled` otherwise; `NewDisabled` keeps the batched-laboratory shape and counters while routing every mutant to the ordinary laboratory.
+- Control: The admission table covers make targets, package-local scopes, omitted `-count=1`, `-race`, `-tags`, absolute and alternate executables, extra spacing, and malformed tokens. A focused test proves disabled gating delegates every mutant with `Gated()==0` and `FellBack()==N`. The golden fixture was moved to the scope `Gated()` is allowed to replace, so its `gated something` assertion still proves the path engages; a second run with `DITTO_GOLDEN_PACKAGE_ONLY=1` proves a package-local command reports `none` with unchanged verdicts.
+- Exact evidence:
+  - `gofmt -l .` clean; `go vet ./...` exit 0; `go test ./...` green across every package including the repository root
+  - `TestReleaseGolden` passed in 21.73 s, exercising both the engaging and the delegating half
+  - weakening `scopeOf` to admit everything made the new guard refuse: `a package-local command gated 4 mutants; module scope may only replace the complete Go module scope`
+  - admission table, `TestOptions` (test-command value unchanged), `TestGatedLaboratory`, and all seven module-scope runner tests passed
+- Wall-clock observation: The golden fixture now runs the module scope twice, so that test costs roughly one extra release. Reported, not gated.
+- Verdict: The safe-default `Gated()` contract holds. Custom commands keep exactly the runner they configured, and disengagement is printed as `none` rather than hidden.
+- What changed: Production `Gated()` no longer replaces an arbitrary `WithTestCommand`, which is a behavior change for callers who paired the two. It is the change the measured scope defect required: the package-only path was answering a smaller question than `./...`.
+- What remains unknown: End-to-end release evidence through the real CLI, verdict-reason fidelity on the module path, and real-repository gain.
+- Next falsifiable step: Run the release end-to-end from a disposable copy and measure the module path against the ordinary path through the shipped binary.
+- Artifacts: `options.go`, `release.go`, `gated_scope_internal_test.go`, `internal/gatedlaboratory/gatedlaboratory.go`, `release_golden_test.go`, `testdata/goldenproject/mutation_test.go`.
+
+## 2026-09-18 — 008 — The ratchet fired, and the number was written down with its cause
+
+- Status: advance
+- Revision: working tree based on `5f65e3d3c4201689b81b707533b18aa42364ea8b`
+- Model: `gpt-5.6-sol`
+- Question: What does the new core cost in the one counter that measures this repository rather than a fixture?
+- Prior hypothesis: New production code adds mutable sites, so `mutantsPerReleaseOnThisRepository` grows and the ratchet refuses until the number is recorded.
+- Intervention: Recorded `813` in `perf/baseline.json` with its attribution, as the repository requires: a counter is never adjusted to match a measurement without naming what moved it.
+- Control: The attribution was measured per file rather than attributed to the change as a whole. Each named file was counted at the revision before this change and after it, with the default virus set and the gate's own exclusions.
+- Exact evidence:
+  - `internal/gobuildrunner/module_scope.go`, new file: 23 mutants, all of them new
+  - `internal/gatedlaboratory/gatedlaboratory.go`: 36 before, 37 after, +1
+  - `options.go`: 5 before, 5 after, +0 — the command-scope table replaced a branchy classifier with the same number of mutable sites
+  - sum 24, against the ratchet's own report of 813 where the baseline was 789
+  - the full suite passed 497 tests with 10 skipped before the counter fired; only this counter was red
+- Wall-clock observation: The gate reached the counter in about 63 s of tests. Reported, not gated.
+- Verdict: The ratchet was correct and the cause is known. The counter speaks for how many mutants a scope produces and says nothing about what judging them costs, which is what the module-scope work changes.
+- What changed: `perf/baseline.json` now says 813, with the +24 attributed by file.
+- What remains unknown: Whether the module-scope path actually lowers the gate's wall clock on this repository. That is the next measurement, and the only one that can say the added mutants were bought back.
+- Next falsifiable step: Run the gate's own scope through the module path from a disposable copy and compare driver starts and wall time against the ordinary path.
+- Artifacts: `perf/baseline.json`, `internal/perfbench/repository_test.go`.
