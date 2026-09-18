@@ -446,3 +446,23 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: **The tree did not change between compiles, and in a real release it does.** Each batch instruments a different file, so this is a ceiling for a fan and an overestimate for a chain, where instrumenting a package everything imports relinks all of them. The honest figure lies between this and zero, and it has to be measured after the change rather than cited before it. Also unmeasured: where the shared directory should live, and who removes it — a directory that outlives its sandbox is a lifetime the current design does not have.
 - Next falsifiable step: Give the module runner one compilation directory per release, count compilations per release, and re-measure the ten-package fixture, the chain fixtures and the closure's own cost.
 - Artifacts: `docs/experiments/the-compile-is-per-file.md`.
+
+## 2026-09-18 — 020 — The prize did not appear, and the reason is the sandbox
+
+- Status: correction
+- Revision: `c049ab7`
+- Model: `gpt-5.6-sol`
+- Question: Does one compilation directory per release collect the 12,379 ms that entry 019 priced?
+- Prior hypothesis: a fresh output directory per batch throws away the toolchain's up-to-date check, so reusing one directory would collect the prize.
+- Intervention: `GatedLaboratory` took one compilation directory per release and handed it to every batch's runner; `ModuleScopeRunner.SetCompilationDirectory` accepts it; `CompilationDirectories()` counts it.
+- Control: The guard for the sharing was watched refusing — `expected 1, actual 2` with two different paths — when the sharing rule was deliberately broken. The ten-package comparison was run as three rotated rounds against the same fixture and the same binary shape as entries 014/015.
+- Exact evidence:
+  - **The ratio did not move.** Before: 0.4005, 0.4040, 0.3995. After: 0.4031, 0.3996, 0.4015. Both fixtures: 40 total, 20 killed, 20 survived, `40 of 40 mutants ran from one compilation`.
+  - The directory **is** shared: every batch printed `out ditto-module-compile-79694792`.
+  - Every batch still spent about 1,750 ms compiling — 1857, 1755, 1744 — against the ~170 ms a reused directory measured in entry 019's loop.
+- Wall-clock observation: The saving predicted at 12,379 ms did not appear at all. The change is worth nothing as built.
+- Verdict: The prediction is refuted in full. **Each batch links its own sandbox, so package directories have different absolute paths, and Go's build IDs cover those paths.** Nothing is up to date between batches however the output directory is chosen, so the check the priced loop was measuring never fires. Entry 019's 12,379 ms measured a situation that cannot occur.
+- What changed: The change was **reverted** — it added three mutable sites and a counter and bought nothing measurable, and this repository's rule is that an unearned cost is written down rather than carried. The finding is kept; the code is not.
+- What remains unknown: Whether one sandbox per release would stabilise the paths and let the check fire, which is the change that would actually collect the prize. It is bigger than the one just reverted and it is named rather than attempted.
+- Next falsifiable step: One sandbox per release instead of one per batch, and only then a shared compilation directory — in that order, because sharing the directory without stabilising the paths is the thing just measured to pay nothing.
+- Artifacts: `docs/experiments/the-compile-is-per-file.md`.

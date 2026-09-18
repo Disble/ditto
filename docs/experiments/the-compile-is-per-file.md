@@ -90,8 +90,50 @@ The mechanism is Go's own up-to-date check, so nothing is re-implemented: the ch
 
 ## What this does NOT establish
 
-**The tree did not change between compiles, and in a real release it does.** Each batch instruments a different file, so the saving measured here is a ceiling for a fan-shaped module and an overestimate for a chain, where instrumenting a package everything imports would relink all of them. The real figure lies between this and zero and has to be measured after the change, not cited before it.
+**The tree did not change between compiles, and a real batch does two things this loop did not.** Each batch instruments a different file *and* runs in a different sandbox, so the prediction above was a ceiling and it was measured against a case that does not exist. That was stated as a limit when the note was written; it turned out to be the whole answer.
 
-It also says nothing about where the shared directory should live, or about who removes it. The release already reclaims sandboxes through the temporary directory, and a directory that outlives its sandbox is a new lifetime the current design does not have.
+**Where the shared directory should live, and who removes it.** A directory that outlives its sandbox is a lifetime the current design does not have.
 
-Finally, this prices the change and does not make it. `compilations per release` is the integer that would say whether it happened, and nothing counts it yet.
+Finally, this prices the change and does not make it. `compilations per release` is the integer that would say whether it happened, and nothing counts it.
+
+## The implementation was measured, and the prize did not appear
+
+Built and run after this note was written, because a priced change is not a paid one.
+
+`GatedLaboratory` took one compilation directory per release and handed it to every batch's runner, with `CompilationDirectories()` as the counter and a guard that two batches share one directory. The guard was watched refusing with a deliberately broken sharing rule: `expected 1, actual 2`, and the two paths different.
+
+Then the ten-package fixture, three rotated rounds:
+
+| Round | Order | A ordinary | B `--gated` | B/A |
+| --- | --- | ---: | ---: | ---: |
+| 1 | A B | 63,463 ms | 25,581 ms | **0.4031** |
+| 2 | B A | 63,630 ms | 25,429 ms | **0.3996** |
+| 3 | A B | 63,926 ms | 25,667 ms | **0.4015** |
+
+Against the same fixture before the change, 0.4005-0.4040. **The ratio did not move.**
+
+### Why, measured
+
+A disposable copy printed the runner's build time and its output directory on every call. Both facts came back:
+
+```
+DBG runs 4 comps 1 buildMs 1857 out ditto-module-compile-79694792
+DBG runs 1 comps 1 buildMs 1755 out ditto-module-compile-79694792
+DBG runs 1 comps 1 buildMs 1744 out ditto-module-compile-79694792
+```
+
+The shared directory **is** used — every batch writes into `ditto-module-compile-79694792`. And every batch still spends about 1,750 ms compiling, which is the price of a full module build rather than the ~170 ms a reused directory measured in the loop above.
+
+The difference between the two situations is the sandbox. Each batch links its own sandbox, so the package directories have different absolute paths, and Go's build IDs cover those paths. Nothing is up to date between batches however the output directory is chosen, and the up-to-date check the loop was measuring never gets to fire.
+
+So the 12,379 ms in the table above is a real measurement of a situation that **cannot occur**, and the change that would collect it is not this one.
+
+### The change was reverted
+
+It added three mutable sites and a counter, and bought nothing measurable. The repository's own rule is that an unearned cost is written down rather than carried, and that a claim goes with its evidence. The finding is kept and the code is not.
+
+## What would collect the prize
+
+One sandbox per release rather than one per batch, which would stabilise the paths and let the up-to-date check work, and only then a shared compilation directory. The order matters: sharing the directory without stabilising the paths is what was just measured to pay nothing.
+
+That is a bigger change than this one, and it is named here rather than attempted at the end of a long session with the measurement that justifies it already in hand.
