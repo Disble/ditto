@@ -30,7 +30,7 @@ Contra el fixture sintético de seis archivos, salvo el último, que se mide con
 | `sandboxesBuiltPerRelease` | 1 | 1 |
 | `laboratoryRunsForOneChangedFunction` | 4 | 4 |
 | `laboratoryRunsForOneChangedFunctionInEachOfTwoFiles` | 8 | 8 |
-| `mutantsPerReleaseOnThisRepository` | 789 | **846** |
+| `mutantsPerReleaseOnThisRepository` | 789 | **850** |
 
 Los ocho primeros **no se movieron**, y eso es el resultado: la ruta optimizada es opt-in y no toca el camino que esos contadores miden.
 
@@ -41,6 +41,7 @@ El noveno subió, y cada salto está atribuido por archivo, no al cambio entero:
 | 789 → 813 (+24) | núcleo de alcance modular | `module_scope.go` +23, `gatedlaboratory.go` +1, `options.go` +0 |
 | 813 → 818 (+5) | el motivo del veredicto en la ruta modular | `module_scope.go` 23 → 28 |
 | 818 → 846 (+28) | la clausura de observabilidad | `module_scope.go` 28 → 54, `gatedlaboratory.go` 37 → 39 |
+| 846 → 850 (+4) | un sandbox y un directorio de compilación por release | `gatedlaboratory.go` 39 → 42, `module_scope.go` 54 → 55 |
 
 Cada suma coincide con lo que reportó el ratchet.
 
@@ -76,6 +77,7 @@ Dispersión 1,7%. Veredictos idénticos y las direcciones de supervivientes **by
 |---|---:|---:|---:|
 | Antes de la clausura | 64.103 ms | 42.686 ms | **0,6649** |
 | Después de la clausura | 63.619 / 63.560 / 63.414 ms | 25.546 / 25.454 / 25.618 ms | **0,4015 / 0,4005 / 0,4040** |
+| Después de un sandbox y un directorio de compilación por release | 64.583 / 65.964 / 64.006 ms | 14.620 / 14.708 / 14.798 ms | **0,2264 / 0,2230 / 0,2312** |
 
 La clausura bajó el ratio de 0,6649 a ~0,40 y la ganancia pasó de 1,50× a **~2,50×**.
 
@@ -130,7 +132,7 @@ Contra umbral pre-registrado de 8.500 ms: el premio existía. **Se implementó, 
 
 **Causa:** el directorio compartido sí se usa, pero cada tanda enlaza **su propio sandbox**, las rutas absolutas difieren, y los build IDs de Go las incluyen. Nada queda al día entre tandas, así que la comprobación de vigencia que el bucle de precio estaba midiendo nunca llega a dispararse. Los 12.379 ms eran una medición real **de una situación que no puede ocurrir**.
 
-**El cambio se revirtió.** Agregaba tres mutantes y un contador a cambio de nada medible.
+**Ese cambio se revirtió** — agregaba tres mutantes y un contador a cambio de nada medible. Pero el precio era real, y la causa de que no apareciera también: cada tanda enlazaba su propio sandbox y los build IDs de Go incluyen esas rutas. Con **un sandbox y un directorio por release**, las dos mitades juntas, el premio llegó: el gated bajó de 25,6 s a 14,6 s sobre el mismo fixture, y el ratio de 0,40 a **0,2230–0,2312** (commit `7e30910`).
 
 ## 9. Lo que NO está medido
 
@@ -140,7 +142,6 @@ Decirlo sin adornos es parte del artefacto:
 |---|---|
 | Ratio con suite pesada | Estimación previa 0,50–0,58, no remedido en esta rama |
 | Kill por **deadline** en la ruta modular | El reloj es de `-test.timeout`; su pánico se convierte en `Assertion`. Pregunta separada, sin arreglar |
-| Un sandbox por release | Es el prerrequisito para que la compilación compartida pague. **No implementado** |
 | El gate propio de este repositorio | Tamaño repositorio, decenas de minutos, y ahora con 57 mutantes más que al empezar |
 | Un repositorio en cadena donde la clausura es todo el módulo | La ronda 016 midió los dos extremos de una cadena, no un repositorio real |
 | Fuentes sin `gofmt` | **No obtienen gating alguno.** `schemata.Plan` rechaza una diferencia que arrastra formato. Se reporta como `none`, así que es visible — pero es un acantilado |
