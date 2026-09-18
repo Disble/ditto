@@ -274,3 +274,24 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: A slow suite, where the removable toll is a smaller share of the bill and an earlier measurement said 0.50-0.58 rather than 0.32; and this repository's own gate, which is repository-sized, takes tens of minutes, and has 24 more mutants than before this change.
 - Next falsifiable step: Run this repository's own gate scope ordinary against gated from a disposable copy, and answer whether the module path buys back the 24 mutants it added.
 - Artifacts: `docs/experiments/gated-through-the-binary.md`.
+
+## 2026-09-18 — 012 — The module path scales with packages, and that is a cliff
+
+- Status: correction
+- Revision: `bb5811e`
+- Model: `gpt-5.6-sol`
+- Question: Does the gated gain survive a repository with more packages than the three it was measured on?
+- Prior hypothesis: the toll removed is the `go test` driver start, which is paid once per mutant in both modes, so the gain should be roughly independent of the package count.
+- Intervention: None to the product. The same binary was run over a ten-package light fixture instead of a three-package one.
+- Control: The three-package fixture was re-measured in the same session with the same binary and reported 0.3149-0.3201 across three rotated rounds. Both fixtures report identical verdicts in both modes, so neither comparison is between different questions.
+- Exact evidence:
+  - 3 packages, 30 mutants: ordinary 22,959 ms, gated 7,349 ms, ratio **0.3201**
+  - 10 packages, 40 mutants: ordinary 64,195 ms, gated 42,686 ms, ratio **0.6649**
+  - identical verdicts in both fixtures: 24 killed / 6 survived, and 20 killed / 20 survived
+  - gated line in the ten-package run: `40 of 40 mutants ran from one compilation`
+- Wall-clock observation: The gain collapsed from 3.14× to 1.50× by going from three packages to ten. Taking the ordinary cost as one driver start per mutant (64,195 / 40 = 1,605 ms) and the gated cost as one test binary per package per mutant (42,686 ms over 400 binary starts plus one compile), the per-start cost is around 98 ms and the crossover sits near sixteen packages. That arithmetic is derived from measured totals rather than measured directly, and it is recorded as an estimate.
+- Verdict: The prior hypothesis was wrong. The module path replaces one driver start per mutant with one test binary **per package per mutant**, so its cost is `selections × packages` while the ordinary path is `selections`. The gain is real and the shape is wrong: on a repository with enough packages the path becomes slower than the one it replaced.
+- What changed: The next core change is now known instead of guessed, and the ten-package case is a case the design must answer before `--gated` is recommended for anything but a small module.
+- What remains unknown: The exact crossover, which is derived rather than measured; whether the per-start cost is stable across larger test binaries; and this repository's own tree, which has far more than sixteen test packages.
+- Next falsifiable step: Run only the packages whose test binaries can observe the mutated package, derived from the Go import graph, and measure package executions per selection against the same two fixtures. A package that cannot transitively import the mutated package cannot observe the mutation, so that reduction is provable rather than heuristic — and the cross-package sentinel from `module-scope-runner.md` is the guard that the closure is not too narrow.
+- Artifacts: `docs/experiments/gated-through-the-binary.md`, `docs/experiments/module-scope-runner.md`.
