@@ -424,3 +424,25 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: The cost of sharing a compile is not measured because nothing shares one yet. And entries 014/015 need re-reading rather than correcting: the ten-package fixture has mutants in every package, so it paid **ten** compiles and still reached 0.3995 — a lower bound on what sharing one would give, with the size of the gap left as arithmetic rather than claimed as measurement.
 - Next falsifiable step: Share one compilation across the source-file batches of a single release and measure compilations per release, which is the counter that says whether it happened, against the same two fixtures and the ten-package one.
 - Artifacts: `docs/experiments/chain-shaped-module.md`.
+
+## 2026-09-18 — 019 — Sharing the compile directory is worth 12,379 ms on a ten-package module
+
+- Status: advance
+- Revision: `616c842`
+- Model: `gpt-5.6-sol`
+- Question: What is the compilation charge that entry 018 identified actually worth, before anything is built for it?
+- Prior hypothesis: a fresh output directory throws away the toolchain's own up-to-date check, so ten batches cost ten full rebuilds where one directory would cost one and nine near-no-ops.
+- Intervention: None to the product. Two loops of ten `go test -c -o <dir> ./...` over one ten-package module, differing only in whether the directory is fresh.
+- Control: Both loops run the same command in the same tree with no mutation in flight, so they differ in exactly one thing. The first compile of each loop is the same job and reads 1,405 ms against the fresh loop's 1,405 ms-scale runs.
+- Exact evidence:
+  - discovery `go list -deps -test -json ./...`: 190, 177, 174 ms — about 180 ms per release, paid once
+  - ten fresh directories: **15,466 ms**, or 11.0× the first compile
+  - one shared directory: first 1,405 ms, then 288, 168, 197, 189, 171, 166, 169, 167, 167 — **3,087 ms** total
+  - saving: **12,379 ms**, against a pre-registered threshold of 8,500 ms
+  - for scale: the ten-package gated run of entries 014/015 measured 25,607 ms, so this is 48% of that run
+- Wall-clock observation: Every shared compile after the first is between 166 and 288 ms against a first of 1,405 ms, which is backlog entry 14's up-to-date check working as it described.
+- Verdict: All three hypotheses corroborated. The prize is real and it is large, and the mechanism is the toolchain's own check rather than anything re-implemented: the change is which directory the binaries are written to.
+- What changed: The next core change is sized. A gated ratio of about 0.21 instead of 0.3995 on a ten-package module is the ceiling.
+- What remains unknown: **The tree did not change between compiles, and in a real release it does.** Each batch instruments a different file, so this is a ceiling for a fan and an overestimate for a chain, where instrumenting a package everything imports relinks all of them. The honest figure lies between this and zero, and it has to be measured after the change rather than cited before it. Also unmeasured: where the shared directory should live, and who removes it — a directory that outlives its sandbox is a lifetime the current design does not have.
+- Next falsifiable step: Give the module runner one compilation directory per release, count compilations per release, and re-measure the ten-package fixture, the chain fixtures and the closure's own cost.
+- Artifacts: `docs/experiments/the-compile-is-per-file.md`.
