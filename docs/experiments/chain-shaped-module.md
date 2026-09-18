@@ -113,23 +113,47 @@ So the closure engaged exactly as designed. The tail fixture started **eight tim
 
 That removes the most comfortable explanation and leaves the question open. Whatever costs the tail fixture its 1.9 seconds is not the number of package executions.
 
+### The phase split, and the cause
+
+A disposable copy was patched to time the three phases separately — discovery, the module-wide compile, and the selections — and to print the runner's counters on every call.
+
+Both fixtures, one measured run each:
+
+| Fixture | discoverMs | buildMs | runMs | package runs | wall clock |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| chain-head | 169 | 1,651 | 1,902 | 56 | 3,828 ms |
+| chain-tail | 141 then 155 | **1,676 then 1,580** | 0, 1,364, 1,414, then 624 | 24 unscoped, then 5 scoped | 5,718 ms |
+
+The head fixture's figures reconcile with its wall clock: 169 + 1,651 + 1,902 = 3,722 ms against 3,828 measured.
+
+The tail fixture prints **two runners**, and that is the answer. The first ran unscoped — 8 packages, 0 skipped — and the second ran scoped — 1 package, 7 skipped, which is the closure working. Each of them compiled the whole module: **1,676 ms and 1,580 ms**.
+
+And the shape explains why:
+
+```
+chain-head  pkg0/pkg0.go — 6 mutants      one source file  -> one batch -> one compile
+chain-tail  pkg0/pkg0.go — 2 mutants      two source files -> two batches -> two compiles
+            pkg7/pkg7.go — 4 mutants
+```
+
+`ditto.Release` batches per source file, and each batch builds its own `GatedLaboratory` runner, so **the module-wide compilation is paid once per source file that has mutants, not once per release.** The tail fixture paid a second 1,580 ms and that, not the package executions, is the 1.9 second gap.
+
+### The wider-rebuild conjecture is dead
+
+The candidate this note named — that instrumenting a file eight packages import forces a wider rebuild than instrumenting a file none does — is refuted. The two compiles are 1,676 ms against 1,580 ms for the same eight-package module, and the compile measured outside the product on both fixtures was 1,306 ms against 1,347 ms. The package graph is identical and the compile does not care which file holds the mutation.
+
 ## Verdicts: 3 of 3
 
 ## Conclusion
 
-Two of the three hypotheses held and the third was refuted, so nothing here is concluded about the closure's value on a chain. What is established is narrower than the note intended and still worth having:
+Two of the three hypotheses held, the third was refuted, and the refutation is now explained by measurement rather than by a story.
 
-- the observer count is exactly what the closure promises, at both ends of a chain;
-- the closure engages in production, verified by its own counters rather than by inference;
-- the wall-clock difference between the two ends is real, reproducible across three rotated rounds, and in the direction this note did not expect;
-- that difference is **not** explained by the number of package executions, which drops eightfold where the time rises.
+The cause is not the closure and not the shape as such. It is that the module-wide compile is charged per source file with mutants, so a fixture with mutants in two files pays twice what a fixture with mutants in one file pays — and that cost is large enough to invert a comparison the closure had already won on executions.
 
-The refutation is a result and it is reported as one. It sends the question back rather than answering it.
+The earlier entries are unaffected in what they measured. The ten-package fan fixture of entries 014 and 015 has mutants in every package, so it paid ten compiles, and its 0.3995 was reached **despite** that. The same accounting says the ten-compile bill is still being paid there.
 
 ## What this does NOT establish
 
-This note cannot say why the head fixture is faster, and it does not guess. The candidates it can now name are the ones the fixture does not separate: the one compile both fixtures pay, the sandbox, the instrumentation of a file eight packages import against a file none does, and the two converters both runs start.
+This note does not measure the cost of sharing one compile across batches, because nothing shares one yet. It also does not re-measure the ten-package fixture under the corrected reading: 0.3995 was measured with ten compiles included, so it is a lower bound on what sharing one would give, but the size of that lower bound is arithmetic rather than measurement.
 
-The obvious candidate — that instrumenting `pkg0`, which every package imports, forces a wider rebuild than instrumenting `pkg7` — is a conjecture with no measurement behind it. It has a kill criterion: time the compile phase alone on both fixtures. If the two compiles are within noise, that candidate is dead too, and the answer is somewhere this note has not looked.
-
-It also says nothing about a real repository's shape distribution, and nothing about a heavy suite.
+It still says nothing about a real repository's shape distribution, and nothing about a heavy suite.
