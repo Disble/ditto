@@ -100,19 +100,36 @@ Measured: the head fixture ran at **0.3492-0.3597** and the tip fixture at **0.5
 
 The prediction is dead. The shape did matter, and the direction is the reverse of what this note argued.
 
+### The closure did engage — measured after the refutation
+
+A first reading of the refutation is that the closure silently did not engage on the tail fixture. It was checked rather than assumed, by printing the runner's own counters from a disposable copy of the tree:
+
+| Fixture | packageRuns at the second kill | skipped | compilations |
+| --- | ---: | ---: | ---: |
+| chain-head | 16 (2 selections × 8) | 0 | 1 |
+| chain-tail | 2 (2 selections × 1) | 14 | 1 |
+
+So the closure engaged exactly as designed. The tail fixture started **eight times fewer** package binaries for the same selections, skipped fourteen, and compiled once — and was the slower of the two.
+
+That removes the most comfortable explanation and leaves the question open. Whatever costs the tail fixture its 1.9 seconds is not the number of package executions.
+
 ## Verdicts: 3 of 3
 
 ## Conclusion
 
-Two of the three hypotheses held and the third was refuted, so nothing here is concluded about the closure's value on a chain. What is established is narrower and still useful:
+Two of the three hypotheses held and the third was refuted, so nothing here is concluded about the closure's value on a chain. What is established is narrower than the note intended and still worth having:
 
 - the observer count is exactly what the closure promises, at both ends of a chain;
-- the wall-clock difference between the two ends is real, reproducible across three rotated rounds, and in the direction this note did not expect.
+- the closure engages in production, verified by its own counters rather than by inference;
+- the wall-clock difference between the two ends is real, reproducible across three rotated rounds, and in the direction this note did not expect;
+- that difference is **not** explained by the number of package executions, which drops eightfold where the time rises.
 
-The refutation is a result and it is reported as one. It sends the question back rather than answering it: something other than the number of package executions is deciding these two numbers, and the candidates are the ones the fixture does not separate — the compile, the sandbox, the instrumentation of a file that eight packages import against a file that none does, and the converter.
+The refutation is a result and it is reported as one. It sends the question back rather than answering it.
 
 ## What this does NOT establish
 
-This note cannot say why the head fixture is faster, and it does not guess. The obvious candidate — that instrumenting `pkg0`, which every package imports, forces a wider rebuild than instrumenting `pkg7` — is a conjecture with no measurement behind it, and the repository's own rule is that a cause offered in passing still needs a kill criterion.
+This note cannot say why the head fixture is faster, and it does not guess. The candidates it can now name are the ones the fixture does not separate: the one compile both fixtures pay, the sandbox, the instrumentation of a file eight packages import against a file none does, and the two converters both runs start.
+
+The obvious candidate — that instrumenting `pkg0`, which every package imports, forces a wider rebuild than instrumenting `pkg7` — is a conjecture with no measurement behind it. It has a kill criterion: time the compile phase alone on both fixtures. If the two compiles are within noise, that candidate is dead too, and the answer is somewhere this note has not looked.
 
 It also says nothing about a real repository's shape distribution, and nothing about a heavy suite.
