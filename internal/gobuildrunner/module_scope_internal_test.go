@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/Disble/ditto/internal/dittotesting/fakerepository"
+	"github.com/Disble/ditto/internal/result"
+	"github.com/Disble/ditto/internal/verdict"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -136,4 +138,71 @@ func moduleFixture(t *testing.T, files map[string]string) string {
 	}
 
 	return root
+}
+
+// TestModuleScopeRunnerCarriesAVerdictReason is the guard for the gap measured
+// in docs/experiments/module-path-verdict-reason.md.
+//
+// A package test binary cannot emit `go test -json` — that flag belongs to the
+// driver that starts the binary, not to the binary — so a module-path kill
+// arrived as plain text, internal/verdict saw no stream, and the reason was
+// Unknown. That is not a cosmetic loss: internal/confirminglaboratory re-runs a
+// kill only when the reason is Assertion, so `--confirm-kills` silently never
+// fired on the gated path.
+func TestModuleScopeRunnerCarriesAVerdictReason(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs the Go toolchain")
+	}
+
+	root := moduleFixture(t, map[string]string{
+		"subject/subject.go": "package subject\n\nimport \"os\"\n\nfunc Changed() bool { return os.Getenv(\"DITTO_MUTANT\") != \"1\" }\n",
+		"subject/subject_test.go": `package subject
+
+import (
+	"os"
+	"testing"
+)
+
+func TestKilledByTheMutant(t *testing.T) {
+	if os.Getenv("DITTO_MUTANT") == "1" {
+		t.Fatal("the mutant was active, so this test failed")
+	}
+}
+`,
+	})
+	runner := NewModuleScope()
+	sandbox := fakerepository.NewTemporaryAt(root)
+
+	if baseline := runner.Test(sandbox); baseline.IsOk() {
+		t.Fatalf("the baseline was red, so nothing below is a mutant's verdict: %s", result.Output(baseline))
+	}
+
+	runner.Select(1)
+
+	outcome := runner.Test(sandbox)
+	require.True(t, outcome.IsOk(), "the selected mutant survived, so there is no kill to read a reason from")
+
+	assert.Equal(t, verdict.Assertion, verdict.ReasonOf(result.Output(outcome)),
+		"a module-path kill must carry the same reason the ordinary command carries, or --confirm-kills never re-runs one")
+
+	assert.Equal(t, 1, runner.ConverterStarts(),
+		"only a failing package needs converting; a green selection must start no converter at all")
+}
+
+func TestModuleScopeRunnerStartsNoConverterForAGreenSelection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs the Go toolchain")
+	}
+
+	root := moduleFixture(t, map[string]string{
+		"subject/subject.go":      "package subject\n\nfunc Value() int { return 1 }\n",
+		"subject/subject_test.go": "package subject\n\nimport \"testing\"\n\nfunc TestValue(t *testing.T) {}\n",
+	})
+	runner := NewModuleScope()
+	sandbox := fakerepository.NewTemporaryAt(root)
+
+	outcome := runner.Test(sandbox)
+
+	assert.False(t, outcome.IsOk(), "the unselected baseline is green")
+	assert.Equal(t, 0, runner.ConverterStarts(), "a green selection needs no reason, so it pays for no conversion")
 }

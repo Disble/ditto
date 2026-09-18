@@ -1,6 +1,7 @@
 package gobuildrunner
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,6 +38,7 @@ type ModuleScopeRunner struct {
 	compilations    int
 	selections      int
 	packageRuns     int
+	converterStarts int
 }
 
 type modulePackage struct {
@@ -88,6 +90,11 @@ func (r *ModuleScopeRunner) Selections() int { return r.selections }
 
 // PackageRuns counts started package test binaries.
 func (r *ModuleScopeRunner) PackageRuns() int { return r.packageRuns }
+
+// ConverterStarts counts conversions of a failing package's output into the
+// stream internal/verdict reads a reason from. A green selection starts none,
+// because a reason is only ever asked of a kill.
+func (r *ModuleScopeRunner) ConverterStarts() int { return r.converterStarts }
 
 // Built is true only after discovery, layout validation, compilation, and every
 // expected test-binary check has succeeded.
@@ -224,16 +231,18 @@ func (r *ModuleScopeRunner) run() result.Result[string] {
 		}
 
 		r.packageRuns++
-		command := exec.Command(pkg.binary, "-test.count=1", //nolint:gosec,noctx // binary was verified after this runner built it
-			"-test.timeout="+cmdtestrunner.DefaultDeadline.String())
-		command.Dir = pkg.directory
-		command.Env = environment(r.mutant)
-		binaryOutput, err := command.CombinedOutput()
-		output.Write(binaryOutput)
 
+		binaryOutput, err := r.runPackage(pkg)
 		if err != nil {
 			failed = true
+
+			// Converted only when the package failed, because a reason is only
+			// ever asked of a kill: a selection where everything passed starts
+			// no converter and pays nothing for a reason nobody reads.
+			binaryOutput = r.readable(pkg, binaryOutput)
 		}
+
+		output.Write(binaryOutput)
 	}
 
 	if failed {
@@ -241,6 +250,71 @@ func (r *ModuleScopeRunner) run() result.Result[string] {
 	}
 
 	return result.Err[string](output.String())
+}
+
+// runPackage starts one package's test binary from that package's own directory,
+// which is what `go test` does and what a suite reading a relative path depends
+// on.
+func (r *ModuleScopeRunner) runPackage(pkg modulePackage) ([]byte, error) {
+	// -test.timeout is passed because a test binary invoked directly takes 0 --
+	// timeout disabled -- and only the `go test` driver injects the 10 minute
+	// default. Without it a mutant that loops never returns and the release
+	// never ends; loopcondition, loopbreak and rangebreak are all in the default
+	// virus set.
+	command := exec.Command(pkg.binary, "-test.count=1", //nolint:gosec,noctx // binary was verified after this runner built it
+		"-test.timeout="+cmdtestrunner.DefaultDeadline.String())
+	command.Dir = pkg.directory
+	command.Env = environment(r.mutant)
+
+	output, err := command.CombinedOutput()
+	if err != nil {
+		// The caller only needs to know the package failed; the tool's own words
+		// are already in output, which is what the report prints. Wrapped so the
+		// exit status is not lost if anything ever asks for it.
+		return output, fmt.Errorf("ditto: %s failed: %w", pkg.importPath, err)
+	}
+
+	return output, nil
+}
+
+// readable turns a failing package's own output into the stream ditto reads a
+// verdict reason from.
+//
+// A package test binary cannot emit `go test -json`: that flag belongs to the
+// driver that starts the binary, not to the binary. So a kill arrived as plain
+// text, internal/verdict saw no stream, and every module-path kill reported
+// Unknown. Measured against the ordinary command over the same fixture and the
+// same mutant: `unknown` against `assertion`,
+// docs/experiments/module-path-verdict-reason.md.
+//
+// That is not a cosmetic loss. internal/confirminglaboratory re-runs a kill only
+// when its reason is Assertion, so on the gated path `--confirm-kills` silently
+// never fired and a flaky suite's false kill could not be caught.
+//
+// `go tool test2json` is the toolchain's own conversion, so nothing is
+// re-implemented here. The verdict is still the binary's own exit status and
+// never the converter's: a converter run over captured text reported to us has
+// no test status of its own to report. Output that cannot be converted is
+// returned untouched, which degrades to the previous behaviour rather than to a
+// wrong reason.
+func (r *ModuleScopeRunner) readable(pkg modulePackage, binaryOutput []byte) []byte {
+	if len(binaryOutput) == 0 {
+		return binaryOutput
+	}
+
+	r.converterStarts++
+
+	command := exec.Command(r.toolchain, "tool", "test2json", "-t", "-p", pkg.importPath) //nolint:noctx,gosec // resolved to an absolute path in goToolchain
+	command.Dir = pkg.directory
+	command.Env = environment(r.mutant)
+	command.Stdin = bytes.NewReader(binaryOutput)
+
+	converted, err := command.CombinedOutput()
+	if err != nil {
+		return binaryOutput
+	}
+
+	return converted
 }
 
 // moduleTestBinaryName is the test-binary name go test -c -o <directory>
