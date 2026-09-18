@@ -229,3 +229,48 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: Everything entry 008 leaves open — the CLI end-to-end measurement, verdict-reason fidelity on the module path, and whether the module path lowers this repository's own gate time enough to buy back the 24 mutants it added.
 - Next falsifiable step: Run the release end-to-end from a disposable copy through the shipped binary, and check whether a killed mutant on the module path still carries a reason other than `Unknown`.
 - Artifacts: `git log 5f65e3d..perf/module-scope-core`.
+
+## 2026-09-18 — 010 — A module-path kill carried no reason, and now does
+
+- Status: advance
+- Revision: working tree on top of `243f2ad`
+- Model: `gpt-5.6-sol`
+- Question: What reason does a module-scope kill carry, and does the ordinary path's reason survive the move to prebuilt binaries?
+- Prior hypothesis: `verdict.ReasonOf` reads the stream `go test -json` emits, and `-json` belongs to the driver rather than to the binary it starts, so every module-path kill would report `Unknown`.
+- Intervention: The module runner now converts a **failing** package's output through `go tool test2json -t -p <package>` before it reaches the reporter. A green selection starts no converter, because a reason is only ever asked of a kill.
+- Control: The ordinary `go test -count=1 -json ./...` command over the same fixture and the same active mutant reported `assertion`. The module path reported `unknown` before the change and `assertion` after it. A non-compiling package was measured separately and fails closed before any binary starts.
+- Exact evidence:
+  - control: `assertion`
+  - module path before: `unknown`
+  - module path through `test2json`: `assertion`
+  - RED captured behaviourally as `expected "assertion", actual "unknown"`, not as a compile error
+  - manual mutation: deleting the conversion made the owning test fail with the same pair, and `ConverterStarts` drop from 1 to 0
+  - the full gate then reported `mutantsPerReleaseOnThisRepository: 818, baseline 813 (+5)`, attributed to `internal/gobuildrunner/module_scope.go` alone: 23 before, 28 after
+- Wall-clock observation: The converter is one process per failing selection, paid only on a kill. Reported, not gated.
+- Verdict: The gap was real and is closed. `--confirm-kills` had been a silent no-op on the gated path, because `internal/confirminglaboratory` re-runs a kill only when the reason is `Assertion`.
+- What changed: `readable` in the module runner, two guards, and `perf/baseline.json` at 818 with the file attributed.
+- What remains unknown: A **deadline** kill is still not covered and is a different defect: the ordinary path writes its own marker when ditto fires the clock, while on the module path the clock belongs to the binary's `-test.timeout`, whose panic text would convert into an `Assertion`. Recorded, not fixed, and not implied to be fixed.
+- Next falsifiable step: Measure the gated path through the shipped binary rather than a harness.
+- Artifacts: `docs/experiments/module-path-verdict-reason.md`, `internal/gobuildrunner/module_scope.go`.
+
+## 2026-09-18 — 011 — Through the shipped binary, gated is 3.14× on a light suite
+
+- Status: advance
+- Revision: working tree on top of the reason fix
+- Model: `gpt-5.6-sol`
+- Question: What does `ditto run --gated` actually buy end to end, as a person experiences it?
+- Prior hypothesis: the same verdicts and survivor addresses, in at most half the wall clock.
+- Intervention: None to the product. Both modes were run through the binary built from a disposable copy, against a throwaway three-package module.
+- Control: The first fixture produced zero survivors, which would have made the address comparison vacuous, so three uncovered functions were added and six mutants survived. The first run also said `Gated: none of 24`, and the cause was the fixture rather than the product — the generated sources had a trailing blank line, so they were not gofmt-formatted and `schemata.Plan` refused every site. That is a real product property and is recorded as one.
+- Exact evidence:
+  - ordinary: 23,145 ms, 30 total, 24 killed, 6 survived
+  - gated: 7,361 ms, 30 total, 24 killed, 6 survived, `30 of 30 mutants ran from one compilation`
+  - ratio 0.318, or 3.14× faster
+  - sorted survivor addresses byte-identical between the modes, over six real survivor reports
+  - no recorded counter moved, and `perf/baseline.json` stayed where entry 010 left it
+- Wall-clock observation: 23.1 s against 7.4 s on the same machine, ordinary run first so a cold toolchain could not favour it. Reported, not gated.
+- Verdict: All three hypotheses corroborated. The architecture earns its keep end to end on the case it was built for.
+- What changed: The claim moves from "the mechanism is 5× cheaper" to "a run is about a third of the wall clock", which is the smaller and honest number: a release also pays parsing, instrumentation, the sandbox, the progress line, and one converter per kill.
+- What remains unknown: A slow suite, where the removable toll is a smaller share of the bill and an earlier measurement said 0.50-0.58 rather than 0.32; and this repository's own gate, which is repository-sized, takes tens of minutes, and has 24 more mutants than before this change.
+- Next falsifiable step: Run this repository's own gate scope ordinary against gated from a disposable copy, and answer whether the module path buys back the 24 mutants it added.
+- Artifacts: `docs/experiments/gated-through-the-binary.md`.
