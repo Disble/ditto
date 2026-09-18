@@ -78,6 +78,21 @@ func TestGatedLaboratory(t *testing.T) {
 		assert.Equal(t, 0, lab.Gated())
 	})
 
+	t.Run("delegates every mutant when module-scope gating is disabled", func(t *testing.T) {
+		delegate := &countingLaboratory{}
+		lab := gatedlaboratory.NewDisabled(delegate, fakeTemporary{})
+
+		results := lab.TestAll(fakeRepository{}, mutantsOf(
+			strings.Replace(source, "a > b", "a >= b", 1),
+			strings.Replace(source, "a > b", "a <= b", 1),
+		))
+
+		assert.Len(t, results, 2)
+		assert.Equal(t, 0, lab.Gated())
+		assert.Equal(t, 2, lab.FellBack())
+		assert.Equal(t, 2, delegate.calls)
+	})
+
 	// H3 of docs/experiments/changed-scope.md. GoBuildRunner.Runs increments once
 	// per Test, so a run the laboratory makes before selecting anything is
 	// counted as a mutant's. Every ratio published from that counter carries it.

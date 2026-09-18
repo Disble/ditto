@@ -62,6 +62,7 @@ var defaultOptions = Options{ //nolint:gochecknoglobals
 	MinimumThreshold:          1.0,
 	Parallel:                  false,
 	IgnoreSourceFilesPatterns: nil,
+	commandScope:              moduleScope,
 	Viruses: []viruses.Virus{
 		arithmetic.New(),
 		arithmeticassignment.New(),
@@ -335,7 +336,12 @@ func assemble(opts Options, logger ditto.Logger, loud bool) (ditto.Laboratory, *
 	var gates *gatedlaboratory.GatedLaboratory
 
 	if opts.Gated {
-		gates = gatedlaboratory.New(lab, opts.TemporaryDir)
+		if opts.commandScope == moduleScope {
+			gates = gatedlaboratory.NewModuleScope(lab, opts.TemporaryDir)
+		} else {
+			gates = gatedlaboratory.NewDisabled(lab, opts.TemporaryDir)
+		}
+
 		lab = gates
 	}
 

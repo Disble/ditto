@@ -108,9 +108,43 @@ func TestReleaseGolden(t *testing.T) {
 		t.Fatalf("the gated release gated %d mutants under -v and %d without it; "+
 			"verbose is meant to change what is logged, not what runs", verbose, quiet)
 	}
+
+	// And a command whose complete scope module scope cannot represent is
+	// refused rather than replaced. Gating used to build `go test -c` for the
+	// mutated file's own package whatever the caller had configured, so a
+	// repository asking for `./calc` silently got a narrower question than its
+	// own command — and a mutant only a dependent package could kill survived
+	// under it. Measured at exactly that: the package-only control missed the
+	// cross-package sentinel while the complete scope killed it
+	// (docs/experiments/module-scope-runner.md).
+	assertPackageLocalCommandFallsBack(t, project, binary, want)
 }
 
-func releaseOutput(t *testing.T, project, binary string, gated, verbose bool) string {
+// assertPackageLocalCommandFallsBack holds the other half of the gated
+// contract: a command whose scope module scope may not replace keeps its own
+// execution, and the report says `none` rather than quietly optimizing
+// something else.
+//
+// The count is still the guard, and the line still has to be printed: `none` is
+// how a reader tells "this run kept your command" from "this run quietly
+// stopped optimizing and said nothing".
+func assertPackageLocalCommandFallsBack(t *testing.T, project, binary, want string) {
+	t.Helper()
+
+	output := releaseOutput(t, project, binary, true, false, "DITTO_GOLDEN_PACKAGE_ONLY=1")
+
+	if got := withoutRunShape(withoutGateCount(output)); got != withoutRunShape(want) {
+		t.Fatalf("the package-local gated release said something different.\n--- want ---\n%s\n--- got ---\n%s", want, got)
+	}
+
+	count := gateCount(t, output)
+	if count != 0 {
+		t.Fatalf("a package-local command gated %d mutants; module scope may only replace the complete Go module scope, "+
+			"and replacing anything else answers a smaller question than the caller asked:\n%s", count, output)
+	}
+}
+
+func releaseOutput(t *testing.T, project, binary string, gated, verbose bool, extraEnvironment ...string) string {
 	t.Helper()
 
 	args := []string{"-test.run", "TestMutation", "-test.count=1"}
@@ -122,6 +156,8 @@ func releaseOutput(t *testing.T, project, binary string, gated, verbose bool) st
 	if gated {
 		run.Env = append(run.Env, "DITTO_GOLDEN_GATED=1")
 	}
+
+	run.Env = append(run.Env, extraEnvironment...)
 
 	output, err := run.CombinedOutput()
 	if err != nil {

@@ -47,6 +47,9 @@ type GatedLaboratory struct {
 	fellBack int
 }
 
+// New retains the package-scope runner for its existing callers. Production
+// Gated assembly uses NewModuleScope because its contract is the complete
+// default Go module scope, not the mutated file's package.
 func New(delegate ditto.Laboratory, temporaryDirectory TemporaryDirectory) *GatedLaboratory {
 	return &GatedLaboratory{
 		delegate:           delegate,
@@ -54,6 +57,27 @@ func New(delegate ditto.Laboratory, temporaryDirectory TemporaryDirectory) *Gate
 		newRunner: func(packagePath string) Runner {
 			return gobuildrunner.New(packagePath)
 		},
+	}
+}
+
+// NewModuleScope gates through the measured default Go module scope.
+func NewModuleScope(delegate ditto.Laboratory, temporaryDirectory TemporaryDirectory) *GatedLaboratory {
+	return &GatedLaboratory{
+		delegate:           delegate,
+		temporaryDirectory: temporaryDirectory,
+		newRunner: func(string) Runner {
+			return gobuildrunner.NewModuleScope()
+		},
+	}
+}
+
+// NewDisabled keeps the batched-laboratory shape and counters while routing all
+// mutants to the ordinary laboratory. It is used for custom commands whose
+// complete execution plan module scope cannot faithfully represent.
+func NewDisabled(delegate ditto.Laboratory, temporaryDirectory TemporaryDirectory) *GatedLaboratory {
+	return &GatedLaboratory{
+		delegate:           delegate,
+		temporaryDirectory: temporaryDirectory,
 	}
 }
 
@@ -82,6 +106,10 @@ func (l *GatedLaboratory) TestAll(
 ) []future.Future[result.Result[string]] {
 	if len(files) == 0 {
 		return nil
+	}
+
+	if l.newRunner == nil {
+		return l.all(repository, files)
 	}
 
 	planned := schemata.Plan(files[0].Source(), mutated(files))

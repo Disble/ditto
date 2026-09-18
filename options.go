@@ -14,6 +14,15 @@ import (
 
 type Option func(Options) Options
 
+// commandScope is the test-command shape whose complete execution plan Gated
+// may replace. Unknown commands stay on the ordinary laboratory path.
+type commandScope uint8
+
+const (
+	unsupportedScope commandScope = iota
+	moduleScope
+)
+
 // Range is a half-open byte range within one file: Start is included, End is
 // not. Offsets are counted from the first byte of that file.
 type Range struct {
@@ -34,6 +43,7 @@ type Options struct {
 	ConfirmKills              bool
 	Verbose                   bool
 	SandboxStrategy           string
+	commandScope              commandScope
 	// RepositoryRoot is kept beside Repository so a later option can rebuild it.
 	RepositoryRoot string
 }
@@ -52,16 +62,14 @@ func Verbose() func(Options) Options {
 	}
 }
 
-// Gated runs a file's mutants from one compilation instead of one each.
+// Gated runs eligible mutants from one complete-module compilation instead of
+// one test-command start each.
 //
 // Ditto normally starts the test command once per mutant, and that start costs
-// 750-950 ms whatever the suite does — the dominant cost of a run. With this,
-// the mutants a file can express as one instrumented source are compiled
-// together and selected at run time. Anything that cannot be expressed that way
-// keeps the path it always had, so no mutant is lost by turning it on.
-//
-// It builds with `go test -c`, so it applies to a Go package and it replaces
-// WithTestCommand for the mutants it takes.
+// 750-950 ms whatever the suite does — the dominant cost of a run. Gating only
+// optimizes the default Go module scope, `go test -count=1 ./...`, including
+// the built-in -json form. Any custom or unsupported WithTestCommand keeps the
+// ordinary laboratory path exactly as configured.
 func Gated() func(Options) Options {
 	return func(options Options) Options {
 		options.Gated = true
@@ -134,11 +142,33 @@ func WithRepositoryRoot(repositoryRoot string) func(Options) Options {
 // and `tags`.
 func WithTestCommand(testCommand string) func(Options) Options {
 	return func(options Options) Options {
+		options.commandScope = scopeOf(testCommand)
+
 		testCommandParts := strings.Split(testCommand, " ")
 		options.TestRunner = cmdtestrunner.New(testCommandParts[0], testCommandParts[1:]...)
 
 		return options
 	}
+}
+
+// scopeOf recognizes only the command token sequences whose complete package
+// scope has been measured. It is a closed set rather than a parser on purpose:
+// anything it does not recognize keeps its ordinary execution, and a command
+// that is almost the default is not the default. Extra spacing, an extra flag,
+// a package-local scope, an alternate executable and a make target all fall
+// outside it by construction rather than by remembering to check for them.
+var moduleScopeCommands = map[string]bool{ //nolint:gochecknoglobals // one fixed set, read only
+	"go test -count=1 ./...":       true,
+	"go test -count=1 -json ./...": true,
+	"go test -json -count=1 ./...": true,
+}
+
+func scopeOf(command string) commandScope {
+	if moduleScopeCommands[command] {
+		return moduleScope
+	}
+
+	return unsupportedScope
 }
 
 // WithMinimumThreshold represents the minimum mutation test score to consider
