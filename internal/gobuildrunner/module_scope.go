@@ -110,6 +110,18 @@ func (r *ModuleScopeRunner) ConverterStarts() int { return r.converterStarts }
 // judged on, and it says nothing unless ScopeTo was called.
 func (r *ModuleScopeRunner) SkippedPackages() int { return r.skippedPackages }
 
+// SetCompilationDirectory writes this runner's test binaries into a directory
+// chosen by the caller, so the batches of one release reuse one instead of each
+// building its own.
+//
+// It only pays together with a sandbox that is reused too. A fresh directory per
+// batch throws away the toolchain's up-to-date check; a fresh sandbox per batch
+// defeats it anyway, because Go's build IDs cover the package directories.
+// Measured both ways: the shared directory alone bought nothing at all.
+func (r *ModuleScopeRunner) SetCompilationDirectory(directory string) {
+	r.output = directory
+}
+
 // ScopeTo declares the repository-relative directory of the package whose
 // mutation this batch selects, so only the test binaries that can observe it
 // are started.
@@ -145,12 +157,18 @@ func (r *ModuleScopeRunner) Test(repository ditto.TemporaryRepository) result.Re
 }
 
 func (r *ModuleScopeRunner) prepare(root string) string {
-	output, err := os.MkdirTemp(root, "ditto-module-tests-")
-	if err != nil {
-		return fmt.Sprintf("ditto: create module test output directory: %v", err)
+	// A directory given by the caller outlives this runner, so its up-to-date
+	// state survives into the next batch. One made here does not.
+	if r.output == "" {
+		output, err := os.MkdirTemp(root, "ditto-module-tests-")
+		if err != nil {
+			return fmt.Sprintf("ditto: create module test output directory: %v", err)
+		}
+
+		r.output = output
 	}
 
-	r.output = output
+	output := r.output
 
 	if err := r.discover(root); err != nil {
 		return err.Error()

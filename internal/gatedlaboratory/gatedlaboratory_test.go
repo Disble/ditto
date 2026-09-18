@@ -1,6 +1,7 @@
 package gatedlaboratory_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -217,10 +218,24 @@ func (fakeRepository) LinkAllToTemporaryRepository(string) ditto.TemporaryReposi
 	return &fakeSandbox{}
 }
 
-type fakeSandbox struct{ written map[string]string }
+type fakeSandbox struct {
+	written map[string]string
+	root    string
+}
 
-func (s *fakeSandbox) Root() string { return "sandbox" }
-func (s *fakeSandbox) Remove()      {}
+func (s *fakeSandbox) Root() string {
+	if s.root == "" {
+		directory, err := os.MkdirTemp("", "ditto-fakesandbox-")
+		if err != nil {
+			panic(err)
+		}
+
+		s.root = directory
+	}
+
+	return s.root
+}
+func (s *fakeSandbox) Remove() {}
 
 func (s *fakeSandbox) Overwrite(filePath string, data []byte) {
 	if s.written == nil {
@@ -261,3 +276,63 @@ type scopingRunner struct {
 }
 
 func (r *scopingRunner) ScopeTo(directory string) { r.scoped = append(r.scoped, directory) }
+
+// TestGatedLaboratoryReusesOneSandboxAndOneCompilationDirectory holds the wiring
+// for docs/experiments/the-compile-is-per-file.md.
+//
+// The two halves are one change, and measuring them apart is what proved it. A
+// shared compilation directory alone bought nothing, because every batch linked
+// its own sandbox: Go's build IDs cover a package's directory, so nothing was
+// ever up to date however the output directory was chosen. The sandbox is what
+// makes the path stable, and the directory is what lets the toolchain's
+// up-to-date check then fire.
+func TestGatedLaboratoryReusesOneSandboxAndOneCompilationDirectory(t *testing.T) {
+	t.Parallel()
+
+	repository := &recordingRepository{}
+	runner := &sharingRunner{built: true}
+	lab := gatedlaboratory.NewWithRunner(&countingLaboratory{}, fakeTemporary{}, runner)
+
+	lab.TestAll(repository, mutantsOf(strings.Replace(source, "a > b", "a >= b", 1)))
+	lab.TestAll(repository, mutantsOf(strings.Replace(source, "a > b", "a <= b", 1)))
+
+	assert.Equal(t, 1, repository.links,
+		"two batches must share one sandbox, or the package paths differ and every build ID is new")
+
+	assert.Equal(t, 1, lab.CompilationDirectories(),
+		"two batches must share one compilation directory, or every batch pays a full module rebuild")
+
+	if len(runner.directories) != 2 {
+		t.Fatalf("the runner was told the compilation directory %d times, want once per batch", len(runner.directories))
+	}
+
+	assert.Equal(t, runner.directories[0], runner.directories[1],
+		"both batches must be given the same directory")
+
+	t.Cleanup(func() { _ = os.RemoveAll(runner.directories[0]) })
+}
+
+// recordingRepository counts how many sandboxes a run builds.
+type recordingRepository struct {
+	links int
+}
+
+func (r *recordingRepository) ListGoSourceFiles() []*gosourcefile.GoSourceFile { return nil }
+
+func (r *recordingRepository) LinkAllToTemporaryRepository(string) ditto.TemporaryRepository {
+	r.links++
+
+	return &fakeSandbox{}
+}
+
+// sharingRunner is a runner that accepts a compilation directory, which is what
+// the module-scope runner does.
+type sharingRunner struct {
+	fakeRunner
+
+	directories []string
+}
+
+func (r *sharingRunner) SetCompilationDirectory(directory string) {
+	r.directories = append(r.directories, directory)
+}
