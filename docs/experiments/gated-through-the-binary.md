@@ -49,22 +49,29 @@ Wall clock is reported and never gated; the counters the report prints are the c
 
 ## Results
 
-Measured 2026-09-18 from a complete `.git`-free disposable copy, with the binary built from that copy and pointed at a throwaway three-package module. Toolchain Go 1.27, windows/amd64.
+Measured 2026-09-18 from a complete `.git`-free disposable copy, with the binary built from that copy and pointed at a throwaway three-package module. Toolchain Go 1.27, windows/amd64. One warm-up round was discarded, then three measured rounds with the mode order rotated, and the ratio is computed **within** each round rather than across rounds — the machine is never idle, and a ratio taken inside one window cancels the load an absolute pair does not.
 
-| Mode | Wall clock | Total | Killed | Survived | Gate line |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Ordinary | 23,145 ms | 30 | 24 | 6 | — |
-| `--gated` | 7,361 ms | 30 | 24 | 6 | `30 of 30 mutants ran from one compilation` |
+| Round | Order | A ordinary | B `--gated` | B/A |
+| --- | --- | ---: | ---: | ---: |
+| 1 | A B | 22,959 ms | 7,349 ms | 0.3201 |
+| 2 | B A | 23,074 ms | 7,266 ms | 0.3149 |
+| 3 | A B | 23,190 ms | 7,424 ms | 0.3201 |
 
-Ratio: **7,361 / 23,145 = 0.318**, or **3.14× faster**.
+The three ratios span 0.3149 to 0.3201, a spread of 1.7%. Both modes reported 30 total, 24 killed and 6 survived, and the gated run reported `30 of 30 mutants ran from one compilation`.
+
+An earlier single pair — 23,145 ms against 7,361 ms, ratio 0.318 — was superseded by the rounds above rather than kept beside them. Two absolute numbers measured minutes apart in separate processes are not a measurement by this repository's own standard, whatever they happen to agree with.
 
 ### Controls
 
+**A warm-up was discarded — passed.** Each mode ran once before any round was recorded, so the toolchain and file caches were warm for every round below; without it the first mode in round 1 would have paid a cold start the other did not.
+
+**The mode order rotated — passed.** Round 2 ran the gated mode first. Both modes stayed inside their own narrow band across the rotation, which is what separates a real difference from one mode being favoured by position.
+
 **The fixture contains survivors — passed.** Six mutants survive in both modes, so the address comparison below is over six real survivor reports rather than over an empty list. The first version of this fixture produced zero survivors, which would have made that check vacuous.
 
-**The gated path actually engaged — passed.** The report says `30 of 30`, not `none`. The first run of this experiment said `none of 24`, and the cause was the fixture rather than the product: the generated sources had a trailing blank line, so they were not gofmt-formatted, and `schemata.Plan` refuses a difference that carries formatting. That is a real property of the product — a repository whose sources are not gofmt'd gets no gating at all — and it is reported rather than hidden.
+**The gated path actually engaged — passed.** The report says `30 of 30`, not `none`. The very first run of this experiment said `none of 24`, and the cause was the fixture rather than the product: the generated sources had a trailing blank line, so they were not gofmt-formatted, and `schemata.Plan` refuses a difference that carries formatting. That is a real property of the product — a repository whose sources are not gofmt'd gets no gating at all — and it is reported rather than hidden.
 
-**The fixture is green before mutation — passed.** `go test ./...` in the project passes before either run, so a red baseline cannot be mistaken for a killed mutant.
+**The fixture is green before mutation — passed.** `go test ./...` in the project passes before either mode runs, so a red baseline cannot be mistaken for a killed mutant.
 
 ### H1 corroborated
 
@@ -72,7 +79,7 @@ Totals, killed and survived are identical, and the sorted survivor addresses are
 
 ### H2 corroborated
 
-0.318 against a kill line of 0.50. The end-to-end gain is smaller than the 0.18-0.20 the mechanism showed in `module-scope-runner.md`, which is the expected direction: a release also pays for parsing, instrumentation, the sandbox, the progress line, and now one `test2json` conversion per killed selection, none of which the mechanism measurement contained.
+0.3149-0.3201 against a kill line of 0.50, and the three rounds agree to within 2% of each other. The end-to-end gain is smaller than the 0.18-0.20 the mechanism showed in `module-scope-runner.md`, which is the expected direction: a release also pays for parsing, instrumentation, the sandbox, the progress line, and now one `test2json` conversion per killed selection, none of which the mechanism measurement contained.
 
 ### H3 corroborated
 
@@ -82,7 +89,9 @@ The gate line reports `30 of 30`. A run that silently took the ordinary path can
 
 ## Conclusion
 
-The decision rule selects the third outcome: the gain is ratified. On a three-package module with a light suite, `--gated` produced the same verdicts and the same survivor addresses in about a third of the wall clock, through the shipped command rather than a harness.
+The decision rule selects the third outcome: the gain is ratified. On a three-package module with a light suite, `--gated` produced the same verdicts and the same survivor addresses in about a third of the wall clock, in every one of three rotated rounds, through the shipped command rather than a harness.
+
+What that number is allowed to mean is narrower than "ditto got 3.14 times faster", and the row that carries the claim is the case: this is a light suite, where the fixed cost of starting the test command dominates the bill. That is exactly the case the tool is built for, and it is not every case.
 
 No recorded counter moved as a result of this experiment: it measures a run, and the counters that gate this repository measure selection and the fixture. `perf/baseline.json` therefore stays where the previous entry left it.
 
@@ -92,4 +101,4 @@ A three-package module with a light suite is the case gating is for and also the
 
 This repository's own gate was not run. It is repository-sized, takes tens of minutes, and 24 of its mutants were added by the change under measurement; whether the module path buys those back is still unmeasured and is the next question rather than an implication of this one.
 
-The experiment also says nothing about `--confirm-kills`, whose module-path behavior the reason change enables but which no run here exercised.
+The experiment also says nothing about `--confirm-kills`, whose module-path behavior the reason change enables but which no run here exercised, and nothing about a deadline kill, which remains a separate open question.
