@@ -317,3 +317,27 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: The cost of computing the closure, which is one `go list` per release rather than per mutant and is paid on top of the discovery already done; whether the reduction reproduces through the shipped binary; and a repository whose packages form a single chain, where the closure is every package and the factor does not divide.
 - Next falsifiable step: Implement `ScopeTo` on the module runner behind an optional interface, compute the closure from `go list -deps -test -json ./...`, and fall back to the full scope whenever the mutated package cannot be resolved — then re-measure the ten-package fixture that showed the cliff.
 - Artifacts: `docs/experiments/dependency-closure.md`, `internal/perfbench/closure_experiment_test.go`.
+
+## 2026-09-18 — 014 — The closure is implemented, and the cliff bends
+
+- Status: advance
+- Revision: `cd24b12`
+- Model: `gpt-5.6-sol`
+- Question: Does the measured ceiling survive contact with the shipped path?
+- Prior hypothesis: running only the test binaries whose closure contains the mutated package divides `selections × packages` and bends the ten-package cliff without moving a verdict.
+- Intervention: `ScopeTo` on the module runner, called from `GatedLaboratory` through an optional `scopedRunner` interface; the closure comes from `go list -deps -test -json ./...`, filtered to the module's own packages; a scope that nothing resolves runs every package.
+- Control: RED captured behaviourally — with the scope stored but not applied, the guard failed with 4 executions against 3 — and seen refusing again with the filter disabled. The previous entry's shipped-runner control already tied the harness to the product.
+- Exact evidence:
+  - seven-package guard: 3 of 7 packages run for a mutation in the scoped package, sentinel still killed
+  - ten-package module, forty mutants, identical verdicts (20 killed / 20 survived):
+    - ordinary 64,103 ms
+    - gated before 42,686 ms, ratio 0.6649
+    - gated after 25,607 ms, ratio **0.3995**
+  - the full suite reached 501 tests; lint clean; counters green
+  - the ratchet moved 818 → 846 (+28), attributed per file: `module_scope.go` 28 → 54 (+26), `gatedlaboratory.go` 37 → 39 (+2)
+- Wall-clock observation: One run per mode, so the ratio is reported rather than relied on; the exact counters are the contract and the guard is what the change is judged on.
+- Verdict: The ceiling reproduced through the shipped binary, and the cliff bent from 0.6649 to 0.3995. The change is kept.
+- What changed: The module path no longer scales with the package count alone, which was the property that would have made `--gated` a trap on a real repository.
+- What remains unknown: This fixture is the best case for the closure — every package independent, so a mutation is observed by one package of ten. A repository whose packages form a chain gets less, and a single chain gets nothing. The closure's own cost is still unmeasured. And the ten-package ratio was taken once per mode rather than across rotated rounds.
+- Next falsifiable step: Re-run the ten-package comparison across rotated rounds, and measure the closure's own `go list` cost against the executions it removes on a repository whose layout is a chain rather than a fan.
+- Artifacts: `internal/gobuildrunner/module_scope.go`, `internal/gatedlaboratory/gatedlaboratory.go`, `perf/baseline.json`.
