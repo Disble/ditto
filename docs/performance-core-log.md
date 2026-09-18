@@ -466,3 +466,24 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: Whether one sandbox per release would stabilise the paths and let the check fire, which is the change that would actually collect the prize. It is bigger than the one just reverted and it is named rather than attempted.
 - Next falsifiable step: One sandbox per release instead of one per batch, and only then a shared compilation directory — in that order, because sharing the directory without stabilising the paths is the thing just measured to pay nothing.
 - Artifacts: `docs/experiments/the-compile-is-per-file.md`.
+
+## 2026-09-18 — 021 — One sandbox per release, and the prize was collected
+
+- Status: advance
+- Revision: `4e1c6bd`
+- Model: `gpt-5.6-sol`
+- Question: Was entry 020's zero a property of the change or of the order it was built in?
+- Prior hypothesis: sharing a compilation directory pays nothing while every batch links its own sandbox, because Go's build IDs cover the package directories; stabilising the path first would let the toolchain's up-to-date check fire and collect the price entry 019 measured.
+- Intervention: `GatedLaboratory` takes one sandbox and one compilation directory per release and reuses both across its batches. Reuse is safe because every batch restores the file it overwrote before returning, so the tree is pristine between batches.
+- Control: `CompilationDirectories()` is the integer, and the guard asserts one sandbox and one directory for two batches. The compilation-directory half was seen refusing earlier — `expected 1, actual 2` — when the sharing rule was deliberately broken.
+- Exact evidence:
+  - ten-package module, forty mutants, three rotated rounds: ordinary 64,583 / 65,964 / 64,006 ms; gated 14,620 / 14,708 / 14,798 ms; ratio **0.2264 / 0.2230 / 0.2312**
+  - the same fixture before this change: 0.4005 / 0.4040 / 0.3995
+  - identical verdicts every round: 40 total, 20 killed, 20 survived, `40 of 40 mutants ran from one compilation`
+  - full suite 502 tests; lint clean; ratchet 846 → 850, attributed per file (`gatedlaboratory.go` 39 → 42, `module_scope.go` 54 → 55)
+- Wall-clock observation: the gated run fell from 25.6 s to 14.6 s on the same fixture, an 11 s saving against the 12.4 s entry 019 priced. The prediction was a ceiling and the real figure came in just under it.
+- Verdict: Entry 020's zero was the order, not the change. The two halves are one change, and measuring them apart is what established that.
+- What changed: The module path now pays one module-wide compile per release instead of one per source file with mutants.
+- What remains unknown: Whether the same reuse helps the chain fixtures, which were not re-measured; and the same open items as before — deadline kills on the module path, a heavy suite, and this repository's own gate.
+- Next falsifiable step: Re-measure the two chain fixtures through the shipped binary, and time this repository's own gate scope with the module path against the ordinary one.
+- Artifacts: `docs/experiments/the-compile-is-per-file.md`, `docs/performance-core-metrics.md`.
