@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -192,5 +193,5 @@ func experimentEnvironmentWithMutant(environment []string, mutant int) []string 
 		}
 	}
 
-	return append(kept, "DITTO_MUTANT=1")
+	return append(kept, "DITTO_MUTANT="+strconv.Itoa(mutant))
 }
