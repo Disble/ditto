@@ -17,6 +17,7 @@ import (
 
 	"github.com/Disble/ditto/internal/cmdtestrunner"
 	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/gotoolchain"
 	"github.com/Disble/ditto/internal/result"
 )
 
@@ -82,7 +83,7 @@ var errEmptyModuleScope = errors.New("ditto: module scope discovered no packages
 
 // NewModuleScope returns a runner for the exact default ./... Go test scope.
 func NewModuleScope() *ModuleScopeRunner {
-	return &ModuleScopeRunner{toolchain: goToolchain()}
+	return &ModuleScopeRunner{toolchain: gotoolchain.Path()}
 }
 
 // Toolchain is the resolved Go executable, or empty when none could be found.
