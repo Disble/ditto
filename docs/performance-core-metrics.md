@@ -30,7 +30,7 @@ Contra el fixture sintético de seis archivos, salvo el último, que se mide con
 | `sandboxesBuiltPerRelease` | 1 | 1 |
 | `laboratoryRunsForOneChangedFunction` | 4 | 4 |
 | `laboratoryRunsForOneChangedFunctionInEachOfTwoFiles` | 8 | 8 |
-| `mutantsPerReleaseOnThisRepository` | 789 | **850** |
+| `mutantsPerReleaseOnThisRepository` | 789 | **873** |
 
 Los ocho primeros **no se movieron**, y eso es el resultado: la ruta optimizada es opt-in y no toca el camino que esos contadores miden.
 
@@ -42,12 +42,13 @@ El noveno subió, y cada salto está atribuido por archivo, no al cambio entero:
 | 813 → 818 (+5) | el motivo del veredicto en la ruta modular | `module_scope.go` 23 → 28 |
 | 818 → 846 (+28) | la clausura de observabilidad | `module_scope.go` 28 → 54, `gatedlaboratory.go` 37 → 39 |
 | 846 → 850 (+4) | un sandbox y un directorio de compilación por release | `gatedlaboratory.go` 39 → 42, `module_scope.go` 54 → 55 |
+| 850 → 873 (+23) | lotes de compilación por nombre de binario (la colisión, entrada 022 del log) | `module_scope.go` 55 → 78 — el 78 es aritmética (55 registrado + 23 medidos), no un conteo por archivo, porque no existe tal contador. Un estado anterior del mismo cambio contó 874; la extracción que dejó `prepare` dentro del límite `cyclop` del gate movió el conteo en uno, y el número anotado es el que el gate contó sobre el árbol commiteado |
 
 Cada suma coincide con lo que reportó el ratchet.
 
 ## 2. El mecanismo, aislado
 
-Fixture de 3 paquetes y 12 mutantes. Contadores exactos, sin tiempo de pared.
+Fixture de 3 paquetes y 12 mutantes, que ejecuta **4 binarios de prueba de paquete**. Contadores exactos, sin tiempo de pared. Corregido el 2026-09-18: esta sección llamaba al fixture un módulo de tres paquetes, pero lo que se ejecuta son cuatro binarios de prueba de paquete, y eso es lo que produce las 52 ejecuciones de la tabla.
 
 | Modo | Arranques del driver | Ejecuciones de paquetes | Veredictos |
 |---|---:|---:|---|
@@ -148,6 +149,27 @@ Decirlo sin adornos es parte del artefacto:
 
 ## 10. La afirmación que estos números sostienen
 
-> En un módulo de tres paquetes con suite ligera, `--gated` produce los mismos veredictos y las mismas direcciones de supervivientes en aproximadamente un tercio del tiempo de pared; en uno de diez paquetes, en aproximadamente dos quintos, después de la clausura de observabilidad.
+> En un módulo de tres paquetes con suite ligera, `--gated` produce los mismos veredictos y las mismas direcciones de supervivientes en aproximadamente un tercio del tiempo de pared; en uno de diez paquetes, en aproximadamente 0,22–0,23 del tiempo de pared, después de la clausura de observabilidad y de un sandbox y un directorio de compilación por release.
+
+Corregido el 2026-09-18: esta afirmación cerraba con «aproximadamente dos quintos», que era el número de la clausura sola (0,4005–0,4040). La sección 4 ya registra 0,2230–0,2312 después del sandbox y del directorio de compilación compartidos, así que la afirmación ahora lleva ese número y su condición.
 
 Todo lo que va más allá de eso —"ditto es N veces más rápido"— no está medido y no se afirma.
+
+## 11. La colisión de nombres de binarios, encontrada y arreglada (2026-09-18)
+
+La ruta modular nombraba los binarios de prueba sólo desde `path.Base(importPath)`, así que en ditto mismo `github.com/Disble/ditto`, `.../cmd/ditto` y `.../internal/ditto` producían todos `ditto.test.exe` (`dittotesting` colisionaba dos veces). El runner rehusaba el módulo entero (`Built=false`, `Compilations=0`, `PackageRuns=0`, `module test binary name collision`), y el gating modular sobre ditto gateó **0 de 850 mutantes** aunque `schemata` puede expresar 517 de ellos (60,8%), medido por `internal/perfbench/gating_test.go` sobre una copia sin `.git` de `85f2ea7`.
+
+El arreglo agrupa los paquetes en lotes de compilación por nombre de binario (case-folded en Windows), cada lote escribe en su propio `batch-N` bajo el directorio de salida del release, y la unión de los argumentos de los lotes es el alcance descubierto — porque `go list -deps -test -json ./...` no hace type-check, y un argumento que no compile falla cerrado en vez de pasar en silencio.
+
+Control y evidencia a través del binario, sobre un módulo desechable con colisión (dos paquetes que ambos producen `pay.test.exe`, 21 mutantes, `--threshold 0`):
+
+| Momento | Total / killed / survived | Línea `Gated:` |
+|---|---:|---|
+| Binario anterior, mismo fixture | 21 / 15 / 6 | `none of 21 mutants ran from one compilation; 21 kept their own.` |
+| Binario con el arreglo | 21 / 15 / 6 | `12 of 21 mutants ran from one compilation; 9 kept their own.` |
+
+Las seis direcciones de supervivientes ordenadas son byte a byte iguales entre las dos rutas (sha256 `c1957c66a5268e8a2d6d52667abdd353158648d4ce134ea6d74918f4ddb7e8ec`), y las pruebas de los dos paquetes se probaron corriendo desde `batch-0/pay.test.exe` y `batch-1/pay.test.exe`.
+
+Costo: un módulo con colisión paga una invocación de compilación por lote en colisión (en ditto son tres lotes); un módulo sin colisión sigue pagando exactamente una. El ratchet se movió 850 → 873 (+23), todo en `module_scope.go` (sección 1).
+
+**Lo que NO está medido:** la proporción gateada realizada sobre el propio árbol de ditto. Un release acotado sobre `internal/fstemporarydir` (20 mutantes contra una suite de ~70 s por re-ejecución) murió por su propio presupuesto de tiempo después de la línea base y antes de cualquier veredicto, así que no se leyó ninguna línea `Gated:` para el árbol de ditto. Lo que sí está medido en ditto mismo es que la ruta modular ya compila: el runner real sobre una copia sin `.git` de este árbol reporta `Built=true`, `Discoveries=1`, `ToolchainStarts=4`, `Compilations=3`, `PackageRuns=45`, `SkippedPackages=0`, sin texto de error, en 94,3 s — contra `Built=false` y `Compilations=0` antes del arreglo. El techo sintáctico es 517 de 850; lo realizado queda sin medir.
