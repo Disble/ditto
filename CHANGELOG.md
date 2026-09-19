@@ -4,6 +4,48 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-09-19
+
+### Changed
+
+- **`Gated()` answers the question the test command asks, not the one the
+  mutated file's package does.** It used to compile the mutated file's own
+  package with `go test -c`, which is a narrower question than the default
+  `go test -count=1 ./...`: a mutant in package P that only a test in a package
+  importing P can kill survived it, and nothing in the output could see the
+  difference — the survivor addresses matched, the totals could match, and the
+  run was faster either way. A gated run now discovers the module's package
+  layout once, compiles the complete default scope's test binaries, and runs
+  each of them for every selected mutant.
+
+  Gating replaces only the commands whose complete execution plan has been
+  measured: `go test -count=1 ./...` and its built-in `-json` form in either
+  flag order. Any custom or unsupported `WithTestCommand` — a package-local
+  scope, an extra flag, extra spacing, an alternate executable — keeps the
+  ordinary laboratory and the runner exactly as configured, counted as fallen
+  back, instead of silently receiving a package-local `go test -c` it never
+  asked for. The set is closed on purpose: a command that is almost the default
+  is not the default.
+
+  This is a behavior change for anyone who paired `Gated()` with a custom test
+  command: they now get their own command. That is the point — the old behavior
+  answered a smaller question than they asked.
+
+  It stays opt-in, and no speedup is claimed here that was not measured; the
+  experiment notes record what the gated path costs and where its gains stop.
+
+### Fixed
+
+- **A module whose test binaries share a basename gates instead of refusing.**
+  The module-scope runner named every test binary after its package, so on a
+  tree where two packages produced the same name — a root module, `cmd/x` and
+  `internal/x` all build `x.test` — it refused before compiling anything,
+  Gated() fell back for every file, and the repository gated nothing while
+  looking like any other gated run. Packages are now planned into batches free
+  of name collisions (case-folded on Windows, where the filesystem is), and
+  each batch compiles into its own directory. A collision-free module still
+  plans exactly one batch, so the one-compilation win is unchanged.
+
 ## [0.10.0] - 2026-08-30
 
 ### Fixed
@@ -703,6 +745,7 @@ here, not yet built.
 - The `retract` block. It named published versions of the upstream module path,
   which do not exist under this one.
 
+[0.11.0]: https://github.com/Disble/ditto/releases/tag/v0.11.0
 [0.10.0]: https://github.com/Disble/ditto/releases/tag/v0.10.0
 [0.9.0]: https://github.com/Disble/ditto/releases/tag/v0.9.0
 [0.8.0]: https://github.com/Disble/ditto/releases/tag/v0.8.0

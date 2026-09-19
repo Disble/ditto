@@ -511,3 +511,120 @@ This file exists so a later session or a different model can continue from evide
 - What remains unknown: the realized gated share on ditto (the syntactic ceiling is 517 of 850); the phase split after the shared sandbox change, which was never re-measured; whether compiling three batches per release costs anything measurable on a real tree; the deadline-kill and heavy-suite items the earlier entries left open.
 - Next falsifiable step: a bounded release over ditto's own tree with at most three mutants, reading the `Gated:` line and comparing totals and survivor addresses against the ordinary path; then re-measure the phase split.
 - Artifacts: `internal/gobuildrunner/module_scope.go`, its two test files, `perf/baseline.json`, this entry.
+
+## 2026-09-18 — 023 — A three-mutant real-tree release engages the repaired module path
+
+- Status: advance
+- Revision: `5320273232f5993a06ff96c47887cffd5c8a032f` (tree `dc85e4232f422e1eba41054577ffef2551a22177`)
+- Model: `gpt-5.6-sol` with a delegated read-only mapper
+- Question: After the collision fix, does a bounded release over ditto's own tree actually engage module-scope gating and preserve the ordinary path's scored verdicts, non-viable classification, mutant identities, and a real survivor address?
+- Prior hypothesis: A range with two statically gateable mutants and one refused mutant will report `Gated: 2 of 3`, keep the refused mutant on the ordinary path, and produce the same observable result as the wholly ordinary run.
+- Intervention: Built the shipped binary from a complete `.git`-free archive of the revision above (sha256 `572ea5104f5355201608f84b54a1cfa9d8b896a2e3a7ec6aa37a644a7318edc5`), initialized a self-contained scratch Git repository from the same archive, and staged only a semantics-neutral comment on `internal/schemata/gate.go:148`. `ditto staged --dry` selected bytes `4961-5031`. Static planning found exactly three mutants: `148:28 Comparison Invert` selector 1, `148:22 Comparison Replace` selector 2, and `148:38 Comparison Replace` selector 0.
+- Control: The ordinary and gated shipped-binary runs used the same staged tree, default `go test -count=1 -json ./...` scope, threshold zero, and no parallel execution. Mutation never ran in the source worktree, which remained on the recorded revision with only the deliberate untracked `odd/` directory.
+- Exact evidence:
+  - ordinary: 3 generated, 2 scored, 1 killed, 1 survived, 1 never compiled, exit 0
+  - gated: the same counts and classifications, exit 0, plus `Gated: 2 of 3 mutants ran from one compilation; 1 kept their own.`
+  - sorted generated-mutant identity lines are byte-identical, sha256 `abd0fd8a6eb4c6a86133602d127c441355d19d6cb1870fcc20bbcd7b8a1e3592`
+  - the non-empty sorted survivor lines are byte-identical, sha256 `4e16653a546ae42ce441c8272932cf612ec8b51d2171369e2fb9f15869294d6e`; the survivor is `internal/schemata/gate.go:148:22 → Comparison Replace (found != nil → true)`
+  - cleanup before the experiment removed 99 top-level temporary directories matching ditto's owned prefixes and left zero; the experiment itself left five `ditto-fakesandbox-*` directories plus its scratch directory, and final cleanup after independent readback removed all six and again left zero
+- Wall-clock observation: ordinary took 186 s after a 1m5.832s baseline; gated took 304 s after a 1m11.832s baseline, a reported ratio of 1.6344. There were no rotated rounds, so this is not a performance claim. It does show that three collision batches are not repaid by this two-gated-mutant sample.
+- Verdict: The hypothesis is corroborated for this bounded sample. In this one real byte range, 2 of 3 generated mutants engaged the repaired module path, the refused mutant stayed on the ordinary path, and every observable classification and address compared here is identical. This is not an estimate of the whole tree's realized share and does not replace the 517-of-850 syntactic ceiling.
+- What changed: The existence and fidelity question left open by entry 022 is closed for one real, survivor-bearing, three-mutant range. The repository-wide realized distribution and wall-clock crossover remain open.
+- What remains unknown: The realized gated share across all 873 current mutants; the phase split after the shared sandbox change; the three-batch cost curve beyond this tiny sample; deadline kills on the module path; and a heavy suite.
+- Next falsifiable step: Re-measure the phase split on this bounded range, then vary the gateable batch size enough to find whether and where the three-batch compile cost is repaid. Do not infer that crossover from this single unrotated pair.
+- Artifacts: `docs/performance-core-metrics.md` §12, `odd/tasks/module-scope-core.md`, this entry.
+
+## 2026-09-18 — 024 — The real fail-fast denominator rejects both isolated levers
+
+- Status: direction change
+- Revision: `5320273232f5993a06ff96c47887cffd5c8a032f` (tree `dc85e4232f422e1eba41054577ffef2551a22177`)
+- Model: `gpt-5.6-sol` with delegated exploration and independent verification
+- Question: Does the current module-scope architecture still advance the primary end-to-end objective when compared with the fail-fast command shape that real gates pay, rather than with the unconfigured whole-suite-per-mutant default?
+- Prior hypothesis and decision rule: On entry 023's exact three-mutant range, `go test -count=1 -json -failfast ./...` must preserve generated/scored/killed/survived/non-viable counts plus mutant and survivor lines. If it takes at most half the ordinary default's 186 s (≤93 s), pivot to preserving/admitting fail-fast. The current module path remains the primary direction only if its recorded 304 s beats fail-fast by at least 30%. With the same custom command and `--gated`, `scopeOf` must disable module gating and print `none of 3`; engagement would invalidate the reach analysis.
+- Intervention: Rebuilt the shipped binary from a complete `.git`-free archive of the recorded revision (binary sha256 `ae2dd35d8037856401dac6fe7f751b353d087e9b686dcaf261407a73fa3defdd`), recreated the self-contained scratch repository, and staged the same semantics-neutral comment selecting `internal/schemata/gate.go` bytes `4961-5031`. Ran the custom fail-fast command once ordinarily and once with `--gated`; no mutation ran in the source worktree.
+- Exact evidence:
+  - both fail-fast arms: 3 generated, 2 scored, 1 killed, 1 survived, 1 never compiled, exit 0
+  - sorted generated-mutant identity lines match each other and entry 023, sha256 `abd0fd8a6eb4c6a86133602d127c441355d19d6cb1870fcc20bbcd7b8a1e3592`
+  - the non-empty survivor line matches each other and entry 023, sha256 `4e16653a546ae42ce441c8272932cf612ec8b51d2171369e2fb9f15869294d6e`
+  - the reach control printed exactly `Gated: none of 3 mutants ran from one compilation; 3 kept their own.`
+  - independent readback reproduced every count, hash, elapsed value, ratio and repository identity; final cleanup removed four run residues plus the scratch directory and left zero matching temporaries
+- Wall-clock observation: fail-fast ordinary took 163 s after a 1m7.03s baseline; the disabled-gating reach control took 162 s after a 1m6.736s baseline. Against entry 023, fail-fast/default is 0.8763, fail-fast/current-gated is 0.5362, and current-gated/fail-fast is 1.8650. These are single unrotated observations; their role is to apply the wide pre-registered decision thresholds, not to publish a stable speed ratio.
+- Verdict: Both isolated branches fail. Fail-fast preserved every compared observable but missed the ≤93 s drastic-win threshold by 70 s. The current module path did not beat fail-fast by 30%; it was 86.5% slower. The reach control corroborates why: the configured fail-fast command cannot use the module path at all. Neither polishing the existing module path against the default command nor presenting fail-fast alone as the answer serves the primary objective.
+- What changed: Phase profiling the current gated path is stopped. The next candidate must combine the two useful properties rather than choose between them: shared compilation plus the configured command's fail-fast semantics. That means a disposable prototype which carries fail-fast through admission, passes it to package test binaries, and stops observer-package execution after the first killing failure; only measured fidelity and end-to-end cost can promote it to production.
+- What remains unknown: Whether combined semantics can preserve reasons, non-viable classification and survivor addresses; whether its fixed three-batch cost amortizes on a representative staged scope; and whether package-local commands such as dharness's can ever use a scope-faithful shared build.
+- Next falsifiable step: Prototype combined fail-fast module execution only in a disposable copy, then compare it against the fail-fast ordinary baseline on a real staged scope large enough to amortize three compile batches. Kill the direction on any observable mismatch or unless it delivers at least a 30% end-to-end win against fail-fast.
+- Artifacts: `docs/performance-core-metrics.md` §13, `odd/tasks/module-scope-core.md`, this entry.
+
+## 2026-09-18 — 025 — Shared compilation plus fail-fast removes work and still loses
+
+- Status: direction closed
+- Revision: `5320273232f5993a06ff96c47887cffd5c8a032f` (tree `dc85e4232f422e1eba41054577ffef2551a22177`)
+- Model: `gpt-5.6-sol` with delegated mapping and independent verification
+- Question: Can a disposable module runner that carries fail-fast through exact command admission, package test binaries, and observer-package early stop beat ordinary fail-fast by at least 30% end to end on a real ten-mutant staged scope while preserving the complete answer?
+- Prior hypothesis: The combined runner will preserve composition, identities, non-empty survivor addresses and reason multisets; stop real observer-package work; and achieve `T_combined/T_ordinary_failfast <= 0.70` in every rotated measured round.
+- Intervention: In a `.git`-free tool copy only, admitted exactly `go test -count=1 -json -failfast ./...`, passed `-test.failfast` to package binaries, and stopped later observer binaries after the first failing package. The mutation target was a separate self-contained repository from the same archive, with semantics-neutral comments staging lines 163 and 167 of `internal/schemata/instrument.go`. Static planning confirmed exactly ten generated mutants and ten non-zero selectors. The final throwaway patch sha256 is `8bbd3d628bddf3a76b8ef9afa1281c15bf48a8ea3f9dd81254d448d678549e51`; prototype binary sha256 is `d2253e90a190a9bfe1762b361a4f7ebe39cfa9cb61f3158d98a9b0481de0d88a` on Go 1.27.0 windows/amd64.
+- Controls: The unmodified reach control reported `none of 10`; an intentionally wrong default runner produced RED because its later test ran; the fail-fast constructor made it GREEN; disabling early stop restored one package run with the same verdict; default complete-scope and red-package continuation stayed unchanged; discovery/build/missing-binary/empty-scope/type-error paths still failed closed; and an expected stopped count of 999 refused against actual 1.
+- Exact evidence:
+  - every measured run: 10 total / 8 killed / 2 survived, zero non-viable; combined `Gated: 10 of 10`, zero fallback
+  - all six sorted mutant sets byte-identical, sha256 `19d0375420ff2925715423c320eb041b309e79d04d5b6c3eca27159f0630bf92`
+  - both non-empty survivor lines byte-identical, sha256 `4d9c3c8bb9b82aea147d1236cc76e07d55fa8761d6dd10f548f2683a5599ce26`
+  - sorted reason records byte-identical, sha256 `fbdda8119b0e46eb5c8f943f06af50754f25fa26b3bc233b06028939f3f5b4af`: 8 assertion kills and 2 unknown survivor reasons
+  - every combined round: 11 selections, 1 discovery, 4 toolchain starts, 3 compilations, 221 package runs, 208 stopped packages, 66 closure skips, 8 converter starts
+  - independent readback reproduced the scope, controls, compositions, hashes, counters, order and ratios; the source worktree had no code changes
+  - final cleanup removed 40 experiment directories, including the throwaway tool/target and run residues, and left zero matching temporaries
+- Wall-clock observation: discarded warm-ups were 622 s ordinary and 692 s combined. Measured rounds, rotating order: 623/703 s (ratio 1.1284), 662/715 s (1.0801), and 676/705 s (1.0429), ordinary/combined respectively. Combined was slower in all three rounds.
+- Verdict: H1 fidelity corroborated; H2 work removal corroborated; H3 drastic gain refuted. Under the registered decision rule, module-path optimisation stops as the primary direction. The result is stronger than “the threshold was missed”: the prototype removed 208 exact package starts and still increased end-to-end latency every time, so that counter is not a sufficient proxy for the user's cost on this workload.
+- What changed: No production code is promoted. Collision batching, closure, shared sandboxes and fail-fast early stopping may remain correct mechanisms, but continuing to refine their module path no longer serves the main objective without a new experiment that changes the end-to-end cost model.
+- What remains unknown: Which phase makes the combined path slower; package-local dharness compatibility; repository-wide latency; other operating systems; and whether a sound below-package test-selection mechanism can remove the test execution that now dominates the bill.
+- Next falsifiable step: Return to the primary question before writing code. A new candidate must remove test execution itself, not only driver or package orchestration, and must pre-register fidelity plus a ≥30% end-to-end win against ordinary fail-fast on the same real staged scope. Until such a candidate is named, there is no implementation step.
+- Artifacts: `docs/experiments/module-failfast-prototype.md`, `docs/performance-core-metrics.md` §14, `docs/learning-log.md`, `odd/tasks/module-scope-core.md`, this entry.
+
+## 2026-09-18 — 026 — Configured tests are 99.3% of the run, so no precision-preserving range remains
+
+- Status: branch closed for now
+- Revision: `5320273232f5993a06ff96c47887cffd5c8a032f` (tree `dc85e4232f422e1eba41054577ffef2551a22177`)
+- Model: `gpt-5.6-sol` with independent verification
+- Question: With the complete configured suite still required for every viable mutant, what fraction of one ordinary fail-fast staged run is spent inside the configured test command, and therefore how much precision-preserving headroom is left inside ditto?
+- Prior hypothesis: Repeat task 8's ten-mutant scope, time only the existing `internal/cmdtestrunner` process boundary, and require exactly eleven records per run; if the configured command consumes at least 90% in all three valid rounds, record that safe headroom is at most 10% and close the branch.
+- Intervention: In a `.git`-free tool copy only, added two env-gated observation hooks — monotonic timing around `CombinedOutput` in `CMDTestRunner.Test`, and a diagnostic reason dump in `ConsoleReporter` — plus the existing static-planning probe. Nothing about arguments, environment filtering, deadline, sandbox, mutation or rendering changed. The mutation target was a separate self-contained repository from the same archive, staging lines 163 and 167 of `internal/schemata/instrument.go`.
+- Controls: dry ranges and the ten-mutant/tengateable static plan matched task 8 exactly; every run produced eleven positive invocations numbered 1–11 (three passed, eight failed) with command time strictly below end-to-end time; an expected-twelve shell check refused against the real eleven; a separate verifier recomputed every sum, total, share, residual and hash and confirmed the note had not been back-filled.
+- Exact evidence:
+  - warm-up: 621.148 s of 623.400 s, share **0.996388**, residual upper bound 2.252 s
+  - round 1: 618.717 s of 623.011 s, share **0.993109**, residual upper bound 4.293 s
+  - round 2: 644.116 s of 648.537 s, share **0.993183**, residual upper bound 4.421 s
+  - round 3: 601.268 s of 605.427 s, share **0.993131**, residual upper bound 4.159 s
+  - every measured run: 10 total / 8 killed / 2 survived, score 0.80, with the task-8 hashes reproduced — mutants `19d0375420ff2925715423c320eb041b309e79d04d5b6c3eca27159f0630bf92`, survivors `4d9c3c8bb9b82aea147d1236cc76e07d55fa8761d6dd10f548f2683a5599ce26`, sorted reasons `fbdda8119b0e46eb5c8f943f06af50754f25fa26b3bc233b06028939f3f5b4af`
+  - source worktree HEAD unchanged, no source file differs, index empty, `git diff --check` clean
+- Wall-clock observation: the non-test residual is 2.252–4.421 s over runs of 605–649 s. It is reported as an upper bound on everything outside the configured command, not as ditto's own overhead: it also contains process setup and teardown, shell and timestamp reads, staging before the first invocation, reporting after the last, and machine noise. Nothing here attributes those seconds to any component.
+- Verdict: H1 and H2 corroborated. On this real staged scope the configured test command is 99.3% of end-to-end time. With the invariant that every viable mutant runs the complete configured suite, and that verdicts, reasons, survivor addresses and non-viable classification cannot move, **no measured precision-preserving performance range remains for now.** The only path this branch had to a drastic gain was running fewer tests, and that was explicitly refused as a trade against accuracy.
+- What changed: The performance branch is closed rather than continued. Collision batching, dependency closure, shared sandboxes and fail-fast early stop remain correct measured mechanisms, and the fail-fast denominator is now the only honest baseline for any future claim, but none of them moves the dominant term.
+- What remains unknown: Whether the 99.3% share holds at repository size, on a heavy suite, on other platforms, or for the whole gate; where inside the small residual the time goes; and whether any future mechanism can reduce suite execution itself without weakening the answer.
+- Next falsifiable step: None inside this branch. A future attempt must first name a mechanism that removes test execution while guaranteeing the same verdicts, and pre-register its fidelity evidence plus a ≥30% end-to-end win against ordinary fail-fast before writing code. Until such a mechanism is named and proven sound, there is no implementation step.
+- Artifacts: `docs/experiments/failfast-cost-ceiling.md`, `docs/performance-core-metrics.md` §15, `docs/learning-log.md`, `odd/tasks/module-scope-core.md`, this entry.
+
+## 2026-09-19 — 027 — Two explicit workers overlap correctly and recover only 5.62%
+
+- Status: direction closed by registered threshold
+- Revision: `5320273232f5993a06ff96c47887cffd5c8a032f` (tree `dc85e4232f422e1eba41054577ffef2551a22177`)
+- Model: `gpt-5.6-sol`; package-owned subagent verification unavailable because the Pi session was rooted in another clone, with an independent raw-artifact parsing pass instead
+- Question: Can bounded outer mutant concurrency reduce end-to-end fail-fast latency enough to justify memory-adaptive scheduling while preserving the complete answer and laptop memory headroom?
+- Prior hypothesis: An explicit scheduler at two workers will reach exactly two overlapping configured commands, preserve composition/identities/survivor/reasons, and achieve `T_two/T_one <= 0.75` in every valid paired round. A third worker and dynamic admission are conditional on that result.
+- Intervention: The incumbent `Parallel()` path was tested first and refuted as a usable base: under the real verbose host invocation, `VerboseLaboratory.TestAll` completed the inner fallback batch before parallel reporting subtests continued, so requested host `-parallel=2` still measured maximum active command count 1. A second pre-registered disposable intervention bypassed that interface interaction, submitted every ordinary mutant to indexed futures, and admitted delegate calls through an explicit worker limit. No source-worktree code was built, tested or mutated.
+- Controls:
+  - the focused reach check was RED at maximum 1 before the scheduler and GREEN at maximum 2 afterward
+  - forcing permit capacity back to 1 manually killed the reach test; restoring it returned green
+  - workers deliberately completed second/third/first while indexed results remained first/second/third
+  - the real scope in every valid arm reproduced 3 generated / 2 scored / 1 assertion kill / 1 survivor / 1 non-viable, diagnostic sha256 `6c9f12c7958a3bbda54af6c3a1c08fe43f2a5ceb03ac2cd1c06d597de881f874`, four balanced command starts/ends and a green baseline
+  - Windows telemetry assigned the tree to a Job Object, produced positive samples with zero errors, retained the 2 GiB/15% headroom by a wide margin, and emitted no low-memory notification
+- Exact evidence:
+  - discarded warm-ups: one worker 165.707 s / maximum active 1; two workers 156.118 s / maximum active 2
+  - first valid pair, order one then two: one worker 163.748 s / maximum active 1 / minimum available 15,137,050,624 B / peak job 3,655,745,536 B; two workers 154.543 s / maximum active 2 / minimum available 17,354,833,920 B / peak job 3,757,441,024 B
+  - valid paired ratio `154.5428993 / 163.7481779 = 0.943784`, a **5.62%** reduction against the registered `<=0.75` requirement
+  - sorted mutant-command durations increased from 2.711 / 27.309 / 64.069 s serial to 12.727 / 50.439 / 72.611 s overlapped; this is timing arithmetic, not a claim about which shared resource caused it
+  - the raw-artifact parsing pass independently re-derived every start/end count, max-active value, composition, hash, memory invariant and ratio; tracked Go source stayed unchanged and the index stayed empty
+- Wall-clock observation: two real configured commands did overlap, but most of the theoretical benefit disappeared inside longer command durations. The experiment does not identify whether CPU, disk, Go build/test internal parallelism, cache contention or another shared resource caused those increases.
+- Verdict: H1 reach/fidelity corroborated. H2 meaningful gain refuted by the first valid ratio, whose registered kill line was any round above 0.75. H3 (third worker) and H4 (adaptive admission) were blocked by H2 and not run; the reason was insufficient value, not memory pressure. Remaining rounds were stopped once H2's irreversible kill line fired.
+- What changed: The old claim “parallelism is not a direction” now has direct Ditto evidence rather than only saturation experience: a custom Go scheduler can make it correct and memory-safe on this fixture, but two workers saved only 5.62%. No production code is promoted.
+- What remains unknown: larger or less internally parallel suites; repository-sized scaling; the cause of per-command slowdown; mode 3; shipped-CLI integration; Linux and gated-path concurrency.
+- Next falsifiable step: none for adaptive admission on this workload. Reopen only with a named population whose configured command leaves independent CPU/I/O capacity and a pre-registered result that can overturn this 5.62% outcome; otherwise the controller would add complexity around a lever that did not earn it.
+- Artifacts: `docs/experiments/adaptive-parallelism-poc.md`, `docs/experiments/explicit-adaptive-scheduler-poc.md`, `docs/performance-core-metrics.md` §16, `docs/learning-log.md`, `odd/tasks/adaptive-parallelism-poc.md`, this entry.

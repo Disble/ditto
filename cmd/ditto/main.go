@@ -126,7 +126,7 @@ func runCommand(args []string) error {
 	root := flags.String("root", ".", "repository root to mutate")
 	testCommand := flags.String("test-command", "go test -count=1 -json ./...", testCommandHelp)
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
-	gated := flags.Bool("gated", false, "run a file's mutants from one compilation instead of one each")
+	gated := flags.Bool("gated", false, gatedHelp)
 	confirm := flags.Bool("confirm-kills", false, confirmKillsHelp)
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
 	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
@@ -204,7 +204,7 @@ func stagedCommand(args []string, out io.Writer) error {
 	testCommand := flags.String("test-command", "go test -count=1 -json ./...", testCommandHelp)
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
 	dry := flags.Bool("dry", false, "report what the staged change justifies and run nothing")
-	gated := flags.Bool("gated", false, "run a file's mutants from one compilation instead of one each")
+	gated := flags.Bool("gated", false, gatedHelp)
 	confirm := flags.Bool("confirm-kills", false, confirmKillsHelp)
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
 	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
@@ -288,7 +288,7 @@ func changedCommand(args []string, out io.Writer) error {
 	testCommand := flags.String("test-command", "go test -count=1 -json ./...", testCommandHelp)
 	threshold := flags.Float64("threshold", 1.0, "minimum mutation score, from 0 to 1")
 	dry := flags.Bool("dry", false, "report what the change justifies and run nothing")
-	gated := flags.Bool("gated", false, "run a file's mutants from one compilation instead of one each")
+	gated := flags.Bool("gated", false, gatedHelp)
 	confirm := flags.Bool("confirm-kills", false, confirmKillsHelp)
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
 	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
@@ -432,6 +432,24 @@ const testCommandHelp = "the `command` that decides whether a mutant died. It ru
 	"sequentially, so ./... costs your whole suite times your mutant count -- name the package " +
 	"that owns the change instead. -json is what lets ditto say WHY a mutant died; without it a " +
 	"mutant that never compiled is counted as killed"
+
+// gatedHelp is the description of --gated on all three subcommands, one
+// constant so the three cannot drift apart.
+//
+// The behavior it describes changed in 0.11.0 and the old line described the
+// behavior that went away: Gated() no longer compiles "a file's" package -- it
+// compiles the complete module scope, and only when the configured command is
+// the exact default, in either -json order. A custom command keeps its own
+// ordinary path, which is the part a reader pairing --gated with
+// --test-command most needs to know at the moment of typing.
+//
+// No backquoted word anywhere in this string: flag.PrintDefaults takes the
+// first one as the flag's VALUE NAME, and --gated is a bool flag that must
+// never render as taking an argument.
+const gatedHelp = "run the module's mutants from one compilation instead of one test-command start " +
+	"each (750-950 ms per start). Only the exact default command go test -count=1 ./... -- with or " +
+	"without -json -- is gated; any custom --test-command keeps its ordinary path, and mutants that " +
+	"cannot be gated keep their own"
 
 // confirmKillsHelp names the cost as well as the behaviour, for the reason
 // testCommandHelp does.

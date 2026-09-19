@@ -106,6 +106,49 @@ func TestTestCommandHelpRendersItsValueName(t *testing.T) {
 	assert.NotContains(t, rendered.String(), "-test-command ./...")
 }
 
+// TestGatedHelpCopy pins what --gated's -h line promises, because the behavior
+// behind the flag changed in 0.11.0: Gated() now answers the complete module
+// scope and only the exact default commands, so the previous wording -- "run a
+// file's mutants from one compilation" -- described a package-local build that
+// no longer exists, on all three subcommands at once.
+func TestGatedHelpCopy(t *testing.T) {
+	t.Run("says the scope is the whole module", func(t *testing.T) {
+		assert.Contains(t, gatedHelp, "module")
+	})
+
+	t.Run("names the exact commands that are eligible", func(t *testing.T) {
+		assert.Contains(t, gatedHelp, "go test -count=1 ./...")
+		assert.Contains(t, gatedHelp, "-json")
+	})
+
+	t.Run("says a custom test command keeps its own path", func(t *testing.T) {
+		assert.Contains(t, gatedHelp, "custom")
+	})
+
+	// The old line promised one compilation for "a file's" mutants, which was
+	// the package-scope behavior. Nothing in the help may claim it again.
+	t.Run("does not name the mutated file as the compilation unit", func(t *testing.T) {
+		assert.NotContains(t, gatedHelp, "a file's mutants")
+	})
+}
+
+// TestGatedHelpRendersWithoutAValueName is the same guard
+// TestTestCommandHelpRendersItsValueName holds: the first backquoted word in a
+// usage string becomes the flag's VALUE NAME, and --gated is a bool flag that
+// must never render as though it takes one. A backtick anywhere in gatedHelp
+// would silently turn `-gated` into `-gated something`.
+func TestGatedHelpRendersWithoutAValueName(t *testing.T) {
+	rendered := &bytes.Buffer{}
+
+	flags := flag.NewFlagSet("ditto run", flag.ContinueOnError)
+	flags.SetOutput(rendered)
+	flags.Bool("gated", false, gatedHelp)
+	flags.PrintDefaults()
+
+	assert.Contains(t, rendered.String(), "-gated")
+	assert.NotContains(t, rendered.String(), "-gated ", "a value name rendered after the bool flag")
+}
+
 // TestChangedRefusesToGuessABase covers the one decision `changed` deliberately
 // does not make for you. There is no default that is right on a CI checkout, in
 // a working tree and on a branch at once, and a base guessed wrong is either a
