@@ -330,6 +330,28 @@ func TestValidateBatchesRefusesDuplicateNamesAmongUntestedPackages(t *testing.T)
 	require.ErrorIs(t, validateBatches(batches, "linux"), errBinaryNameCollision)
 }
 
+// TestValidateBatchesCaseFoldsOnlyOnWindows is the validator's own half of the
+// collision key, and it is what makes validateBatches testable on the Linux-only
+// CI matrix. Windows resolves `Calc.test.exe` and `calc.test.exe` to one file and
+// refuses both in one argument list, so the two packages cannot share a batch;
+// Linux keeps them apart and the batch is legal. Dropping the target OS from the
+// validator would leave its key function covered only through planning.
+func TestValidateBatchesCaseFoldsOnlyOnWindows(t *testing.T) {
+	t.Parallel()
+
+	batches := [][]modulePackage{
+		{
+			{importPath: "fixture/first/Calc", hasTests: true},
+			{importPath: "fixture/second/calc", hasTests: true},
+		},
+	}
+
+	require.ErrorIs(t, validateBatches(batches, "windows"), errBinaryNameCollision,
+		"a case-insensitive filesystem gives both packages one test binary")
+	assert.NoError(t, validateBatches(batches, "linux"),
+		"a case-sensitive filesystem keeps them apart")
+}
+
 // TestValidateBatchesAcceptsDistinctBatches previously owned the opposite
 // untested-package behaviour: its library case demonstrated that packages
 // without tests are invisible to validation. They now carry collision keys and

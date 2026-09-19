@@ -590,6 +590,11 @@ func planCompileBatches(packages []modulePackage, goos string) [][]modulePackage
 // tested or not, since one batch is one argument list — is unique.
 // It is the reachable form of errBinaryNameCollision, and firing it means an
 // internal defect in planning, never a property of the module under test.
+//
+// The target OS is a parameter rather than a read of runtime.GOOS, the way it
+// is in moduleTestBinaryName and planCompileBatches, because the case-folding
+// half of the invariant only exists on Windows and CI runs on Linux alone. A
+// test that passes "windows" is the only way this host covers it.
 func validateBatches(batches [][]modulePackage, goos string) error {
 	for _, batch := range batches {
 		seen := make(map[string]string)
