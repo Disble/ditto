@@ -10,16 +10,15 @@ package gobuildrunner
 
 import (
 	"errors"
-	"go/build"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/Disble/ditto/internal/cmdtestrunner"
 	"github.com/Disble/ditto/internal/ditto"
+	"github.com/Disble/ditto/internal/gotoolchain"
 	"github.com/Disble/ditto/internal/result"
 )
 
@@ -46,51 +45,12 @@ type GoBuildRunner struct {
 }
 
 func New(packagePath string) *GoBuildRunner {
-	return &GoBuildRunner{packagePath: packagePath, toolchain: goToolchain()}
+	return &GoBuildRunner{packagePath: packagePath, toolchain: gotoolchain.Path()}
 }
 
 // Toolchain is the absolute path of the `go` binary this runner builds with, or
 // empty when none could be found.
 func (r *GoBuildRunner) Toolchain() string { return r.toolchain }
-
-// goToolchain resolves the compiler once, to an absolute path, instead of naming
-// it and letting the operating system search.
-//
-// Two reasons, pointing the same way. `exec.Command("go", …)` reads PATH at
-// every call, so a directory an attacker can write to — or prepend — decides
-// which compiler runs. That is SonarQube's go:S4036, and it is the same shape as
-// git's inherited addressing that `environment` below strips: something ambient
-// deciding what a subprocess really is.
-//
-// The other reason matters more here. Ditto exists to compare verdicts, and
-// building a mutant's tests with a different toolchain from the one running the
-// suite would make a disagreement that is nobody's mutation look like one that
-// is. GOROOT is the toolchain that built this binary, so it is preferred, and
-// PATH is the fallback for a GOROOT that is not on disk.
-//
-// It resolves to empty rather than panicking. A build that cannot happen is an
-// answer the caller already knows how to take: Built stays false and the file
-// falls back to the path ditto has always taken.
-func goToolchain() string {
-	name := "go"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-
-	if root := build.Default.GOROOT; root != "" {
-		candidate := filepath.Join(root, "bin", name)
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			return candidate
-		}
-	}
-
-	found, err := exec.LookPath("go")
-	if err != nil {
-		return ""
-	}
-
-	return found
-}
 
 // Select is which mutant the next run asks the binary for.
 func (r *GoBuildRunner) Select(mutant int) { r.mutant = mutant }
