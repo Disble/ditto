@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 
@@ -68,11 +69,16 @@ type goListPackage struct {
 	Deps         []string `json:"Deps"`         //nolint:tagliatelle // go list -json emits these names
 }
 
-// errBinaryNameCollision is what a module scope reports when two packages would
-// write the same test binary. `go test -c -o <directory> ./...` refuses such a
-// tree outright, so a scope that reached the build would fail there with a
-// message about the output directory rather than about the packages.
+// errBinaryNameCollision is the invariant a planned compile batch must hold:
+// within one batch directory, no two packages may write the same test binary.
+// Batch planning keeps colliding packages in separate batches, so reaching this
+// error is an internal defect, not a property of the module under test.
 var errBinaryNameCollision = errors.New("ditto: module test binary name collision")
+
+// errEmptyModuleScope is what discovery reports when the module's ./... scope
+// yields no packages at all. Running `go test -c` with no package arguments
+// would be a silent no-op, so an empty scope fails closed instead.
+var errEmptyModuleScope = errors.New("ditto: module scope discovered no packages")
 
 // NewModuleScope returns a runner for the exact default ./... Go test scope.
 func NewModuleScope() *ModuleScopeRunner {
@@ -168,15 +174,55 @@ func (r *ModuleScopeRunner) prepare(root string) string {
 		r.output = output
 	}
 
-	output := r.output
-
 	if err := r.discover(root); err != nil {
 		return err.Error()
 	}
 
+	batches := planCompileBatches(r.packages, runtime.GOOS)
+
+	// Planning exists to hold this invariant; reaching the refusal means an
+	// internal defect, never a property of the module under test.
+	if err := validateBatches(batches, runtime.GOOS); err != nil {
+		return err.Error()
+	}
+
+	r.assignBinaries(batches)
+
+	for i, batch := range batches {
+		if refusal := r.compileBatch(root, i, batch); refusal != "" {
+			return refusal
+		}
+	}
+
+	if refusal := r.verifyBinaries(); refusal != "" {
+		return refusal
+	}
+
+	r.built = true
+
+	return ""
+}
+
+// compileBatch creates one batch's own output directory and compiles the
+// batch's packages into it. The returned string is the refusal text on failure
+// or empty on success, which keeps the caller's fail-closed chain shape.
+func (r *ModuleScopeRunner) compileBatch(root string, index int, batch []modulePackage) string {
+	batchDir := moduleBatchDir(r.output, index)
+	if err := os.MkdirAll(batchDir, 0o750); err != nil {
+		return fmt.Sprintf("ditto: create module test batch directory: %v", err)
+	}
+
+	// The batch's own import paths, and nothing else: never a subset of the
+	// configured scope, never a pattern that could widen it. The packages
+	// arrive sorted by import path, so the arguments are sorted too.
+	paths := make([]string, 0, len(batch))
+	for _, pkg := range batch {
+		paths = append(paths, pkg.importPath)
+	}
+
 	r.compilations++
 	r.toolchainStarts++
-	command := exec.Command(r.toolchain, "test", "-c", "-o", output, "./...") //nolint:noctx,gosec // resolved to an absolute path in goToolchain
+	command := exec.Command(r.toolchain, append([]string{"test", "-c", "-o", batchDir}, paths...)...) //nolint:noctx,gosec // resolved to an absolute path in goToolchain
 	command.Dir = root
 	command.Env = environment(r.mutant)
 
@@ -185,6 +231,12 @@ func (r *ModuleScopeRunner) prepare(root string) string {
 		return string(buildOutput)
 	}
 
+	return ""
+}
+
+// verifyBinaries is the fail-closed check that every package with tests has a
+// binary after compiling. Same refusal-or-empty shape as compileBatch.
+func (r *ModuleScopeRunner) verifyBinaries() string {
 	for _, pkg := range r.packages {
 		if !pkg.hasTests {
 			continue
@@ -196,9 +248,37 @@ func (r *ModuleScopeRunner) prepare(root string) string {
 		}
 	}
 
-	r.built = true
-
 	return ""
+}
+
+// moduleBatchDir is the output directory of one compile batch, under the run's
+// output directory. Binary assignment and the compile invocation both go
+// through it, so they cannot disagree.
+func moduleBatchDir(output string, index int) string {
+	return filepath.Join(output, fmt.Sprintf("batch-%d", index))
+}
+
+// assignBinaries writes each tested package's binary path: its batch's own
+// directory plus the test-binary name `go test -c` gives the package there.
+func (r *ModuleScopeRunner) assignBinaries(batches [][]modulePackage) {
+	dirByImportPath := make(map[string]string)
+
+	for i, batch := range batches {
+		for _, pkg := range batch {
+			dirByImportPath[pkg.importPath] = moduleBatchDir(r.output, i)
+		}
+	}
+
+	for i := range r.packages {
+		if !r.packages[i].hasTests {
+			continue
+		}
+
+		r.packages[i].binary = filepath.Join(
+			dirByImportPath[r.packages[i].importPath],
+			moduleTestBinaryName(r.packages[i].importPath, runtime.GOOS),
+		)
+	}
 }
 
 func (r *ModuleScopeRunner) discover(root string) error {
@@ -234,8 +314,6 @@ func (r *ModuleScopeRunner) discover(root string) error {
 
 	packages := make([]modulePackage, 0, len(byImportPath))
 
-	seenBinaries := make(map[string]string)
-
 	for importPath, pkg := range byImportPath {
 		// A package's own test binary compiles the package, so it observes itself
 		// whatever the toolchain reports about its dependencies.
@@ -246,16 +324,6 @@ func (r *ModuleScopeRunner) discover(root string) error {
 			if known && observed.relativeDir != "" {
 				pkg.observes[observed.relativeDir] = true
 			}
-		}
-
-		if pkg.hasTests {
-			name := moduleTestBinaryName(importPath, runtime.GOOS)
-			if other, exists := seenBinaries[name]; exists {
-				return fmt.Errorf("%w: %s and %s both produce %s", errBinaryNameCollision, other, importPath, name)
-			}
-
-			seenBinaries[name] = importPath
-			pkg.binary = filepath.Join(r.output, name)
 		}
 
 		packages = append(packages, pkg)
@@ -312,6 +380,10 @@ func decodeLayout(root string, decoder *json.Decoder) (map[string]modulePackage,
 
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return nil, nil, fmt.Errorf("ditto: decode module package layout: %w", err)
+	}
+
+	if len(byImportPath) == 0 {
+		return nil, nil, errEmptyModuleScope
 	}
 
 	return byImportPath, depsByPackage, nil
@@ -448,6 +520,93 @@ func (r *ModuleScopeRunner) readable(pkg modulePackage, binaryOutput []byte) []b
 	}
 
 	return converted
+}
+
+// binaryNameKey is the identity a test binary has inside one output directory:
+// on Windows the filesystem is case-insensitive, so two names differing only in
+// case are one file and must be treated as colliding.
+func binaryNameKey(name, goos string) string {
+	if goos == "windows" {
+		return strings.ToLower(name)
+	}
+
+	return name
+}
+
+// planCompileBatches assigns the discovered packages to compile batches so that
+// no batch ever holds two packages producing the same test binary: each batch
+// is compiled into its own output directory, which is how a module whose
+// packages collide still builds.
+//
+// Every discovered package belongs to a batch, tested or not: the union of the
+// batch arguments must be exactly the scope discovery returned. `go list -deps
+// -test -json ./...` does not type-check, so only a package that appears in a
+// compile argument list can fail the release the way `go test ./...` fails it;
+// and the toolchain refuses duplicate basenames per argument list even without
+// test files anywhere, so the collision key covers every package too.
+//
+// The function is pure and deterministic: packages are walked in the caller's
+// order (sorted by import path at the discovery site), each is placed in the
+// lowest-index batch free of its binary name, and no map iteration takes part
+// in any ordering. Binary paths are assigned only to packages that have tests.
+// A module without collisions plans exactly one batch, which is what preserves
+// the measured ten-package win of one `go test -c` invocation.
+func planCompileBatches(packages []modulePackage, goos string) [][]modulePackage {
+	batches := [][]modulePackage{}
+	names := [][]string{}
+
+	for _, pkg := range packages {
+		name := binaryNameKey(moduleTestBinaryName(pkg.importPath, goos), goos)
+
+		placed := false
+
+		for i, batch := range batches {
+			taken := slices.Contains(names[i], name)
+
+			if taken {
+				continue
+			}
+
+			batches[i] = append(batch, pkg)
+			names[i] = append(names[i], name)
+			placed = true
+
+			break
+		}
+
+		if placed {
+			continue
+		}
+
+		batches = append(batches, []modulePackage{pkg})
+		names = append(names, []string{name})
+	}
+
+	return batches
+}
+
+// validateBatches re-checks a planned set of batches against the invariant
+// planning exists to hold: within one batch, every package's binary name —
+// tested or not, since one batch is one argument list — is unique.
+// It is the reachable form of errBinaryNameCollision, and firing it means an
+// internal defect in planning, never a property of the module under test.
+func validateBatches(batches [][]modulePackage, goos string) error {
+	for _, batch := range batches {
+		seen := make(map[string]string)
+
+		for _, pkg := range batch {
+			name := moduleTestBinaryName(pkg.importPath, goos)
+
+			key := binaryNameKey(name, goos)
+			if other, exists := seen[key]; exists {
+				return fmt.Errorf("%w: %s and %s both produce %s", errBinaryNameCollision, other, pkg.importPath, name)
+			}
+
+			seen[key] = pkg.importPath
+		}
+	}
+
+	return nil
 }
 
 // moduleTestBinaryName is the test-binary name go test -c -o <directory>

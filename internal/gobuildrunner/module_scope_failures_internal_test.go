@@ -36,6 +36,12 @@ func runFailureToolchain() int {
 
 	switch args[0] {
 	case "list":
+		if os.Getenv("DITTO_MODULE_SCOPE_FAILURE_EMPTY") != "" {
+			// A module whose ./... matches nothing: the toolchain exits 0 with
+			// no package records at all.
+			return 0
+		}
+
 		listed := goListPackage{
 			ImportPath:  "fixture/has_tests",
 			Dir:         filepath.Join(os.Getenv("DITTO_MODULE_SCOPE_FAILURE_ROOT"), "has_tests"),
@@ -149,6 +155,27 @@ func TestModuleScopeRunnerSuccessfulBuildWithoutExpectedBinaryDoesNotRunPackages
 	assert.Equal(t, 0, runner.PackageRuns())
 	assert.Contains(t, outcome.String(), "fixture/has_tests")
 	assert.Contains(t, outcome.String(), moduleTestBinaryName("fixture/has_tests", runtime.GOOS))
+}
+
+// TestModuleScopeRunnerFailsClosedWhenDiscoveryYieldsNoPackages guards the
+// empty-scope path: discovery that returns no module packages at all must fail
+// closed with a named error, never reach `go test -c` with no package
+// arguments.
+func TestModuleScopeRunnerFailsClosedWhenDiscoveryYieldsNoPackages(t *testing.T) {
+	root := t.TempDir()
+	runner := NewModuleScope()
+	runner.toolchain = moduleScopeFailureToolchain(t, root)
+	t.Setenv("DITTO_MODULE_SCOPE_FAILURE_EMPTY", "1")
+
+	outcome := runner.Test(fakerepository.NewTemporaryAt(root))
+
+	assert.True(t, outcome.IsOk(), "an empty scope must fail closed")
+	assert.False(t, runner.Built())
+	assert.Equal(t, 1, runner.Discoveries())
+	assert.Equal(t, 1, runner.ToolchainStarts(), "only the discovery runs; no compile invocation is started")
+	assert.Equal(t, 0, runner.Compilations(), "no batch is compiled when nothing was discovered")
+	assert.Equal(t, 0, runner.PackageRuns())
+	assert.Contains(t, outcome.String(), "ditto: module scope discovered no packages")
 }
 
 func TestModuleScopeRunnerContinuesAfterARedBaselinePackage(t *testing.T) {
