@@ -27,11 +27,40 @@ import (
 // A refusal and a usage error are told apart by their message, not by this.
 const exitFailure = 1
 
+// exitUnmeasured is what a run whose scope holds mutants the configured test
+// command cannot execute returns.
+//
+// It is its own code because the response is different, and a wrapper has to be
+// able to tell it apart without reading prose: a score below the bar is answered
+// by testing more or by agreeing to less, while this one is answered by naming
+// every package the scope mutates in --test-command, or by narrowing the scope —
+// and by no test at all. Measured on the report that asked for it, where 17 of 20
+// survivors were in a package the command never builds.
+// docs/reports/ditto-mutation-scope.md.
+const exitUnmeasured = 3
+
 func main() {
-	if err := command(os.Args[1:], os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(exitFailure)
+	err := command(os.Args[1:], os.Stderr)
+	if err == nil {
+		return
 	}
+
+	fmt.Fprintln(os.Stderr, err)
+	os.Exit(exitCodeOf(err))
+}
+
+// exitCodeOf is what a shell, a hook or a CI step reads when ditto does not pass.
+//
+// A refusal, a usage error and a score below the bar stay one code, as they were:
+// they are told apart by their message, which a reader has. The unmeasured scope
+// is the one condition a wrapper is asked to act on differently, so it is the one
+// condition with a number of its own.
+func exitCodeOf(err error) int {
+	if _, ok := errors.AsType[ditto.UnmeasuredScopeError](err); ok {
+		return exitUnmeasured
+	}
+
+	return exitFailure
 }
 
 // errNoSubcommand is what an invocation with nothing to do reports.
@@ -106,6 +135,10 @@ func usage(out io.Writer) {
                           (also -v, --version)
 
 Run `+"`ditto run -h`"+` for its flags.
+
+Exit codes: 0 a score at or above the bar; 1 every other failure, including a
+refusal and a usage error; 3 the scope holds mutants the test command does not
+compile, which are reported as unmeasured rather than scored.
 `)
 }
 
@@ -427,11 +460,22 @@ func describeRanges(ranges []ditto.Range) string {
 // are deciding what to type, and the readme is not.
 // The first backquoted word is not decoration: flag.PrintDefaults renders it as
 // the flag's VALUE NAME. Naming anything else there is how this line used to
-// render as `-test-command -json`, which reads like a second flag.
+// render as `-test-command -json`, which reads like a second flag. Any further
+// backquoted word would render literally, so -json is spelled plainly below.
+//
+// The sentence this gained next is the second half of the same idea, and it
+// replaced a wrong one. It used to say "name the package that owns the change
+// instead", which is right only while the scope holds one package: a command
+// that names one of five leaves the other four unmeasurable — nothing it runs
+// can compile them — and the release now says so and fails. Measured on the
+// report at the top of this file's list: 17 of 20 survivors in a package the
+// command never builds.
 const testCommandHelp = "the `command` that decides whether a mutant died. It runs ONCE PER MUTANT, " +
-	"sequentially, so ./... costs your whole suite times your mutant count -- name the package " +
-	"that owns the change instead. -json is what lets ditto say WHY a mutant died; without it a " +
-	"mutant that never compiled is counted as killed"
+	"sequentially, so ./... costs your whole suite times your mutant count -- name every package the " +
+	"scope mutates instead, because a command that leaves one out does not score it: those mutants are " +
+	"reported as unmeasured and the run fails with exit 3. -json is what lets ditto say WHY a mutant " +
+	"died and which packages the command executes; without it a mutant that never compiled is counted " +
+	"as killed"
 
 // gatedHelp is the description of --gated on all three subcommands, one
 // constant so the three cannot drift apart.

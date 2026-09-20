@@ -42,3 +42,15 @@ func (r *VerboseReporter) Total() int {
 
 	return counted.Total()
 }
+
+// Unmeasured forwards how much of the scope the command could not execute, with
+// the same reason and the same sentinel: an unreadable count is negative rather
+// than zero, because zero is the answer that lets a run pass.
+func (r *VerboseReporter) Unmeasured() int {
+	counted, ok := r.delegate.(interface{ Unmeasured() int })
+	if !ok {
+		return -1
+	}
+
+	return counted.Unmeasured()
+}

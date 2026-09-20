@@ -47,14 +47,42 @@ type BatchLaboratory interface {
 
 type ScoreCalculator func(total, killed int) float32
 
+// CommandScope answers whether the configured test command can execute the
+// package that owns a source path.
+//
+// It is a separate interface rather than part of Laboratory, for the reason
+// BatchLaboratory is: a laboratory that cannot answer is still a laboratory, and
+// the release then runs exactly what it ran before. An implementation is allowed
+// to answer true because it does not know -- see laboratory.Executes -- and the
+// release treats that as "everything is executed", which is what ditto assumed
+// until it could ask.
+type CommandScope interface {
+	Executes(repository Repository, relativePath string) bool
+}
+
 type Diagnostic struct {
 	res  future.Future[result.Result[string]]
 	file *gomutatedfile.GoMutatedFile
+
+	// unmeasured is a mutant ditto chose not to run at all, because the test
+	// command cannot compile the package that owns it. It is not a verdict about
+	// the mutant, which is why it does not travel as one: the score leaves it out
+	// on both sides and the report names it. See NewUnmeasuredDiagnostic.
+	unmeasured bool
 }
 
 func (d *Diagnostic) IsOk() bool {
 	return d.res.Await().IsOk()
 }
+
+// Unmeasured reports a mutant that was never run because the test command does
+// not compile the package that owns it.
+//
+// Read it BEFORE IsOk. An unmeasured diagnostic is shaped like a survivor -- that
+// is what it would have been, before ditto could tell the difference -- so a
+// consumer that ignores this reads exactly what it read before this existed,
+// which is the graceful half. The shipped reporter does not ignore it.
+func (d *Diagnostic) Unmeasured() bool { return d.unmeasured }
 
 // Reason is why this mutant died, and Unknown when ditto was not told.
 //
@@ -87,6 +115,10 @@ func (d *Diagnostic) Label() string {
 // rendered: where it is, and what it wrote there.
 func (d *Diagnostic) Address() string { return d.file.Address() }
 
+// Path is the repository-relative source file this mutant came from. The report
+// groups the mutants it could not measure by the directory this names.
+func (d *Diagnostic) Path() string { return d.file.Path() }
+
 // Virus names the mutation operator behind this diagnostic, which is the unit a
 // non-viable mutant is fixed in. docs/metrics.md metric 1.
 func (d *Diagnostic) Virus() string  { return d.file.Virus() }
@@ -96,6 +128,27 @@ func NewDiagnostic(res future.Future[result.Result[string]], file *gomutatedfile
 	return &Diagnostic{
 		res:  res,
 		file: file,
+	}
+}
+
+// NewUnmeasuredDiagnostic is a mutant ditto did not run, because the configured
+// test command does not compile the package that owns it.
+//
+// Nothing the command runs can kill it, so its survival is not evidence about
+// anybody's tests: the score leaves it out of the numerator and the denominator,
+// exactly as it leaves out a mutant that never compiled, and the report names it
+// instead. Measured on the report that asked for it: 43 mutants, 20 survivors,
+// 17 of them in one package the command never builds, printed as a score of 0.53
+// against a bar of 0.80. docs/reports/ditto-mutation-scope.md.
+//
+// It carries the result ditto would have reported before it could tell the
+// difference -- a survivor -- so a consumer that does not know about Unmeasured
+// reads what it read before, and none of them meets a nil.
+func NewUnmeasuredDiagnostic(file *gomutatedfile.GoMutatedFile) *Diagnostic {
+	return &Diagnostic{
+		res:        future.Resolved(result.Err[string]("")),
+		file:       file,
+		unmeasured: true,
 	}
 }
 
@@ -109,14 +162,26 @@ type Ditto struct {
 	repository Repository
 	laboratory Laboratory
 	reporter   Reporter
+
+	// scope is how the release asks whether the configured test command can
+	// execute a package at all. Nil when nothing can answer, and the release then
+	// runs every mutant of the scope, which is what it did before this existed.
+	scope CommandScope
 }
 
-func New(logger Logger, repository Repository, laboratory Laboratory, reporter Reporter) *Ditto {
+func New(logger Logger, repository Repository, laboratory Laboratory, reporter Reporter, scopes ...CommandScope) *Ditto {
+	var scope CommandScope
+
+	if len(scopes) > 0 {
+		scope = scopes[0]
+	}
+
 	return &Ditto{
 		logger:     logger,
 		repository: repository,
 		laboratory: laboratory,
 		reporter:   reporter,
+		scope:      scope,
 	}
 }
 
@@ -126,10 +191,23 @@ func New(logger Logger, repository Repository, laboratory Laboratory, reporter R
 // that compiles once for a whole file has to receive the file's mutants at once.
 // The order they are reported in is unchanged: sources are walked in order, and
 // each file's mutants in the order its viruses produced them.
+//
+// A file whose package the test command cannot execute is not run at all: its
+// mutants are recorded as unmeasured, and the report says so. Running them would
+// buy a survivor nobody can kill with a full run of the suite, and the number
+// that came back would be a mixture of two different questions.
 func (o *Ditto) Release(viri ...viruses.Virus) {
 	for _, source := range o.repository.ListGoSourceFiles() {
 		mutants := mutate(source.Incubate(viri...))
 		if len(mutants) == 0 {
+			continue
+		}
+
+		if !o.executes(mutants[0].Path()) {
+			for _, mutant := range mutants {
+				o.reporter.AddDiagnostic(NewUnmeasuredDiagnostic(mutant))
+			}
+
 			continue
 		}
 
@@ -144,6 +222,20 @@ func (o *Ditto) Release(viri ...viruses.Virus) {
 			o.reporter.AddDiagnostic(NewDiagnostic(res, mutants[i]))
 		}
 	}
+}
+
+// executes reports whether the configured test command can execute the package
+// that owns a source path.
+//
+// Everything is executed when nothing can answer the question, and that is not a
+// fallback: a command that is not `go test -json` has no readable package scope,
+// and ditto has no business failing a run over a question it cannot read.
+func (o *Ditto) executes(relativePath string) bool {
+	if o.scope == nil {
+		return true
+	}
+
+	return o.scope.Executes(o.repository, relativePath)
 }
 
 func mutate(infected []*goinfectedfile.GoInfectedFile) []*gomutatedfile.GoMutatedFile {

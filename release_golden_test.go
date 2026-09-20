@@ -26,6 +26,14 @@ import (
 // The fixture is copied to a temporary directory and mutated there. It is never
 // mutated where it sits, and the run is pointed at the copy — the rule from
 // AGENTS.md, applied to ditto's own suite rather than quoted at other people.
+//
+// The sample moved once, in 0.12.0, and the move is the whole reason this note
+// exists: a release now asks the laboratory which packages the test command can
+// execute before it announces a file, and that first question is what pays for
+// the baseline. So the baseline line prints before the first file's
+// announcement instead of between it and the first mutant. No verdict moved and
+// every address is identical, which is the claim a golden has to be able to
+// support when it changes.
 func TestReleaseGolden(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs a full release: one test process per mutant")
