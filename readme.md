@@ -104,11 +104,16 @@ score of 0.13 against 1.00 for the identical eight mutants of an identical file.
 Checking that the staged files themselves are clean does not cover it, because
 the file that moved them was never staged.
 
-Policy stays with you: `--threshold`, `--test-command`, and `--exclude-prefix`
-(repeatable) are yours to set, and Ditto has an opinion about none of them
-beyond its defaults.
+Policy stays with you: `--threshold`, `--test-command`, `--exclude-prefix` and
+`--include-prefix` (the last two repeatable) are yours to set, and Ditto has an
+opinion about none of them beyond its defaults.
 
-**Name the package that owns the change in `--test-command`.** This is the one
+The exit code is the one thing a wrapper has to read: **0** a score at or above
+the bar, **1** every other failure including a refusal and a usage error, and
+**3** a scope that holds mutants the test command does not compile — the case the
+next section is about.
+
+**Name every package the scope mutates in `--test-command`.** This is the one
 default that will surprise you, so it is here rather than only in `-h`: the test
 command runs **once per mutant, sequentially**, so the default `./...` costs your
 whole suite times your mutant count. Reported from a repository whose suite takes
@@ -119,14 +124,63 @@ twice, and was read as a hang. It was not stuck. It was paying that bill.
 ditto staged --test-command "go test -count=1 -json ./internal/thepackage/"
 ```
 
-Seconds instead. `--exclude-prefix` and a `--threshold` below 1.00 are the other
-two levers, and the sandbox strategy is not one — `--sandbox hardlink` buys back
-a fixed fifteen seconds on a two-thousand-file repository, and `--sandbox link`
-cannot work at all in a repository with a `go:embed` directive, because embed
-refuses an irregular file.
+Seconds instead. `--exclude-prefix`, `--include-prefix` and a `--threshold` below
+1.00 are the other levers, and the sandbox strategy is not one — `--sandbox
+hardlink` buys back a fixed fifteen seconds on a two-thousand-file repository,
+and `--sandbox link` cannot work at all in a repository with a `go:embed`
+directive, because embed refuses an irregular file.
 
 Keep `-json`. It is what lets ditto tell a mutant that never compiled from one a
-test caught; without it, the first is counted as the second.
+test caught; without it, the first is counted as the second. It is also what lets
+ditto read which packages your command executes, which is the next section.
+
+### When the command cannot see part of the scope
+
+A command that names one package is the right command for a change that touches
+one package. When the same command meets a change that touches five, the four it
+does not name are not badly tested — they are **unmeasured**: nothing the command
+runs can compile them, so every mutant in them survives, and a score counting
+them mixes "your tests missed this" with "your command cannot see this".
+
+Reported from a consumer of ditto, which had done exactly that and read 0.53 as a
+verdict:
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ • Total:       26                    ┃
+┃ • Killed:      23                    ┃
+┃ • Survived:     3                    ┃
+┃ • Unmeasured:       17               ┃
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┨
+┃ ⨯ Score:     0.88 (minimum: 0.80)    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┃ 17 of the 43 mutants in this scope are never compiled by this test command, so
+┃ nothing it runs can kill them and they are out of the score entirely:
+┃   internal/desktop (17)
+┃ Name every package the scope mutates in --test-command, or narrow the scope.
+```
+
+Three things are happening there, and each is a decision. The mutants the command
+cannot compile leave the numerator **and** the denominator, exactly as a mutant
+that never compiled does — the score above is a real measurement of the 26 that
+could be judged, not of 43. They are not run at all, because a guaranteed
+survivor bought with a full suite run is not evidence about anybody's tests. And
+the run exits **3**, so a gate can tell "unmeasurable scope" from "below the bar":
+the second is answered by testing more, and the first by naming every package the
+scope mutates — or, when the change really is five packages wide, by running one
+honest pass per package with a narrower scope:
+
+```shell
+ditto staged --include-prefix internal/thepackage/ \
+  --test-command "go test -count=1 -json ./internal/thepackage/"
+```
+
+Two limits are worth knowing, because they are where this says nothing rather
+than guessing. The check reads the packages your command reports executing, which
+means a `--test-command` that is not `go test -json` — `make`, `gotestsum`, a
+wrapper script — gets no check at all. And it works per package, not per file: a
+file behind a build tag for another operating system is inside a package the
+command does execute, and its mutants stay ordinary survivors.
 
 ### In CI, where nothing is staged
 

@@ -809,3 +809,58 @@ which is the difference between an obvious cost and an arguable one.
 
 It is a design question rather than a defect, and it is on this list because it
 now has a repository behind it instead of a hypothetical.
+
+## 28. The scope check only reads a command that reports itself
+
+**Measured 2026-09-19**, by building the binary and running it against a fixture
+with three packages: one the command names, one its tests import, and one nothing
+compiles. `docs/reports/ditto-mutation-scope.md` is the report it answers.
+
+A release now reads which packages the configured test command executes, out of
+the command's own `go test -json` stream, and reports the mutants it cannot
+compile instead of scoring them. Three limits come with that, and they are named
+here so the silence is not mistaken for a pass:
+
+- **A command that emits no such stream gets no check at all.** `make`,
+  `gotestsum`, a wrapper script, or `go test` without `-json` — the stream is the
+  only truthful answer available without parsing the command string, which
+  `options.go`'s command-scope table already refuses to do on purpose. The check
+  therefore says nothing rather than guessing, and a run configured that way keeps
+  the behaviour it always had.
+- **A gated run is not checked.** `Gated()` replaces the execution plan of the
+  exact module-scope command and nothing else, so the command that runs is
+  `go test -count=1 ./...` — every package the module has, which the gated path
+  already resolves for itself. Asking the ordinary laboratory would buy a second
+  suite run to learn what the gated path knows.
+- **The check is per package, not per file.** A file behind a build tag for
+  another operating system is inside a package the command does execute, so its
+  mutants stay ordinary survivors — which they are: the command builds the
+  package, on a platform where that file is not part of it.
+
+What would close the first: a `--test-command` contract that carries the scope
+explicitly, or a second subcommand that names the package set. Both are API
+decisions rather than measurements, and neither has a repository asking for it
+yet.
+
+## 29. One test command per owning package is a cost-model change
+
+**Proposed by the same report, 2026-09-19**, and deliberately not shipped with it.
+
+The report's third suggestion: group a scope's mutants by owning package and
+derive one test command per group, so a five-package change does not need a
+`--test-command` that names all five. It is the version of this that would make
+the scope check unnecessary rather than enforceable.
+
+It is not shipped, and the reason is written in the report itself: ditto's `-h`
+says the command runs once per mutant, changed to once per package would be a
+different cost model presented as the same flag, and the measured gain is not
+obvious — a package's suite is a fraction of the module's, but the fixed 750–950
+ms start of the test command is paid per invocation and would be paid per package
+per mutant unless the compilation is shared too, which is what the gated path
+already does for the exact module-scope command.
+
+What would close it: a measurement of a real staged run against a per-package
+command set, with the counter that matters (`testCommandInvocationsPerRelease`)
+beside the wall clock, and a verdict comparison showing the narrower command set
+does not change a single mutant's answer. The scope check this entry's report did
+buy makes that measurement cheaper to argue for and no less necessary.

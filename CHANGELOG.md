@@ -4,6 +4,128 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-09-19
+
+A release about one number that measured two things at once. Mutants come from a
+change, they are judged by one configured test command, and when that command
+cannot compile part of the scope the mutants it cannot reach were counted as
+evidence about the tests. Reported from a consumer of ditto that had staged five
+packages and named one of them:
+
+    ditto staged --exclude-prefix frontend/ --threshold 0.80 \
+      --test-command "go test -count=1 -timeout 120s -json ./internal/observability/syncdiag/"
+
+    Total: 43   Killed: 23   Survived: 20   Score: 0.53 (minimum: 0.80)
+
+17 of those 20 survivors lived in `internal/desktop`, a package the command never
+builds, so nothing it ran could have killed them: the run's ceiling was 0.605 and
+the number presented as a verdict was measuring the tests and the scope together.
+They are now named, left out of the score, not run at all, and failed on.
+`docs/reports/ditto-mutation-scope.md` is the report that produced this release.
+
+### Breaking
+
+- **A scope holding mutants the test command cannot compile now fails with its
+own exit code, 3.** Those mutants leave the numerator **and** the denominator,
+exactly as a mutant that never compiled does, so the printed score is a real
+measurement of what the command could judge rather than a mixture of two
+questions. They are not run, because a guaranteed survivor bought with a full run
+of the suite is not evidence about anybody's tests, and they are named with the
+package that holds them:
+
+      ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+      ┃ • Total:       26                    ┃
+      ┃ • Killed:      23                    ┃
+      ┃ • Survived:     3                    ┃
+      ┃ • Unmeasured:       17               ┃
+      ┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┨
+      ┃ ⨯ Score:     0.88 (minimum: 0.80)    ┃
+      ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+      ┃ 17 of the 43 mutants in this scope are never compiled by this test command, so
+      ┃ nothing it runs can kill them and they are out of the score entirely:
+      ┃   internal/desktop (17)
+      ┃ Name every package the scope mutates in --test-command, or narrow the scope.
+
+  Exit 3 is the other half: a scope ditto cannot measure and a score below the bar
+  were both 1, and a gate has to be able to tell them apart, because no test
+  answers the first. The two levers are to name every package the scope mutates in
+  `--test-command`, or to narrow the scope — see `--include-prefix` below.
+
+  **The check only speaks when the command reports itself.** It reads the packages
+  the command executes out of its own `go test -json` stream, so a `--test-command`
+  that is `make`, `gotestsum`, a wrapper script or `go test` without `-json` gets no
+  check at all, and keeps the behaviour it always had. It also runs per package and
+  not per file: a file behind a build tag for another operating system is inside a
+  package the command does compile, and its mutants stay ordinary survivors. Both
+  limits are recorded in `docs/backlog.md`, entry 28.
+
+- **`PlanStaged`, `RunStaged`, `PlanChanged` and `RunChanged` take a
+  `ditto.Prefixes`** where they took one `[]string`: what a run is about and what
+  it leaves out are one decision, so they are one argument instead of two that can
+  drift. Every existing call site is a one-line change:
+  `ditto.RunStaged(dir, ditto.Prefixes{Exclude: []string{"tools/"}})`.
+
+- **One line of output moved.** The baseline announcement prints before the first
+  file's announcement now, because asking the laboratory which packages the test
+  command can compile is what pays for the baseline. No verdict moved and every
+  mutant address is identical; the golden was updated deliberately, and says so
+  where someone will look.
+
+### Added
+
+- **`--include-prefix`, the mirror of `--exclude-prefix`,** on `staged` and
+  `changed`. It exists because the fix above makes it necessary: a run now refuses
+  a scope its command cannot compile, and the honest answer is usually to narrow
+  the run to the package the command names — one flag, where one exclusion per
+  other package the change happens to touch would do the same. `-h` names the
+  pairing, because the moment a reader needs it is the moment a run just refused
+  their scope.
+
+- **`ditto.Prefixes`,** the exported pair those flags set.
+
+- **A distinct exit code for an unmeasurable scope,** documented in `ditto -h`
+  beside the other two: 0 a score at or above the bar, 1 every other failure, 3 a
+  scope the test command cannot compile.
+
+### Changed
+
+- **`--test-command`'s help names the lever that exists.** It said "name the
+  package that owns the change instead", which is right only while the scope holds
+  one package: a command that names one of five leaves the other four unmeasurable,
+  and the run now says so and fails. It also names what keeping `-json` buys beyond
+  the reason to keep it.
+
+- **The report's box gained `• Unmeasured: N`,** printed only when there is
+  something to say, for the reason the non-viable line is: a line on every run is a
+  line people stop reading. An unmeasured mutant is never rendered as a survivor —
+  a diff of a program that never ran is not evidence about anything.
+
+- **The reporter's summary is one pass over its diagnostics instead of three.**
+  The exclusions now live in one place, in the order that is the rule: unmeasured,
+  then never-compiled, then killed or survived.
+
+### Documentation
+
+- `docs/reports/ditto-mutation-scope.md`, the report in the reporting
+  repository's words, committed with the release it produced.
+- `docs/metrics.md` gains the classification row for it: out of both sides, named,
+  and the one row whose fix is not in the tests.
+- `docs/backlog.md` entries 28 and 29: the two ways the check stays silent, and
+  per-package runs as a cost-model change rather than a feature to add quietly.
+
+### Performance
+
+- The scope costs **one `go list -deps -test` process per release**, measured at
+  0.28–0.31 s over this repository's 64 executed packages, and it runs only for a
+  command that emitted a stream. It is not paid per mutant, and it is not paid at
+  all for a command ditto cannot read.
+
+- `mutantsPerReleaseOnThisRepository` moved 873 → 949 over the four commits that
+  added product code here: +31 for the scope, +1 for the laboratory answering,
+  +41 for the report and the exit code, and +3 for `--include-prefix`. Each is
+  attributed per file in `perf/baseline.json` rather than as one number at the
+  end, including the +8 the reporter's folded summary gave back.
+
 ## [0.11.0] - 2026-09-19
 
 ### Changed
