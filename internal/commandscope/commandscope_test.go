@@ -22,6 +22,7 @@ type scriptedToolchain struct {
 
 func (s *scriptedToolchain) Output(_, name string, args ...string) ([]byte, error) {
 	s.asked++
+
 	s.lastRun = append([]string{name}, args...)
 
 	return s.output, s.err
