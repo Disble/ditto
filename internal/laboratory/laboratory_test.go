@@ -1,6 +1,8 @@
 package laboratory_test
 
 import (
+	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/Disble/ditto/internal/ditto"
@@ -131,6 +133,104 @@ func TestLaboratoryChecksTheBaselineOnce(t *testing.T) {
 	}
 
 	assert.Equal(t, 4, runner.calls, "want one baseline and three mutants")
+}
+
+// streamingRunner is a command that passes and prints what `go test -json`
+// prints. Its stream is the only place the package scope of a release exists.
+type streamingRunner struct {
+	stream string
+	calls  int
+}
+
+func (r *streamingRunner) Test(ditto.TemporaryRepository) result.Result[string] {
+	r.calls++
+
+	return result.Err[string](r.stream)
+}
+
+// scriptedToolchain is the toolchain's answer to "what does that compile", and
+// it counts how often it was asked.
+type scriptedToolchain struct {
+	output []byte
+	err    error
+	asked  int
+}
+
+func (s *scriptedToolchain) Output(_, _ string, _ ...string) ([]byte, error) {
+	s.asked++
+
+	return s.output, s.err
+}
+
+// A release judges mutants from files the scope selected with one configured
+// command, and when that command does not compile a mutant's package the mutant
+// is unmeasured rather than badly tested: nothing the command runs can kill it.
+//
+// The scope comes free. The baseline run the laboratory already makes once per
+// release prints the stream that names the packages the command executes, and
+// the sandbox it ran in is the tree to resolve the rest against — so the answer
+// costs one `go list` and no extra suite run, which the counts below hold.
+func TestLaboratoryKnowsWhichPackagesTheCommandExecutes(t *testing.T) {
+	root := "tmpdir-1"
+
+	runner := &streamingRunner{stream: `{"Action":"start","Package":"example.com/mod/internal/observability/syncdiag"}` + "\n"}
+
+	toolchain := &scriptedToolchain{output: []byte(filepath.Join(root, "internal", "observability", "readcap") + "\n" +
+		filepath.Join(root, "internal", "observability", "syncdiag") + "\n")}
+
+	defer laboratory.SetScopeRunnerForTest(toolchain)()
+
+	subject := laboratory.New(fakelogger.New(), runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
+	repository := fakerepository.New(fakerepository.FS{}, fakerepository.NewTemporary())
+
+	assert.True(t, subject.Executes(repository, "internal/observability/syncdiag/reader.go"),
+		"the package the command names is not reported as executed")
+
+	// The closure is the load-bearing half: a package the command does not name
+	// but does compile into a test binary IS killable by that binary's tests, so
+	// a set comparison against the names alone would accuse a correct run.
+	assert.True(t, subject.Executes(repository, "internal/observability/readcap/reader.go"),
+		"a package compiled into the named package's tests is not reported as executed")
+
+	// The report's own case, and the whole point: staged, mutated, never built.
+	assert.False(t, subject.Executes(repository, "internal/desktop/app_runtime_services.go"),
+		"a package the command does not compile is reported as executed")
+
+	assert.Equal(t, 1, toolchain.asked, "want one toolchain query per scope")
+	assert.Equal(t, 1, runner.calls, "want one baseline, not one per question asked of the scope")
+}
+
+// A command that is not `go test -json` has no readable scope — make, gotestsum,
+// a wrapper — and ditto refuses nothing over it. Two costs are held here: the
+// scope is unknown rather than guessed, and the toolchain is never asked, because
+// there is nothing to ask.
+func TestLaboratoryRefusesNothingForACommandWithNoReadableScope(t *testing.T) {
+	runner := &streamingRunner{stream: "ok  \texample.com/mod/calc\t0.2s\n"}
+	toolchain := &scriptedToolchain{output: []byte("anything")}
+
+	defer laboratory.SetScopeRunnerForTest(toolchain)()
+
+	subject := laboratory.New(fakelogger.New(), runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
+	repository := fakerepository.New(fakerepository.FS{}, fakerepository.NewTemporary())
+
+	assert.True(t, subject.Executes(repository, "internal/desktop/app.go"),
+		"an unreadable command refused a mutant")
+	assert.Zero(t, toolchain.asked, "the toolchain was asked about a command ditto could not read")
+}
+
+// And the other half of that rule: a scope that could not be resolved is not
+// evidence of a mismatch either.
+func TestLaboratoryRefusesNothingWhenTheToolchainCannotAnswer(t *testing.T) {
+	runner := &streamingRunner{stream: `{"Action":"start","Package":"example.com/mod/calc"}` + "\n"}
+	toolchain := &scriptedToolchain{err: errors.New("no go binary")}
+
+	defer laboratory.SetScopeRunnerForTest(toolchain)()
+
+	subject := laboratory.New(fakelogger.New(), runner, faketempdirectory.NewFakeTemporaryDirectory("tmpdir"))
+	repository := fakerepository.New(fakerepository.FS{}, fakerepository.NewTemporary())
+
+	assert.True(t, subject.Executes(repository, "internal/desktop/app.go"),
+		"a scope that could not be resolved refused a mutant")
 }
 
 func TestLaboratory(t *testing.T) {

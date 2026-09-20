@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Disble/ditto/internal/color"
+	"github.com/Disble/ditto/internal/commandscope"
 	"github.com/Disble/ditto/internal/ditto"
 	"github.com/Disble/ditto/internal/future"
 	"github.com/Disble/ditto/internal/gomutatedfile"
@@ -32,6 +33,12 @@ type TemporaryDirectory interface {
 // which is what ditto is built for — only ever builds one. The number alive at
 // any instant is therefore the same as when each mutant built its own, which
 // matters because that number is also what an interrupted run leaves behind.
+//
+// It is also the only place that can learn what the configured test command
+// executes, without paying for it: the baseline run it already makes once per
+// release prints the `go test -json` stream that names every package the command
+// executes, and the sandbox it ran in is the tree to resolve the rest against.
+// See Executes and internal/commandscope.
 type Laboratory struct {
 	logger             ditto.Logger
 	testRunner         TestRunner
@@ -41,6 +48,24 @@ type Laboratory struct {
 	idle  []ditto.TemporaryRepository
 
 	baseline sync.Once
+	scope    *commandscope.Scope
+}
+
+// scopeRunner is the process seam under the one `go list` a scope costs.
+//
+// A package-level variable with a Set for tests rather than a constructor
+// parameter, because it is not something a caller configures: it is how ditto
+// asks the toolchain which packages the command compiles, and the only thing
+// that ever varies is a test's answer to it.
+var scopeRunner commandscope.Runner = commandscope.OSRunner{} //nolint:gochecknoglobals // one seam, with the restore below
+
+// SetScopeRunnerForTest replaces the process the scope resolution would start,
+// and returns the restore.
+func SetScopeRunnerForTest(runner commandscope.Runner) func() {
+	previous := scopeRunner
+	scopeRunner = runner
+
+	return func() { scopeRunner = previous }
 }
 
 func New(logger ditto.Logger, testRunner TestRunner, temporaryDirectory TemporaryDirectory) *Laboratory {
@@ -63,6 +88,38 @@ func (l *Laboratory) Test(
 	file.WriteTo(sandbox)
 
 	return future.Resolved(l.testRunner.Test(sandbox))
+}
+
+// Executes reports whether the configured test command can execute the package
+// that owns a repository-relative source path.
+//
+// This is the one question the report cannot answer for itself. Mutants come
+// from files the scope selected and are judged by one command, and when that
+// command does not compile a mutant's package the mutant is not badly tested, it
+// is unmeasured: nothing the command runs can kill it, so it survives, and a
+// score counting it mixes 'your tests missed this' with 'your command cannot see
+// this'. Measured on the report that asked for this: 43 mutants, 20 survivors,
+// 17 of them in one package the command never builds,
+// docs/reports/ditto-mutation-scope.md.
+//
+// It answers true when the question cannot be answered — a command that is not
+// `go test -json` has no readable package scope, and so does one whose toolchain
+// cannot be asked — because a wrong accusation fails a run that was correct,
+// while a missing one only leaves the caller with what it had before.
+//
+// The first call is what pays for the baseline on a release that never asks
+// otherwise. There is no second cost: the same sandbox and the same once.
+func (l *Laboratory) Executes(repository ditto.Repository, relativePath string) bool {
+	sandbox := l.acquire(repository)
+	defer l.returnToPool(sandbox)
+
+	l.verifyBaseline(sandbox)
+
+	if l.scope == nil {
+		return true
+	}
+
+	return l.scope.Executes(relativePath)
 }
 
 // verifyBaseline runs the suite once, on unmutated code, before any mutant is
@@ -99,6 +156,13 @@ func (l *Laboratory) verifyBaseline(sandbox ditto.TemporaryRepository) {
 			panic(ditto.NewRefusalError("ditto: the test command fails on unmutated code, so every mutant would be scored " +
 				"killed; refusing to score against a red baseline\n\n" + verdict.Text(result.Output(res))))
 		}
+
+		// What a GREEN suite said about itself, which is the part nothing else
+		// reads. `go test -json` names every package the command executes, and
+		// this is the one run that produces that stream for free: the baseline
+		// was already paid for, once per release. A command that emits no stream
+		// leaves the scope unknown, and unknown refuses nothing.
+		l.scope = commandscope.New(result.Output(res), sandbox.Root(), scopeRunner)
 
 		// This run was already paid for and the clock above already measured it;
 		// throwing the number away was the waste. It is the per-mutant price of
@@ -137,6 +201,12 @@ func (l *Laboratory) acquire(repository ditto.Repository) ditto.TemporaryReposit
 func (l *Laboratory) hand(sandbox ditto.TemporaryRepository, file *gomutatedfile.GoMutatedFile) {
 	file.RestoreIn(sandbox)
 
+	l.returnToPool(sandbox)
+}
+
+// returnToPool hands a clean sandbox back for the next mutant. It is hand
+// without the restore, for a caller that never wrote anything into it.
+func (l *Laboratory) returnToPool(sandbox ditto.TemporaryRepository) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
