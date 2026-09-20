@@ -130,23 +130,24 @@ func (r *Repository) git(args ...string) ([]byte, error) {
 }
 
 // Files lists the staged Go sources worth mutating: not tests, because they are
-// the oracle rather than the subject, and not anything under a prefix the caller
-// excluded.
-func (r *Repository) Files(excludedPrefixes []string) ([]string, error) {
+// the oracle rather than the subject, not anything under a prefix the caller
+// excluded, and, when the caller named prefixes to include, only what they
+// cover.
+func (r *Repository) Files(excludedPrefixes, includedPrefixes []string) ([]string, error) {
 	output, err := r.git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
 	if err != nil {
 		return nil, fmt.Errorf("listing the staged files: %w", err)
 	}
 
-	return selectMutable(splitNUL(output), excludedPrefixes), nil
+	return selectMutable(splitNUL(output), excludedPrefixes, includedPrefixes), nil
 }
 
-func selectMutable(files, excludedPrefixes []string) []string {
+func selectMutable(files, excludedPrefixes, includedPrefixes []string) []string {
 	selected := []string{}
 
 	for _, file := range files {
 		file = strings.ReplaceAll(file, "\\", "/")
-		if file != "" && isMutable(file, excludedPrefixes) {
+		if file != "" && isMutable(file, excludedPrefixes, includedPrefixes) {
 			selected = append(selected, file)
 		}
 	}
@@ -154,8 +155,12 @@ func selectMutable(files, excludedPrefixes []string) []string {
 	return selected
 }
 
-func isMutable(file string, excludedPrefixes []string) bool {
+func isMutable(file string, excludedPrefixes, includedPrefixes []string) bool {
 	if !strings.HasSuffix(file, ".go") || strings.HasSuffix(file, "_test.go") {
+		return false
+	}
+
+	if !underAnyPrefix(file, includedPrefixes) {
 		return false
 	}
 
@@ -166,6 +171,32 @@ func isMutable(file string, excludedPrefixes []string) bool {
 	}
 
 	return true
+}
+
+// underAnyPrefix answers the include half, and answers true when the caller
+// named nothing to include: an empty list is no narrowing.
+//
+// An empty prefix is ignored rather than honoured, exactly as it is on the
+// exclusion side. Every path starts with the empty string, so a list that
+// carries one empty entry means "no filter" when it was built -- and "nothing"
+// when it was not, which is the reading that would silently mutate no files at
+// all.
+func underAnyPrefix(file string, prefixes []string) bool {
+	named := false
+
+	for _, prefix := range prefixes {
+		if prefix == "" {
+			continue
+		}
+
+		named = true
+
+		if strings.HasPrefix(file, prefix) {
+			return true
+		}
+	}
+
+	return !named
 }
 
 // RejectPartial refuses a staged file that also has unstaged edits.

@@ -96,7 +96,7 @@ func TestSelectMutableKeepsProductionSourcesOnly(t *testing.T) {
 		"",
 	}
 
-	selected := selectMutable(files, []string{"tools/"})
+	selected := selectMutable(files, []string{"tools/"}, nil)
 
 	want := []string{"internal/calc/calc.go"}
 	if !reflect.DeepEqual(selected, want) {
@@ -109,9 +109,42 @@ func TestSelectMutableKeepsProductionSourcesOnly(t *testing.T) {
 func TestSelectMutableIgnoresAnEmptyPrefix(t *testing.T) {
 	t.Parallel()
 
-	selected := selectMutable([]string{"a.go"}, []string{""})
+	selected := selectMutable([]string{"a.go"}, []string{""}, nil)
 	if len(selected) != 1 {
 		t.Fatalf("selected = %v, want a.go kept", selected)
+	}
+}
+
+// The include half, which is the mirror of the exclusion above and the reason
+// the pair exists: a scope that holds more packages than the test command can
+// compile is narrowed to the package the command names.
+func TestSelectMutableKeepsOnlyIncludedPrefixes(t *testing.T) {
+	t.Parallel()
+
+	files := []string{"internal/desktop/app.go", "internal/observability/syncdiag/reader.go", "README.md"}
+
+	selected := selectMutable(files, nil, []string{"internal/observability/"})
+
+	want := []string{"internal/observability/syncdiag/reader.go"}
+	if !reflect.DeepEqual(selected, want) {
+		t.Fatalf("selected = %v, want %v", selected, want)
+	}
+}
+
+// An empty include list is no narrowing at all -- the same reading as the
+// exclusion side, and the one that keeps every caller that never used the flag
+// mutating what it always did. A list that carries only an empty entry is the
+// same list: every path starts with the empty string, so honouring it would
+// mutate nothing at all.
+func TestSelectMutableWithoutIncludesKeepsEverything(t *testing.T) {
+	t.Parallel()
+
+	files := []string{"a.go", "internal/b.go"}
+
+	for _, included := range [][]string{nil, {""}} {
+		if selected := selectMutable(files, nil, included); !reflect.DeepEqual(selected, files) {
+			t.Fatalf("selected = %v for includes %v, want every file", selected, included)
+		}
 	}
 }
 

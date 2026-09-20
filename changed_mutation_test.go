@@ -38,7 +38,7 @@ func TestChangedMutation(t *testing.T) {
 		t.Skipf("set %s to the ref this change is measured against, for example a release tag", baseRefVariable)
 	}
 
-	plan, err := ditto.PlanChanged(".", base, []string{"testdata/"})
+	plan, err := ditto.PlanChanged(".", base, ditto.Prefixes{Exclude: []string{"testdata/"}})
 	if err != nil {
 		t.Fatalf("reading the change since %s: %v", base, err)
 	}
@@ -60,7 +60,7 @@ func TestChangedMutation(t *testing.T) {
 		t.Log(notice)
 	}
 
-	if err := ditto.RunChanged(".", base, []string{"testdata/"},
+	if err := ditto.RunChanged(".", base, ditto.Prefixes{Exclude: []string{"testdata/"}},
 		ditto.ForceColors(),
 		ditto.WithTestCommand(makeCommand(t)+" test.failfast MAKEFLAGS="),
 		ditto.WithMinimumThreshold(0.5),

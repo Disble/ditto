@@ -7,6 +7,26 @@ import (
 	"github.com/Disble/ditto/internal/staged"
 )
 
+// Prefixes narrows which files of a change a scoped run is worth asking about.
+//
+// It is the pair the two scoped subcommands expose as --exclude-prefix and
+// --include-prefix, and it is a type rather than two slice arguments because the
+// two are one decision: what this run is about. Empty is no narrowing at all,
+// which is what both entry points did before this existed.
+//
+// Include is the one to reach for when a release refuses a scope its test
+// command cannot compile: narrowing the run to the package the command names is
+// cheaper and more precise than widening the command, and it is one flag instead
+// of one per package the change happens to touch.
+type Prefixes struct {
+	// Exclude names repository-relative prefixes never worth mutating.
+	Exclude []string
+	// Include names the only repository-relative prefixes worth mutating. Empty
+	// means every prefix, so a run with no Include mutates everything Exclude
+	// left.
+	Include []string
+}
+
 // StagedPlan is what a staged change justifies mutating, before anything runs.
 type StagedPlan struct {
 	// Root is the repository the plan was read from.
@@ -53,13 +73,13 @@ func (p StagedPlan) Mutable() bool { return len(p.Files) > 0 }
 // asking on its own, and answering it must not write a sandbox or start a suite.
 // It therefore does not read `.ditto.json` either -- that names what a sandbox
 // needs, and this builds none. See RunStaged.
-func PlanStaged(directory string, excludePrefixes []string) (StagedPlan, error) {
+func PlanStaged(directory string, prefixes Prefixes) (StagedPlan, error) {
 	repository, err := staged.New(staged.OSRunner{}, directory)
 	if err != nil {
 		return StagedPlan{}, fmt.Errorf("reading the repository: %w", err)
 	}
 
-	files, err := repository.Files(excludePrefixes)
+	files, err := repository.Files(prefixes.Exclude, prefixes.Include)
 	if err != nil {
 		return StagedPlan{}, fmt.Errorf("reading the staged files: %w", err)
 	}
@@ -104,8 +124,8 @@ func PlanStaged(directory string, excludePrefixes []string) (StagedPlan, error) 
 //
 // Options are applied after the scope and the root, so a caller can set a
 // threshold or a test command but cannot quietly point the run somewhere else.
-func RunStaged(directory string, excludePrefixes []string, options ...Option) error {
-	plan, err := PlanStaged(directory, excludePrefixes)
+func RunStaged(directory string, prefixes Prefixes, options ...Option) error {
+	plan, err := PlanStaged(directory, prefixes)
 	if err != nil {
 		return err
 	}

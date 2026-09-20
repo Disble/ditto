@@ -16,14 +16,15 @@ import (
 // of a different pair of trees.
 
 // ChangedFiles lists the Go sources a range touched, on the same terms Files
-// uses: not tests, and not anything under an excluded prefix.
-func (r *Repository) ChangedFiles(baseRef string, excludedPrefixes []string) ([]string, error) {
+// uses: not tests, not anything under an excluded prefix, and, when the caller
+// named prefixes to include, only what they cover.
+func (r *Repository) ChangedFiles(baseRef string, excludedPrefixes, includedPrefixes []string) ([]string, error) {
 	output, err := r.git("diff", "--name-only", "--diff-filter=ACMR", "-z", rangeOf(baseRef))
 	if err != nil {
 		return nil, fmt.Errorf("listing the files changed since %s: %w", baseRef, err)
 	}
 
-	return selectMutable(splitNUL(output), excludedPrefixes), nil
+	return selectMutable(splitNUL(output), excludedPrefixes, includedPrefixes), nil
 }
 
 // ChangedScopeOf converts each file's range diff into byte ranges of HEAD.
