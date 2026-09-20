@@ -26,13 +26,21 @@ func (r *FakeReporter) Summarize() result.Result[any] {
 	survived := 0
 	killed := 0
 	nonViable := 0
+	unmeasured := 0
 
 	for _, diagnostic := range r.diagnostics {
-		// The same exclusion the shipped reporter applies. A double that scores
-		// differently from the thing it stands in for measures the old rules,
-		// and every test through it would keep agreeing with a version of ditto
-		// that no longer exists. A mutant that never compiled is out of both
-		// sides -- see internal/consolereporter and docs/metrics.md.
+		// The same exclusions the shipped reporter applies, in the same order. A
+		// double that scores differently from the thing it stands in for measures
+		// the old rules, and every test through it would keep agreeing with a
+		// version of ditto that no longer exists. An unmeasured mutant never ran,
+		// so it is neither a kill nor a survivor; a mutant that never compiled is
+		// out of both sides -- see internal/consolereporter and docs/metrics.md.
+		if diagnostic.Unmeasured() {
+			unmeasured++
+
+			continue
+		}
+
 		if diagnostic.IsOk() && diagnostic.Reason() == verdict.BuildFailed {
 			nonViable++
 
@@ -47,12 +55,15 @@ func (r *FakeReporter) Summarize() result.Result[any] {
 	}
 
 	r.summary = &Summary{
-		Survived:  survived,
-		Killed:    killed,
-		NonViable: nonViable,
+		Survived:   survived,
+		Killed:     killed,
+		NonViable:  nonViable,
+		Unmeasured: unmeasured,
 	}
 
-	if survived > 0 {
+	// A run that could not measure part of its scope did not pass, whatever the
+	// score over the rest says. The shipped reporter fails it the same way.
+	if survived > 0 || unmeasured > 0 {
 		return result.Err[any]("")
 	}
 

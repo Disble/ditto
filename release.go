@@ -144,6 +144,13 @@ func Run(options ...Option) error {
 	}
 
 	if !rel.summarize().IsOk() {
+		// A scope ditto could not measure all of comes first, because it is what
+		// the run is about: the score over the rest is real and the report says
+		// what left it, while naming the threshold would name the wrong problem.
+		if unmeasured := rel.unmeasured(); unmeasured > 0 {
+			return UnmeasuredScopeError{Unmeasured: unmeasured, Scored: rel.scored()}
+		}
+
 		// A scope with nothing mutable in it is not a suite that failed, and the
 		// score cannot tell the two apart: the calculator reports -1 for an
 		// empty run, which is below every threshold. Measured on ditto's own
@@ -186,6 +193,30 @@ func (e ScoreBelowThresholdError) Error() string {
 	return fmt.Sprintf("ditto: the mutation score is below the configured minimum of %.2f", e.Minimum)
 }
 
+// UnmeasuredScopeError reports a run whose scope holds mutants the configured
+// test command cannot execute.
+//
+// It is neither a refusal nor a threshold failure, which is why it is its own
+// error and its own exit code: the mutants that could be judged were, the score
+// printed is a real measurement — of a smaller population than the scope — and
+// the report names what left it. A gate has to be able to tell the two apart,
+// because the response is different: this one is answered by naming every package
+// the scope mutates in --test-command, or by narrowing the scope, and no amount
+// of testing answers it. docs/reports/ditto-mutation-scope.md.
+type UnmeasuredScopeError struct {
+	// Unmeasured is how many mutants the command could not reach.
+	Unmeasured int
+	// Scored is how many it could, and what the ratio above was computed over.
+	Scored int
+}
+
+func (e UnmeasuredScopeError) Error() string {
+	return fmt.Sprintf(
+		"ditto: %d of the %d mutants in this scope are never compiled by the test command, "+
+			"so the score above measures the other %d",
+		e.Unmeasured, e.Unmeasured+e.Scored, e.Scored)
+}
+
 // release is one configured run, assembled once and driven by either entry
 // point. Splitting it out is what keeps the two from drifting: there is one
 // order in which the decorators wrap, and both callers get it.
@@ -194,6 +225,7 @@ type release struct {
 	logger    ditto.Logger
 	reporter  ditto.Reporter
 	lab       ditto.Laboratory
+	base      *laboratory.Laboratory
 	sandboxes interface{ RemoveAll() error }
 }
 
@@ -237,7 +269,12 @@ func newRelease(options []Option, hostVerbose bool) *release {
 		reporter = verbosereporter.New(logger, reporter)
 	}
 
-	lab, gates := assemble(opts, logger, loud)
+	// Built here rather than inside assemble, because the release keeps it: it is
+	// the only thing that can say which packages the test command executes, and
+	// the scope of the run has to be readable above the decorators.
+	base := laboratory.New(logger, opts.TestRunner, opts.TemporaryDir)
+
+	lab, gates := assemble(base, opts, logger, loud)
 
 	// Wrapped here, after the verbose decorator and before anything summarises,
 	// so the counts are the last thing a run says.
@@ -250,6 +287,7 @@ func newRelease(options []Option, hostVerbose bool) *release {
 		logger:    logger,
 		reporter:  reporter,
 		lab:       lab,
+		base:      base,
 		sandboxes: sandboxes,
 	}
 }
@@ -257,9 +295,29 @@ func newRelease(options []Option, hostVerbose bool) *release {
 // start is the run itself, identical whichever entry point asked for it.
 func (r *release) start() {
 	r.logger.Logf("%s %s", color.Yellow("┃"), color.Green("Releasing Ditto…"))
-	ditto.New(r.logger, r.opts.Repository, r.lab, r.reporter).Release(
+	ditto.New(r.logger, r.opts.Repository, r.lab, r.reporter, r.scope()).Release(
 		r.opts.Viruses...,
 	)
+}
+
+// scope is what the release may ask which packages the test command executes.
+//
+// It is nil for a gated run, and that is a cost decision with a stated limit.
+// Gated() replaces the execution plan of the exact module-scope command and
+// nothing else, so the command that runs is `go test -count=1 ./...`: every
+// package the module has, which the gated path already resolves for itself.
+// Asking the ordinary laboratory would buy a second suite run to learn what the
+// gated path knows, and one suite run per release is exactly the cost this
+// change refuses to add. What it leaves uncovered on a gated run: a mutant no
+// package compiles at all — a file under testdata, or one behind a build tag for
+// another operating system — is not named as unmeasured there, and stays the
+// survivor it has always been.
+func (r *release) scope() ditto.CommandScope {
+	if r.opts.Gated && r.opts.commandScope == moduleScope {
+		return nil
+	}
+
+	return r.base
 }
 
 // startWithoutPanicking turns a refusal into a value and leaves every other
@@ -305,6 +363,22 @@ func (r *release) scored() int {
 	return counted.Total()
 }
 
+// unmeasured is how many mutants the run could not judge because the test
+// command does not compile their packages, and -1 when the reporter cannot say.
+//
+// The sentinel is negative for the same reason scored's is: zero is the answer
+// that lets a run pass, so "I cannot tell" must never be reported as it. A
+// reporter that cannot forward this leaves the run failing on the score it did
+// compute, which is the answer it would have given before this existed.
+func (r *release) unmeasured() int {
+	counted, ok := r.reporter.(interface{ Unmeasured() int })
+	if !ok {
+		return -1
+	}
+
+	return counted.Unmeasured()
+}
+
 // reclaim removes what a run left behind.
 //
 // Sandboxes outlive each mutant now, so removing them belongs to the run rather
@@ -330,8 +404,8 @@ func (r *release) reclaim() {
 // are the only thing that can say whether the gated path engaged, and a decorator
 // above it cannot be asked. The pointer is nil, concretely rather than as an
 // interface holding a nil, when the run is not gated.
-func assemble(opts Options, logger ditto.Logger, loud bool) (ditto.Laboratory, *gatedlaboratory.GatedLaboratory) {
-	var lab ditto.Laboratory = laboratory.New(logger, opts.TestRunner, opts.TemporaryDir)
+func assemble(base *laboratory.Laboratory, opts Options, logger ditto.Logger, loud bool) (ditto.Laboratory, *gatedlaboratory.GatedLaboratory) {
+	var lab ditto.Laboratory = base
 
 	var gates *gatedlaboratory.GatedLaboratory
 

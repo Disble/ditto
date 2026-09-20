@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -67,6 +68,39 @@ func TestStagedGated(t *testing.T) {
 	})
 }
 
+// TestUnmeasuredScopeHasItsOwnExitCode covers the half of the report that is
+// about a wrapper rather than about a reader: a scope ditto cannot measure and a
+// score below the bar were both 1, so an automated gate could not tell them apart
+// — and the responses differ, because no test answers an unmeasurable scope.
+// docs/reports/ditto-mutation-scope.md.
+func TestUnmeasuredScopeHasItsOwnExitCode(t *testing.T) {
+	assert.Equal(t, exitUnmeasured, exitCodeOf(ditto.UnmeasuredScopeError{Unmeasured: 17, Scored: 26}))
+
+	// Wrapped, because the error travels back through RunStaged and RunChanged
+	// before main sees it and any of them may add context on the way.
+	assert.Equal(t, exitUnmeasured, exitCodeOf(fmt.Errorf("running the change: %w",
+		ditto.UnmeasuredScopeError{Unmeasured: 1, Scored: 2})))
+}
+
+// And every other failure stays one code: a refusal, a usage error and a score
+// below the bar are told apart by their message, which a reader has.
+func TestEveryOtherFailureKeepsThePlainExitCode(t *testing.T) {
+	assert.Equal(t, exitFailure, exitCodeOf(ditto.ScoreBelowThresholdError{Minimum: 0.8}))
+	assert.Equal(t, exitFailure, exitCodeOf(ditto.NoMutantsError{}))
+	assert.Equal(t, exitFailure, exitCodeOf(errNoSubcommand))
+}
+
+// The legend is what makes the number usable, and a number nobody can look up is
+// a number people guess at.
+func TestUsageNamesTheExitCodes(t *testing.T) {
+	out := &bytes.Buffer{}
+
+	usage(out)
+
+	assert.Contains(t, out.String(), "Exit codes")
+	assert.Contains(t, out.String(), "unmeasured")
+}
+
 // TestTestCommandHelp covers backlog entry 23. The old description was accurate
 // and told the reader nothing about what the default costs, which is the one
 // thing they need at the moment of typing.
@@ -79,7 +113,16 @@ func TestTestCommandHelp(t *testing.T) {
 	})
 
 	t.Run("names the lever rather than only the toll", func(t *testing.T) {
-		assert.Contains(t, testCommandHelp, "name the package")
+		// It named "the package that owns the change", which is right only while
+		// the scope holds one package. A command that names one of five leaves
+		// the other four unmeasurable, and the release now fails on that instead
+		// of scoring it, so the lever is every package the scope mutates.
+		assert.Contains(t, testCommandHelp, "name every package the scope mutates")
+	})
+
+	t.Run("says what a command that leaves part of the scope out costs", func(t *testing.T) {
+		assert.Contains(t, testCommandHelp, "reported as unmeasured")
+		assert.Contains(t, testCommandHelp, "exit 3")
 	})
 
 	t.Run("says what dropping -json costs, not only what it does", func(t *testing.T) {
