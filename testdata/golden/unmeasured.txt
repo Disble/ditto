@@ -1,0 +1,39 @@
+┃ Releasing Ditto…
+┃ baseline: the suite took <duration> on unmutated code, and every mutant runs it again.
+┃ covered/covered.go — 2 mutants
+┃   covered/covered.go:5:12 → Comparison
+┃   covered/covered.go:5:11 → Comparison Invert
+┃ shared/shared.go — 1 mutants
+┃   shared/shared.go:7:11 → Arithmetic
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┃ 🧬 Survivors
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+┃ covered/covered.go:5:12 → Comparison (deletes =)
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┃ 🧬 Mutant survived: covered/covered.go:5:12 → Comparison
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+┃ --- covered/covered.go (original)
+┃ +++ covered/covered.go (mutated with 'Comparison')
+┃ @@ -2,5 +2,5 @@
+┃  
+┃  // Over is exercised from both sides, so its Comparison Invert mutant dies.
+┃  func Over(a, b int) bool {
+┃ -	return a >= b
+┃ +	return a > b
+┃  }
+┃ 
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╍┅
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ • Total:        3                    ┃
+┃ • Killed:       2                    ┃
+┃ • Survived:     1                    ┃
+┃ • Unmeasured:        1               ┃
+┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┨
+┃ ⨯ Score:     0.67 (minimum: 0.00)    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┃ 1 of the 4 mutants in this scope are never compiled by this test command, so
+┃ nothing it runs can kill them and they are out of the score entirely:
+┃   untested (1)
+┃ Name every package the scope mutates in --test-command, or narrow the scope.
+ditto: 1 of the 4 mutants in this scope are never compiled by the test command, so the score above measures the other 3
