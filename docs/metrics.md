@@ -218,8 +218,18 @@ Settled by the literature, not chosen here. See
 | the mutant | treatment | why |
 | --- | --- | --- |
 | does not compile | out of the numerator **and** the denominator | the kill predicate is undefined for a program that does not exist |
+| in a package the test command does not compile | out of the numerator **and** the denominator, named with its package, and the run fails with its own exit code (3) | the kill predicate is undefined for code no run can compile, and it is a defect of the *scope*, not of the tests: answered by naming every package the scope mutates or by narrowing the scope, and by no test at all |
 | timed out | **a kill**, reported as its own reason | unanimous across PIT, Stryker and Infection |
 | suspected equivalent | counted as **survived**, and the metric renamed to a stated lower bound | equivalence is undecidable |
+
+The second row is the one this repository learned last, and it is the only row
+whose fix is not in the tests. Measured on the report that produced it: a staged
+change spanning five packages, judged by a command naming one of them, printed
+**0.53 against a bar of 0.80** for a run whose ceiling was 0.605 — 17 of its 20
+survivors lived in a package the command never builds. A score that mixes "your
+tests missed this" with "your command cannot see this" is not a weaker
+measurement of the same thing; it is a measurement of two things, and nobody can
+tell which. `docs/reports/ditto-mutation-scope.md`.
 
 The canonical definition, Zhu, Hall & May, *ACM Computing Surveys* 29(4), 1997,
 Definition 3.1: **`S = D / (M − E)`** — dead mutants over all mutants minus the
