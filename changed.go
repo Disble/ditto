@@ -19,13 +19,13 @@ import (
 // The scope is `base...HEAD`, the diff against their merge base, so a base that
 // has moved on since the change was written does not drag somebody else's
 // commits into the bill.
-func PlanChanged(directory, baseRef string, excludePrefixes []string) (StagedPlan, error) {
+func PlanChanged(directory, baseRef string, prefixes Prefixes) (StagedPlan, error) {
 	repository, err := staged.New(staged.OSRunner{}, directory)
 	if err != nil {
 		return StagedPlan{}, fmt.Errorf("reading the repository: %w", err)
 	}
 
-	files, err := repository.ChangedFiles(baseRef, excludePrefixes)
+	files, err := repository.ChangedFiles(baseRef, prefixes.Exclude, prefixes.Include)
 	if err != nil {
 		return StagedPlan{}, fmt.Errorf("reading the changed files: %w", err)
 	}
@@ -63,8 +63,8 @@ func PlanChanged(directory, baseRef string, excludePrefixes []string) (StagedPla
 // Everything below the scope is the staged path unchanged: the same sandbox, the
 // same `.ditto.json` for what git does not carry, the same notice when the diff
 // could not be turned into ranges.
-func RunChanged(directory, baseRef string, excludePrefixes []string, options ...Option) error {
-	plan, err := PlanChanged(directory, baseRef, excludePrefixes)
+func RunChanged(directory, baseRef string, prefixes Prefixes, options ...Option) error {
+	plan, err := PlanChanged(directory, baseRef, prefixes)
 	if err != nil {
 		return err
 	}

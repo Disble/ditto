@@ -45,7 +45,7 @@ func TestChangedFilesReadsARangeRatherThanTheIndex(t *testing.T) {
 		"diff --name-only": "internal/thing/thing.go\x00internal/thing/thing_test.go\x00readme.md\x00",
 	})
 
-	files, err := repository.ChangedFiles("v0.7.0", []string{"testdata/"})
+	files, err := repository.ChangedFiles("v0.7.0", []string{"testdata/"}, nil)
 	if err != nil {
 		t.Fatalf("listing the changed files: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestChangedFilesSurvivesAnEmptyRange(t *testing.T) {
 
 	repository, _ := scripted(map[string]string{"diff --name-only": ""})
 
-	files, err := repository.ChangedFiles("v0.7.0", nil)
+	files, err := repository.ChangedFiles("v0.7.0", nil, nil)
 	if err != nil {
 		t.Fatalf("listing the changed files: %v", err)
 	}

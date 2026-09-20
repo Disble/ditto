@@ -24,7 +24,7 @@ import (
 // It skips when nothing is staged, because a scope of nothing is not a failure
 // -- it is a commit that changed no Go source, and there is nothing to judge.
 func TestStagedMutation(t *testing.T) {
-	plan, err := ditto.PlanStaged(".", []string{"testdata/"})
+	plan, err := ditto.PlanStaged(".", ditto.Prefixes{Exclude: []string{"testdata/"}})
 	if err != nil {
 		t.Fatalf("reading the staged change: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestStagedMutation(t *testing.T) {
 	// the worktree, with one tracked file left dirty and unstaged, seven of
 	// eight verdicts moved. Scoping correctly and then measuring the wrong bytes
 	// would be the same defect wearing the fix's clothes.
-	if err := ditto.RunStaged(".", []string{"testdata/"},
+	if err := ditto.RunStaged(".", ditto.Prefixes{Exclude: []string{"testdata/"}},
 		ditto.ForceColors(),
 		ditto.WithTestCommand(makeCommand(t)+" test.failfast MAKEFLAGS="),
 		ditto.WithMinimumThreshold(0.5),

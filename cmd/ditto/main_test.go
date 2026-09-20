@@ -192,6 +192,47 @@ func TestGatedHelpRendersWithoutAValueName(t *testing.T) {
 	assert.NotContains(t, rendered.String(), "-gated ", "a value name rendered after the bool flag")
 }
 
+// TestIncludePrefixReachesThePlan covers the flag the report asked for: the
+// mirror of --exclude-prefix, so the honest pass it wants — one run per owning
+// package — is one flag instead of one exclusion for each package the change
+// happens to touch.
+//
+// Asserted through the two subcommands rather than through ditto.Prefixes,
+// because the wiring between them is the part a unit test of the plan cannot
+// see, and it is the part that would silently do nothing.
+func TestIncludePrefixReachesThePlan(t *testing.T) {
+	t.Run("changed", func(t *testing.T) {
+		dir := dittotesting.GitRepository(t)
+
+		dittotesting.WriteFile(t, dir, "web/web.go", "package web\n\nfunc Web(a, b int) bool { return a > b }\n")
+		dittotesting.WriteFile(t, dir, "tools/tool.go", "package tools\n\nfunc Tool(a, b int) bool { return a > b }\n")
+		dittotesting.Git(t, dir, "add", "-A")
+		dittotesting.Git(t, dir, "commit", "-m", "two packages")
+
+		out := &bytes.Buffer{}
+		err := changedCommand([]string{"--since", "base", "--dry", "--cwd", dir, "--include-prefix", "web/"}, out)
+
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "web/web.go")
+		assert.NotContains(t, out.String(), "tools/tool.go")
+	})
+
+	t.Run("staged", func(t *testing.T) {
+		dir := dittotesting.GitRepository(t)
+
+		dittotesting.WriteFile(t, dir, "web/web.go", "package web\n\nfunc Web(a, b int) bool { return a > b }\n")
+		dittotesting.WriteFile(t, dir, "tools/tool.go", "package tools\n\nfunc Tool(a, b int) bool { return a > b }\n")
+		dittotesting.Git(t, dir, "add", "-A")
+
+		out := &bytes.Buffer{}
+		err := stagedCommand([]string{"--cwd", dir, "--dry", "--include-prefix", "web/"}, out)
+
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "web/web.go")
+		assert.NotContains(t, out.String(), "tools/tool.go")
+	})
+}
+
 // TestChangedRefusesToGuessABase covers the one decision `changed` deliberately
 // does not make for you. There is no default that is right on a CI checkout, in
 // a working tree and on a branch at once, and a base guessed wrong is either a

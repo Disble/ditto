@@ -142,14 +142,14 @@ compile, which are reported as unmeasured rather than scored.
 `)
 }
 
-// excludes collects a flag that may appear more than once, because a repository
-// rarely has exactly one thing worth leaving out.
-type excludes []string
+// prefixes collects a flag that may appear more than once, because a repository
+// rarely has exactly one thing worth leaving out — or one thing worth keeping.
+type prefixes []string
 
-func (e *excludes) String() string { return strings.Join(*e, ",") }
+func (p *prefixes) String() string { return strings.Join(*p, ",") }
 
-func (e *excludes) Set(value string) error {
-	*e = append(*e, value)
+func (p *prefixes) Set(value string) error {
+	*p = append(*p, value)
 
 	return nil
 }
@@ -164,7 +164,7 @@ func runCommand(args []string) error {
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
 	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
 
-	var exclude excludes
+	var exclude prefixes
 
 	flags.Var(&exclude, "exclude", "regexp of source paths not to mutate; repeatable")
 
@@ -198,7 +198,7 @@ func optionsFor(
 	root, testCommand string,
 	threshold float32,
 	gated, confirm, loud bool,
-	exclude excludes,
+	exclude prefixes,
 ) ([]ditto.Option, error) {
 	options := []ditto.Option{
 		ditto.WithRepositoryRoot(root),
@@ -242,9 +242,10 @@ func stagedCommand(args []string, out io.Writer) error {
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
 	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
 
-	var exclude excludes
+	var exclude, include prefixes
 
 	flags.Var(&exclude, "exclude-prefix", "repository-relative prefix never worth mutating; repeatable")
+	flags.Var(&include, "include-prefix", "only mutate paths under this repository-relative prefix; repeatable")
 
 	// There is no flag for .ditto.json, so `-h` is the one place a reader would
 	// look and not find it. Named here rather than left to the readme.
@@ -269,12 +270,13 @@ func stagedCommand(args []string, out io.Writer) error {
 	}
 
 	if *dry {
-		return reportPlan(*directory, exclude, out)
+		return reportPlan(*directory, ditto.Prefixes{Exclude: exclude, Include: include}, out)
 	}
 
 	options := stagedOptions(*testCommand, float32(*threshold), *gated, *confirm, *loud, *sandbox)
 
-	return ditto.RunStaged(*directory, exclude, options...) //nolint:wrapcheck // this is the top of the program: the message is already the one a reader needs
+	//nolint:wrapcheck // this is the top of the program: the message is already the one a reader needs
+	return ditto.RunStaged(*directory, ditto.Prefixes{Exclude: exclude, Include: include}, options...)
 }
 
 // stagedOptions is what the staged flags mean, kept apart from reading them.
@@ -326,9 +328,10 @@ func changedCommand(args []string, out io.Writer) error {
 	loud := flags.Bool("verbose", false, "print what the run is doing as it does it")
 	sandbox := flags.String("sandbox", "", `how each file reaches the sandbox: "copy" (default), "hardlink" or "link"`)
 
-	var exclude excludes
+	var exclude, include prefixes
 
 	flags.Var(&exclude, "exclude-prefix", "repository-relative prefix never worth mutating; repeatable")
+	flags.Var(&include, "include-prefix", "only mutate paths under this repository-relative prefix; repeatable")
 
 	flags.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Usage of ditto changed:")
@@ -353,12 +356,13 @@ func changedCommand(args []string, out io.Writer) error {
 	}
 
 	if *dry {
-		return reportChangedPlan(*directory, *since, exclude, out)
+		return reportChangedPlan(*directory, *since, ditto.Prefixes{Exclude: exclude, Include: include}, out)
 	}
 
 	options := stagedOptions(*testCommand, float32(*threshold), *gated, *confirm, *loud, *sandbox)
 
-	return ditto.RunChanged(*directory, *since, exclude, options...) //nolint:wrapcheck // this is the top of the program: the message is already the one a reader needs
+	//nolint:wrapcheck // this is the top of the program: the message is already the one a reader needs
+	return ditto.RunChanged(*directory, *since, ditto.Prefixes{Exclude: exclude, Include: include}, options...)
 }
 
 // errNoBaseRef refuses to guess. There is no default that is right in a CI
@@ -380,8 +384,8 @@ while nothing is modified or staged.
 
 // reportChangedPlan answers what a committed change would cost without paying
 // for it.
-func reportChangedPlan(directory, baseRef string, exclude excludes, out io.Writer) error {
-	plan, err := ditto.PlanChanged(directory, baseRef, exclude)
+func reportChangedPlan(directory, baseRef string, prefixes ditto.Prefixes, out io.Writer) error {
+	plan, err := ditto.PlanChanged(directory, baseRef, prefixes)
 	if err != nil {
 		return fmt.Errorf("reading the change: %w", err)
 	}
@@ -407,8 +411,8 @@ func reportChangedPlan(directory, baseRef string, exclude excludes, out io.Write
 
 // reportPlan answers what a staged change would cost without paying for it. A
 // dry run that materialised a sandbox or started a suite would not be one.
-func reportPlan(directory string, exclude excludes, out io.Writer) error {
-	plan, err := ditto.PlanStaged(directory, exclude)
+func reportPlan(directory string, prefixes ditto.Prefixes, out io.Writer) error {
+	plan, err := ditto.PlanStaged(directory, prefixes)
 	if err != nil {
 		return fmt.Errorf("reading the staged change: %w", err)
 	}
@@ -517,4 +521,10 @@ paths git does not carry, in a .ditto.json at its root:
 They are copied from the working tree after the index is materialised, and each
 copy is announced. Naming a path git tracks is refused: the index version is the
 one a staged run measures.
+
+--exclude-prefix and --include-prefix narrow what is mutated, and the second is
+the one to reach for when a release reports mutants its test command cannot
+compile: narrowing the run to the package the command names is cheaper and more
+precise than widening the command, and it is one flag instead of one exclusion
+per package the change happens to touch. Exit 3 is that report.
 `

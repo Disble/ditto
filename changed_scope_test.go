@@ -23,7 +23,7 @@ func TestPlanChangedReadsACommittedChange(t *testing.T) {
 	dittotesting.Git(t, dir, "add", "-A")
 	dittotesting.Git(t, dir, "commit", "-m", "add")
 
-	plan, err := ditto.PlanChanged(dir, "base", nil)
+	plan, err := ditto.PlanChanged(dir, "base", ditto.Prefixes{})
 	if err != nil {
 		t.Fatalf("planning: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestPlanChangedIsEmptyWhenNoGoSourceMoved(t *testing.T) {
 	dittotesting.Git(t, dir, "add", "-A")
 	dittotesting.Git(t, dir, "commit", "-m", "docs")
 
-	plan, err := ditto.PlanChanged(dir, "base", nil)
+	plan, err := ditto.PlanChanged(dir, "base", ditto.Prefixes{})
 	if err != nil {
 		t.Fatalf("planning: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestPlanChangedExcludesByPrefix(t *testing.T) {
 	dittotesting.Git(t, dir, "add", "-A")
 	dittotesting.Git(t, dir, "commit", "-m", "tool")
 
-	plan, err := ditto.PlanChanged(dir, "base", []string{"tools/"})
+	plan, err := ditto.PlanChanged(dir, "base", ditto.Prefixes{Exclude: []string{"tools/"}})
 	if err != nil {
 		t.Fatalf("planning: %v", err)
 	}
@@ -78,11 +78,56 @@ func TestPlanChangedExcludesByPrefix(t *testing.T) {
 	}
 }
 
+// The mirror of the exclusion above, and the one the report asked for: a scope
+// that holds more packages than the test command can compile is answered by
+// narrowing the scope to the package the command names, and one flag does it
+// where one exclusion per other package does not.
+func TestPlanChangedIncludesByPrefix(t *testing.T) {
+	dir := dittotesting.GitRepository(t)
+
+	dittotesting.WriteFile(t, dir, "tools/tool.go", "package tools\n\nfunc Tool(a, b int) bool { return a > b }\n")
+	dittotesting.WriteFile(t, dir, "web/web.go", "package web\n\nfunc Web(a, b int) bool { return a > b }\n")
+	dittotesting.Git(t, dir, "add", "-A")
+	dittotesting.Git(t, dir, "commit", "-m", "two packages")
+
+	plan, err := ditto.PlanChanged(dir, "base", ditto.Prefixes{Include: []string{"web/"}})
+	if err != nil {
+		t.Fatalf("planning: %v", err)
+	}
+
+	if len(plan.Files) != 1 || plan.Files[0] != "web/web.go" {
+		t.Fatalf("files = %v, want only web/web.go", plan.Files)
+	}
+}
+
+// Include narrows, exclude still removes: the two are one decision about what
+// the run is about, so a file has to survive both to be planned.
+func TestPlanChangedIncludesAndExcludesTogether(t *testing.T) {
+	dir := dittotesting.GitRepository(t)
+
+	dittotesting.WriteFile(t, dir, "web/kept.go", "package web\n\nfunc Kept(a, b int) bool { return a > b }\n")
+	dittotesting.WriteFile(t, dir, "web/dropped.go", "package web\n\nfunc Dropped(a, b int) bool { return a > b }\n")
+	dittotesting.Git(t, dir, "add", "-A")
+	dittotesting.Git(t, dir, "commit", "-m", "one package, two files")
+
+	plan, err := ditto.PlanChanged(dir, "base", ditto.Prefixes{
+		Include: []string{"web/"},
+		Exclude: []string{"web/dropped"},
+	})
+	if err != nil {
+		t.Fatalf("planning: %v", err)
+	}
+
+	if len(plan.Files) != 1 || plan.Files[0] != "web/kept.go" {
+		t.Fatalf("files = %v, want only web/kept.go", plan.Files)
+	}
+}
+
 // A base that does not exist is an error rather than an empty scope. The two are
 // the same exit code and opposite meanings: one is a change with nothing in it,
 // the other is a question git could not answer.
 func TestPlanChangedRefusesAnUnknownBase(t *testing.T) {
-	_, err := ditto.PlanChanged(dittotesting.GitRepository(t), "no-such-ref", nil)
+	_, err := ditto.PlanChanged(dittotesting.GitRepository(t), "no-such-ref", ditto.Prefixes{})
 	if err == nil {
 		t.Fatal("an unknown base was accepted")
 	}
@@ -93,7 +138,7 @@ func TestPlanChangedRefusesAnUnknownBase(t *testing.T) {
 }
 
 func TestPlanChangedRefusesSomewhereThatIsNotARepository(t *testing.T) {
-	if _, err := ditto.PlanChanged(t.TempDir(), "base", nil); err == nil {
+	if _, err := ditto.PlanChanged(t.TempDir(), "base", ditto.Prefixes{}); err == nil {
 		t.Fatal("a directory outside any repository was accepted")
 	}
 }
@@ -112,7 +157,7 @@ func TestRunChangedRefusesAStagedChange(t *testing.T) {
 	dittotesting.WriteFile(t, dir, "kept.go", "package fixture\n\nfunc Kept() int { return 2 }\n")
 	dittotesting.Git(t, dir, "add", "kept.go")
 
-	err := ditto.RunChanged(dir, "base", nil)
+	err := ditto.RunChanged(dir, "base", ditto.Prefixes{})
 	if err == nil {
 		t.Fatal("a staged change was accepted")
 	}
@@ -131,19 +176,19 @@ func TestRunChangedDoesNothingWhenNothingChanged(t *testing.T) {
 	dittotesting.Git(t, dir, "add", "-A")
 	dittotesting.Git(t, dir, "commit", "-m", "docs")
 
-	if err := ditto.RunChanged(dir, "base", nil); err != nil {
+	if err := ditto.RunChanged(dir, "base", ditto.Prefixes{}); err != nil {
 		t.Fatalf("a docs-only commit was reported as a failure: %v", err)
 	}
 }
 
 func TestRunChangedRefusesAnUnknownBase(t *testing.T) {
-	if err := ditto.RunChanged(dittotesting.GitRepository(t), "no-such-ref", nil); err == nil {
+	if err := ditto.RunChanged(dittotesting.GitRepository(t), "no-such-ref", ditto.Prefixes{}); err == nil {
 		t.Fatal("an unknown base was accepted")
 	}
 }
 
 func TestRunChangedRefusesSomewhereThatIsNotARepository(t *testing.T) {
-	if err := ditto.RunChanged(t.TempDir(), "base", nil); err == nil {
+	if err := ditto.RunChanged(t.TempDir(), "base", ditto.Prefixes{}); err == nil {
 		t.Fatal("a directory outside any repository was accepted")
 	}
 }
@@ -168,7 +213,7 @@ func TestRunChangedAcceptsAChangeWithNothingMutableInIt(t *testing.T) {
 		"gated": {ditto.Gated()},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := ditto.RunChanged(dir, "base", nil, options...); err != nil {
+			if err := ditto.RunChanged(dir, "base", ditto.Prefixes{}, options...); err != nil {
 				t.Fatalf("a change with nothing mutable in it was reported as a failure: %v", err)
 			}
 		})
