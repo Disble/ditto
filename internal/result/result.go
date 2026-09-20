@@ -14,20 +14,28 @@ func Err[Type any](errorMessage string) Result[Type] {
 	return err[Type]{errorMessage}
 }
 
-// Output is the value an Ok carries, and empty for an Err.
+// Output is what the command printed, whichever way it ended.
 //
-// It exists because a refusal has to be able to show what it refused over. The
-// laboratory reads a failing test command as a killed mutant, so when nothing is
-// mutated that same failure is a red baseline — and a refusal that does not
-// print the command's own output leaves the reader guessing which of a hundred
-// reasons a suite might be red. Measured the hard way: an embedded directory
-// missing from a sandbox produced a refusal that named neither the file nor the
-// pattern, and finding it took four measurements that should have been none.
+// It answered only for an Ok until the command's own package scope had to be
+// read: that scope is announced by `go test -json` on the stream of a GREEN
+// suite, and a green suite is an Err — so the one run whose output the scope
+// check needs was the one this refused to answer for. The name and the contract
+// now say the same thing: the output belongs to the command, not to the verdict.
+//
+// What the Ok side is for is unchanged, and it was measured the hard way: the
+// laboratory reads a failing command as a killed mutant, so a refusal to score a
+// red baseline has to show the command's own words — the first version named
+// neither the file nor the pattern, and finding the embedded directory behind it
+// took four measurements that should have been none.
 func Output(res Result[string]) string {
-	value, isOk := res.(ok[string])
-	if !isOk {
-		return ""
+	if ended, isOk := res.(ok[string]); isOk {
+		return ended.value
 	}
 
-	return value.value
+	if ended, isErr := res.(err[string]); isErr {
+		return ended.errorMessage
+	}
+
+	// Unreachable: the seal keeps every implementation inside this package.
+	return ""
 }
