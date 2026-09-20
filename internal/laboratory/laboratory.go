@@ -109,15 +109,17 @@ func (l *Laboratory) Test(
 //
 // The first call is what pays for the baseline on a release that never asks
 // otherwise. There is no second cost: the same sandbox and the same once.
+//
+// There is no nil check on the scope, and that is deliberate rather than an
+// omission. The baseline always produces one — commandscope.New answers for an
+// empty stream by declining to refuse anything — so a guard here would be
+// unreachable, and a guard no test can distinguish from its absence is dead
+// weight pretending to be defense. Measured: deleting it changed no test.
 func (l *Laboratory) Executes(repository ditto.Repository, relativePath string) bool {
 	sandbox := l.acquire(repository)
 	defer l.returnToPool(sandbox)
 
 	l.verifyBaseline(sandbox)
-
-	if l.scope == nil {
-		return true
-	}
 
 	return l.scope.Executes(relativePath)
 }
